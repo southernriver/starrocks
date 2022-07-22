@@ -100,6 +100,9 @@ Status StreamLoadExecutor::execute_plan_fragment(StreamLoadContext* ctx) {
                     case TLoadSourceType::PULSAR:
                         ctx->pulsar_info->clear_backlog();
                         break;
+                    case TLoadSourceType::TUBE:
+                        ctx->tube_info->reset_offset();
+                        break;
                     default:
                         break;
                     }
@@ -376,6 +379,20 @@ bool StreamLoadExecutor::collect_load_stat(StreamLoadContext* ctx, TTxnCommitAtt
 
         rl_attach.pulsarRLTaskProgress = pulsar_progress;
         rl_attach.__isset.pulsarRLTaskProgress = true;
+        if (!ctx->error_url.empty()) {
+            rl_attach.__set_errorLogUrl(ctx->error_url);
+        }
+        return true;
+    }
+    case TLoadSourceType::TUBE: {
+        TRLTaskTxnCommitAttachment& rl_attach = attach->rlTaskTxnCommitAttachment;
+        rl_attach.loadSourceType = TLoadSourceType::TUBE;
+
+        TTubeRLTaskProgress tube_progress;
+        tube_progress.partitionCmtOffset = ctx->tube_info->cmt_offset;
+
+        rl_attach.tubeRLTaskProgress = tube_progress;
+        rl_attach.__isset.tubeRLTaskProgress = true;
         if (!ctx->error_url.empty()) {
             rl_attach.__set_errorLogUrl(ctx->error_url);
         }

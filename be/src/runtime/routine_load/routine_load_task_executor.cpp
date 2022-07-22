@@ -25,6 +25,8 @@
 #include <memory>
 #include <thread>
 
+#include <boost/filesystem.hpp>
+
 #include "common/status.h"
 #include "runtime/routine_load/data_consumer_group.h"
 #include "runtime/routine_load/kafka_consumer_pipe.h"
@@ -274,6 +276,32 @@ Status RoutineLoadTaskExecutor::submit_task(const TRoutineLoadTask& task) {
     case TLoadSourceType::PULSAR:
         ctx->pulsar_info = std::make_unique<PulsarLoadInfo>(task.pulsar_load_info);
         break;
+    case TLoadSourceType::TUBE:
+        {
+            // TubeMQ service need to be started first
+            if (!tubemq_service_started) {
+                tubemq::TubeMQServiceConfig serviceConfig;
+                std::string log_path = config::sys_log_dir + "/tubemq_log";
+                if (!boost::filesystem::is_directory(log_path)) {
+                    boost::system::error_code ec;
+                    if (!boost::filesystem::create_directory(log_path, ec)) {
+                        LOG(WARNING) << "Failed to create log path for tubemq service: " << ec.message();
+                        return Status::InternalError("Failed to create log path for tubemq service: " + ec.message());
+                    }
+                }
+                serviceConfig.SetLogCofigInfo(10 /*log_max_num*/, 100 /*log_max_size(MB)*/, 2 /*log_level(info)*/,
+                                              log_path);
+
+                std::string err_info;
+                if (!tubemq::StartTubeMQService(err_info, serviceConfig)) {
+                    LOG(WARNING) << "Failed to StartTubeMQService: " << err_info;
+                    return Status::InternalError("Failed to StartTubeMQService: " + err_info);
+                }
+                tubemq_service_started = true;
+            }
+        }
+        ctx->tube_info = std::make_unique<TubeLoadInfo>(task.tube_load_info);
+        break;
     default:
         LOG(WARNING) << "unknown load source type: " << task.type;
         delete ctx;
@@ -342,6 +370,16 @@ void RoutineLoadTaskExecutor::exec_task(StreamLoadContext* ctx, DataConsumerPool
     case TLoadSourceType::PULSAR: {
         pipe = std::make_shared<PulsarConsumerPipe>();
         Status st = std::static_pointer_cast<PulsarDataConsumerGroup>(consumer_grp)->assign_topic_partitions(ctx);
+        if (!st.ok()) {
+            err_handler(ctx, st, st.get_error_msg());
+            cb(ctx);
+            return;
+        }
+        break;
+    }
+    case TLoadSourceType::TUBE: {
+        pipe = std::make_shared<TubeConsumerPipe>();
+        Status st = std::static_pointer_cast<TubeDataConsumerGroup>(consumer_grp)->assign_topic_partitions(ctx);
         if (!st.ok()) {
             err_handler(ctx, st, st.get_error_msg());
             cb(ctx);
@@ -450,6 +488,10 @@ void RoutineLoadTaskExecutor::exec_task(StreamLoadContext* ctx, DataConsumerPool
             // return consumer
             _data_consumer_pool.return_consumer(consumer);
         }
+    } break;
+    case TLoadSourceType::TUBE: {
+        // Cumulative confirm is not supported by tubemq, but we need to break here and 
+        // call cb(ctx) at last
     } break;
     default:
         return;

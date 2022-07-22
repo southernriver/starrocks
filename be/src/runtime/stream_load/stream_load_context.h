@@ -114,6 +114,35 @@ public:
     std::map<std::string, std::string> properties;
 };
 
+// tube related info
+class TubeLoadInfo {
+public:
+    explicit TubeLoadInfo(const TTubeLoadInfo& t_info)
+            : master_addr(t_info.master_addr),
+              topic(t_info.topic),
+              group_name(t_info.group_name) {
+                if (t_info.__isset.consume_position) {
+                  consume_position = t_info.consume_position;
+                }
+              }
+
+    void reset_offset() {
+        // clear the cmt_offset
+        cmt_offset.clear();
+    }
+
+    const static int32_t INVALID_CONSUME_POSITION = -2;
+
+public:
+    std::string master_addr;
+    std::string topic;
+    std::string group_name;
+    int32_t consume_position = INVALID_CONSUME_POSITION;
+
+    // partition -> offset, inclusive.
+    std::map<std::string, int64_t> cmt_offset;
+};
+
 class MessageBodySink;
 
 const std::string TXN_BEGIN = "begin";
@@ -226,6 +255,7 @@ public:
 
     std::unique_ptr<KafkaLoadInfo> kafka_info;
     std::unique_ptr<PulsarLoadInfo> pulsar_info;
+    std::unique_ptr<TubeLoadInfo> tube_info;
 
     std::vector<TTabletCommitInfo> commit_infos;
     std::vector<TTabletFailInfo> fail_infos;

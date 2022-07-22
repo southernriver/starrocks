@@ -60,6 +60,13 @@ struct TPulsarLoadInfo {
     6: optional map<string, string> properties;
 }
 
+struct TTubeLoadInfo {
+    1: required string master_addr;
+    2: required string topic;
+    3: required string group_name;
+    4: optional i32 consume_position;
+}
+
 struct TRoutineLoadTask {
     1: required Types.TLoadSourceType type
     2: required i64 job_id
@@ -76,6 +83,7 @@ struct TRoutineLoadTask {
     13: optional InternalService.TExecPlanFragmentParams params
     14: optional PlanNodes.TFileFormatType format
     15: optional TPulsarLoadInfo pulsar_load_info
+    16: optional TTubeLoadInfo tube_load_info
 }
 
 struct TKafkaMetaProxyRequest {

@@ -35,6 +35,9 @@ import org.apache.logging.log4j.Logger;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public class RoutineLoadDataSourceProperties {
     private static final Logger LOG = LogManager.getLogger(RoutineLoadDataSourceProperties.class);
@@ -47,6 +50,10 @@ public class RoutineLoadDataSourceProperties {
     private static final ImmutableSet<String> CONFIGURABLE_PULSAR_PROPERTIES_SET = new ImmutableSet.Builder<String>()
             .add(CreateRoutineLoadStmt.PULSAR_PARTITIONS_PROPERTY)
             .add(CreateRoutineLoadStmt.PULSAR_INITIAL_POSITIONS_PROPERTY)
+            .build();
+
+    private static final ImmutableSet<String> CONFIGURABLE_TUBE_PROPERTIES_SET = new ImmutableSet.Builder<String>()
+            .add(CreateRoutineLoadStmt.TUBE_CONSUME_POSITION)
             .build();
 
     @SerializedName(value = "type")
@@ -63,6 +70,9 @@ public class RoutineLoadDataSourceProperties {
     private List<Pair<String, Long>> pulsarPartitionInitialPositions = Lists.newArrayList();
     @SerializedName(value = "customPulsarProperties")
     private Map<String, String> customPulsarProperties = Maps.newHashMap();
+
+    @SerializedName(value = "tubeConsumePosition")
+    private Integer tubeConsumePosition = null;
 
     public RoutineLoadDataSourceProperties() {
         // empty
@@ -82,6 +92,8 @@ public class RoutineLoadDataSourceProperties {
             return !kafkaPartitionOffsets.isEmpty() || !customKafkaProperties.isEmpty();
         } else if (type.equals("PULSAR")) {
             return !pulsarPartitionInitialPositions.isEmpty() || !customPulsarProperties.isEmpty();
+        } else if (type.equals("TUBE")) {
+            return tubeConsumePosition != null;
         } else {
             return false;
         }
@@ -107,6 +119,10 @@ public class RoutineLoadDataSourceProperties {
         return customPulsarProperties;
     }
 
+    public int getTubeConsumePosition() {
+        return tubeConsumePosition;
+    }
+
     private void checkDataSourceProperties() throws AnalysisException {
         LoadDataSourceType sourceType;
         try {
@@ -120,6 +136,9 @@ public class RoutineLoadDataSourceProperties {
                 break;
             case PULSAR:
                 checkPulsarProperties();
+                break;
+            case TUBE:
+                checkTubeProperties();
                 break;
             default:
                 break;
@@ -194,6 +213,20 @@ public class RoutineLoadDataSourceProperties {
         }
     }
 
+    private void checkTubeProperties() throws AnalysisException {
+        Optional<String> optional = properties.keySet().stream().filter(
+                entity -> !CONFIGURABLE_TUBE_PROPERTIES_SET.contains(entity)).findFirst();
+        if (optional.isPresent()) {
+            throw new AnalysisException(optional.get() + " is invalid tube custom property");
+        }
+
+        // check position
+        String tubeConsumePositionString = properties.get(CreateRoutineLoadStmt.TUBE_CONSUME_POSITION);
+        if (tubeConsumePositionString != null) {
+            tubeConsumePosition = CreateRoutineLoadStmt.getTubeConsumePosition(tubeConsumePositionString);
+        }
+    }
+
     @Override
     public String toString() {
         if (!hasAnalyzedProperties()) {
@@ -210,6 +243,10 @@ public class RoutineLoadDataSourceProperties {
                 sb.append(", pulsar partition initial positions: ").append(pulsarPartitionInitialPositions);
             }
             sb.append(", custom properties: ").append(customPulsarProperties);
+        } else if (type.equals("TUBE")) {
+            if (tubeConsumePosition != null) {
+                sb.append(", tube consume position: ").append(tubeConsumePosition);
+            }
         }
         return sb.toString();
     }

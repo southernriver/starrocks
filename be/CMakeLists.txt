@@ -268,6 +268,9 @@ set_target_properties(librdkafka PROPERTIES IMPORTED_LOCATION ${THIRDPARTY_DIR}/
 add_library(libpulsar STATIC IMPORTED)
 set_target_properties(libpulsar PROPERTIES IMPORTED_LOCATION ${THIRDPARTY_DIR}/lib/libpulsar.a)
 
+add_library(libtubemq STATIC IMPORTED)
+set_target_properties(libtubemq PROPERTIES IMPORTED_LOCATION ${THIRDPARTY_DIR}/lib/libtubemq.a)
+
 add_library(libs2 STATIC IMPORTED)
 set_target_properties(libs2 PROPERTIES IMPORTED_LOCATION ${THIRDPARTY_DIR}/lib/libs2.a)
 
@@ -678,6 +681,7 @@ set(STARROCKS_DEPENDENCIES
     librdkafka_cpp
     librdkafka
     libpulsar
+    libtubemq
     velocypack
     opentelemetry_trace
     http_client_curl

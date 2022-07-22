@@ -70,7 +70,8 @@ import java.util.regex.Pattern;
 
       type of routine load:
           KAFKA,
-          PULSAR
+          PULSAR,
+          TUBE
 */
 public class CreateRoutineLoadStmt extends DdlStmt {
     private static final Logger LOG = LogManager.getLogger(CreateRoutineLoadStmt.class);
@@ -107,6 +108,20 @@ public class CreateRoutineLoadStmt extends DdlStmt {
     public static final String PULSAR_INITIAL_POSITIONS_PROPERTY = "pulsar_initial_positions";
     public static final String PULSAR_DEFAULT_INITIAL_POSITION = "pulsar_default_initial_position";
 
+    // tube type properties
+    public static final String TUBE_MASTER_ADDR_PROPERTY = "tube_master_addr";
+    public static final String TUBE_TOPIC_PROPERTY = "tube_topic";
+    public static final String TUBE_GROUP_NAME_PROPERTY = "tube_group_name";
+    // optional
+    public static final String TUBE_CONSUME_POSITION = "tube_consume_position";
+
+    public static final String TUBE_FROM_FIRST = "FROM_FIRST"; // -1
+    public static final String TUBE_FROM_LATEST = "FROM_LATEST"; // 0
+    public static final String TUBE_FROM_MAX = "FROM_MAX"; // 1
+    public static final int TUBE_FROM_FIRST_VAL = -1;
+    public static final int TUBE_FROM_LATEST_VAL = 0;
+    public static final int TUBE_FROM_MAX_VAL = 1;
+
     private static final String NAME_TYPE = "ROUTINE LOAD NAME";
     private static final String ENDPOINT_REGEX = "[-A-Za-z0-9+&@#/%?=~_|!:,.;]+[-A-Za-z0-9+&@#/%=~_|]";
 
@@ -142,7 +157,14 @@ public class CreateRoutineLoadStmt extends DdlStmt {
             .add(PULSAR_INITIAL_POSITIONS_PROPERTY)
             .build();
 
-    private LabelName labelName;
+    private static final ImmutableSet<String> TUBE_PROPERTIES_SET = new ImmutableSet.Builder<String>()
+            .add(TUBE_MASTER_ADDR_PROPERTY)
+            .add(TUBE_TOPIC_PROPERTY)
+            .add(TUBE_GROUP_NAME_PROPERTY)
+            .add(TUBE_CONSUME_POSITION)
+            .build();
+
+    private final LabelName labelName;
     private final String tableName;
     private final List<ParseNode> loadPropertyList;
     private final Map<String, String> jobProperties;
@@ -193,6 +215,12 @@ public class CreateRoutineLoadStmt extends DdlStmt {
 
     // custom pulsar property map<key, value>
     private Map<String, String> customPulsarProperties = Maps.newHashMap();
+
+    // tube related properties
+    private String tubeMasterAddr;
+    private String tubeTopic;
+    private String tubeGroupName;
+    private int tubeConsumePosition;
 
     public static final Predicate<Long> DESIRED_CONCURRENT_NUMBER_PRED = (v) -> v > 0L;
     public static final Predicate<Long> MAX_ERROR_NUMBER_PRED = (v) -> v >= 0L;
@@ -340,6 +368,22 @@ public class CreateRoutineLoadStmt extends DdlStmt {
 
     public Map<String, String> getCustomPulsarProperties() {
         return customPulsarProperties;
+    }
+
+    public String getTubeMasterAddr() {
+        return tubeMasterAddr;
+    }
+
+    public String getTubeTopic() {
+        return tubeTopic;
+    }
+
+    public String getTubeGroupName() {
+        return tubeGroupName;
+    }
+
+    public int getTubeConsumePosition() {
+        return tubeConsumePosition;
     }
 
     public List<ParseNode> getLoadPropertyList() {
@@ -497,6 +541,9 @@ public class CreateRoutineLoadStmt extends DdlStmt {
                 break;
             case PULSAR:
                 checkPulsarProperties();
+                break;
+            case TUBE:
+                checkTubeProperties();
                 break;
             default:
                 break;
@@ -766,6 +813,57 @@ public class CreateRoutineLoadStmt extends DdlStmt {
             }
             // can be extended in the future which other prefix
         }
+    }
+
+    private void checkTubeProperties() throws AnalysisException {
+        Optional<String> optional = dataSourceProperties.keySet().stream()
+                .filter(entity -> !TUBE_PROPERTIES_SET.contains(entity)).findFirst();
+        if (optional.isPresent()) {
+            throw new AnalysisException(optional.get() + " is invalid tube custom property");
+        }
+
+        // check tube master address
+        tubeMasterAddr = Strings.nullToEmpty(dataSourceProperties.get(TUBE_MASTER_ADDR_PROPERTY)).replaceAll(" ", "");
+        if (Strings.isNullOrEmpty(tubeMasterAddr)) {
+            throw new AnalysisException(TUBE_MASTER_ADDR_PROPERTY + " is a required property");
+        }
+
+        if (!Pattern.matches(ENDPOINT_REGEX, tubeMasterAddr)) {
+            throw new AnalysisException(TUBE_MASTER_ADDR_PROPERTY + ":" + tubeMasterAddr
+                    + " not match pattern " + ENDPOINT_REGEX);
+        }
+
+        // check topic
+        tubeTopic = Strings.nullToEmpty(dataSourceProperties.get(TUBE_TOPIC_PROPERTY)).replaceAll(" ", "");
+        if (Strings.isNullOrEmpty(tubeTopic)) {
+            throw new AnalysisException(TUBE_TOPIC_PROPERTY + " is a required property");
+        }
+
+        // check group name
+        tubeGroupName = Strings.nullToEmpty(dataSourceProperties.get(TUBE_GROUP_NAME_PROPERTY)).replaceAll(" ", "");
+        if (Strings.isNullOrEmpty(tubeGroupName)) {
+            throw new AnalysisException(TUBE_GROUP_NAME_PROPERTY + " is a required property");
+        }
+
+        // check positions
+        String consumePosition = dataSourceProperties.get(TUBE_CONSUME_POSITION);
+        if (consumePosition != null) {
+            tubeConsumePosition = getTubeConsumePosition(consumePosition);
+        }
+    }
+
+    public static int getTubeConsumePosition(String consumePositionStr) throws AnalysisException {
+        int position;
+        if (consumePositionStr.equalsIgnoreCase(TUBE_FROM_FIRST)) {
+            position = TUBE_FROM_FIRST_VAL;
+        } else if (consumePositionStr.equalsIgnoreCase(TUBE_FROM_LATEST)) {
+            position = TUBE_FROM_LATEST_VAL;
+        } else if (consumePositionStr.equalsIgnoreCase(TUBE_FROM_MAX)) {
+            position = TUBE_FROM_MAX_VAL;
+        } else {
+            throw new AnalysisException("Only FROM_FIRST/FROM_LATEST/FROM_MAX can be specified");
+        }
+        return position;
     }
 
     private static int getIntegerValueFromString(String valueString, String propertyName) throws AnalysisException {
