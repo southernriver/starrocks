@@ -525,6 +525,16 @@ build_pulsar() {
     cp -r include/pulsar $TP_INSTALL_DIR/include/
 }
 
+# tube
+build_tube() {
+    check_if_source_exist $TUBE_SOURCE
+
+    cd $TP_SOURCE_DIR/$TUBE_SOURCE
+
+    cp lib/libtubemq.a $TP_INSTALL_DIR/lib/
+    cp -r include/tubemq $TP_INSTALL_DIR/include/
+}
+
 # flatbuffers
 build_flatbuffers() {
   check_if_source_exist $FLATBUFFERS_SOURCE
@@ -953,6 +963,7 @@ build_brpc
 build_rocksdb
 build_librdkafka
 build_pulsar
+build_tube
 build_flatbuffers
 build_arrow
 build_s2

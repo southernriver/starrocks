@@ -197,6 +197,9 @@ public class RoutineLoadManager implements Writable {
             case PULSAR:
                 routineLoadJob = PulsarRoutineLoadJob.fromCreateStmt(createRoutineLoadStmt);
                 break;
+            case TUBE:
+                routineLoadJob = TubeRoutineLoadJob.fromCreateStmt(createRoutineLoadStmt);
+                break;
             default:
                 throw new UserException("Unknown data source type: " + type);
         }

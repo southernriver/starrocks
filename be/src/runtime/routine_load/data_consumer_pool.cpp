@@ -55,6 +55,9 @@ Status DataConsumerPool::get_consumer(StreamLoadContext* ctx, std::shared_ptr<Da
     case TLoadSourceType::PULSAR:
         consumer = std::make_shared<PulsarDataConsumer>(ctx);
         break;
+    case TLoadSourceType::TUBE:
+        consumer = std::make_shared<TubeDataConsumer>(ctx);
+        break;
     default:
         std::stringstream ss;
         ss << "PAUSE: unknown routine load task type: " << ctx->load_type;
@@ -70,44 +73,49 @@ Status DataConsumerPool::get_consumer(StreamLoadContext* ctx, std::shared_ptr<Da
 }
 
 Status DataConsumerPool::get_consumer_grp(StreamLoadContext* ctx, std::shared_ptr<DataConsumerGroup>* ret) {
-    if (ctx->load_src_type != TLoadSourceType::KAFKA && ctx->load_src_type != TLoadSourceType::PULSAR) {
-        return Status::InternalError("PAUSE: Currently only support consumer group for Kafka or Palsur data source");
+    if (ctx->load_src_type != TLoadSourceType::KAFKA && ctx->load_src_type != TLoadSourceType::PULSAR &&
+        ctx->load_src_type != TLoadSourceType::TUBE) {
+        return Status::InternalError("PAUSE: Currently only support consumer group for Kafka/Palsur/Tube data source");
     }
 
     if (ctx->load_src_type == TLoadSourceType::KAFKA) {
         DCHECK(ctx->kafka_info);
 
-        // one data consumer group contains at least one data consumers.
-        int max_consumer_num = config::max_consumer_num_per_group;
-        size_t consumer_num = std::min((size_t)max_consumer_num, ctx->kafka_info->begin_offset.size());
+      LOG(INFO) << "get consumer group " << grp->grp_id() << " with " << consumer_num << " consumers";
+      *ret = grp;
+      return Status::OK();
+    } if (ctx->load_src_type == TLoadSourceType::PULSAR) {
+      DCHECK(ctx->pulsar_info);
+      DCHECK_GE(ctx->pulsar_info->partitions.size(), 1);
+  
+      // Cumulative acknowledge is not supported for multiple topic subscribtion,
+      // so one consumer can only subscribe one topic/partition
+      int max_consumer_num = config::max_consumer_num_per_group;
+      if (max_consumer_num < ctx->pulsar_info->partitions.size()) {
+          return Status::InternalError(
+                  "PAUSE: Partition num is more than max consumer num in one data consumer group on some BEs, please "
+                  "increase max_consumer_num_per_group from BE side or just add more BEs");
+      }
+      size_t consumer_num = ctx->pulsar_info->partitions.size();
+  
+      std::shared_ptr<PulsarDataConsumerGroup> grp = std::make_shared<PulsarDataConsumerGroup>(consumer_num);
+  
+      for (int i = 0; i < consumer_num; ++i) {
+          std::shared_ptr<DataConsumer> consumer;
+          RETURN_IF_ERROR(get_consumer(ctx, &consumer));
+          grp->add_consumer(consumer);
+      }
 
-        std::shared_ptr<KafkaDataConsumerGroup> grp = std::make_shared<KafkaDataConsumerGroup>(consumer_num);
-
-        for (int i = 0; i < consumer_num; ++i) {
-            std::shared_ptr<DataConsumer> consumer;
-            RETURN_IF_ERROR(get_consumer(ctx, &consumer));
-            grp->add_consumer(consumer);
-        }
-
-        LOG(INFO) << "get consumer group " << grp->grp_id() << " with " << consumer_num << " consumers";
-        *ret = grp;
-        return Status::OK();
+      LOG(INFO) << "get consumer group " << grp->grp_id() << " with " << consumer_num << " consumers";
+      *ret = grp;
+      return Status::OK();
     } else {
-        DCHECK(ctx->pulsar_info);
-        DCHECK_GE(ctx->pulsar_info->partitions.size(), 1);
-
-        // Cumulative acknowledge is not supported for multiple topic subscribtion,
-        // so one consumer can only subscribe one topic/partition
-        int max_consumer_num = config::max_pulsar_consumer_num_per_group;
-        if (max_consumer_num < ctx->pulsar_info->partitions.size()) {
-            return Status::InternalError(
-                    "PAUSE: Partition num is more than max consumer num in one data consumer group on some BEs, please "
-                    "increase max_pulsar_consumer_num_per_group from BE side or just add more BEs");
-        }
-        size_t consumer_num = ctx->pulsar_info->partitions.size();
-
-        std::shared_ptr<PulsarDataConsumerGroup> grp = std::make_shared<PulsarDataConsumerGroup>(consumer_num);
-
+        DCHECK(ctx->tube_info);
+  
+        // TODO(TUBE): 1 for now.
+        size_t consumer_num = 1;
+        std::shared_ptr<TubeDataConsumerGroup> grp = std::make_shared<TubeDataConsumerGroup>(consumer_num);
+  
         for (int i = 0; i < consumer_num; ++i) {
             std::shared_ptr<DataConsumer> consumer;
             RETURN_IF_ERROR(get_consumer(ctx, &consumer));

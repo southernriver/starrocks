@@ -61,6 +61,4 @@ public:
     }
 };
 
-using PulsaConsumerPipe = KafkaConsumerPipe;
-
 } // end namespace starrocks

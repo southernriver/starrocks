@@ -27,6 +27,8 @@
 
 #include "librdkafka/rdkafkacpp.h"
 #include "pulsar/Client.h"
+#include "tubemq/tubemq_client.h"
+#include "tubemq/tubemq_tdmsg.h"
 #include "runtime/stream_load/stream_load_context.h"
 #include "util/blocking_queue.hpp"
 #include "util/uid_util.h"
@@ -38,6 +40,7 @@ class Status;
 class StreamLoadPipe;
 
 using PulsarConsumerPipe = KafkaConsumerPipe;
+using TubeConsumerPipe = KafkaConsumerPipe;
 
 class DataConsumer {
 public:
@@ -206,6 +209,41 @@ private:
     pulsar::Client* _p_client = nullptr;
     pulsar::Consumer _p_consumer;
     std::shared_ptr<PulsarConsumerPipe> _p_consumer_pipe;
+};
+
+class TubeDataConsumer : public DataConsumer {
+public:
+    TubeDataConsumer(StreamLoadContext* ctx)
+            : DataConsumer(ctx),
+              _master_addr(ctx->tube_info->master_addr),
+              _topic(ctx->tube_info->topic),
+              _group_name(ctx->tube_info->group_name) {}
+
+    ~TubeDataConsumer() override {
+        VLOG(3) << "close tube consumer";
+        _t_consumer.ShutDown();
+    }
+
+    Status init(StreamLoadContext* ctx) override;
+    Status set_group_consume_target(StreamLoadContext* ctx);
+    // TODO(cmy): currently do not implement single consumer start method, using group_consume
+    Status consume(StreamLoadContext* ctx) override { return Status::OK(); }
+    Status cancel(StreamLoadContext* ctx) override;
+    // reassign partition topics
+    Status reset() override;
+    bool match(StreamLoadContext* ctx) override;
+
+    // start the consumer and put msgs to queue
+    Status group_consume(TimedBlockingQueue<tubemq::ConsumerResult*>* queue, int64_t max_running_time_ms);
+
+private:
+    std::string _master_addr;
+    std::string _topic;
+    std::string _group_name;
+
+    tubemq::ConsumerConfig _t_consumer_config;
+    tubemq::TubeMQConsumer _t_consumer;
+    std::shared_ptr<TubeConsumerPipe> _t_consumer_pipe;
 };
 
 } // end namespace starrocks

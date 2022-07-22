@@ -108,4 +108,28 @@ private:
     TimedBlockingQueue<pulsar::Message*> _queue;
 };
 
+// for tube
+class TubeDataConsumerGroup : public DataConsumerGroup {
+public:
+    TubeDataConsumerGroup(size_t sz) : DataConsumerGroup(sz), _queue(500) {}
+
+    ~TubeDataConsumerGroup() override;
+
+    Status start_all(StreamLoadContext* ctx) override;
+    // assign topic partitions to all consumers equally
+    Status assign_topic_partitions(StreamLoadContext* ctx);
+
+private:
+    // start a single consumer
+    void actual_consume(const std::shared_ptr<DataConsumer>& consumer,
+                        TimedBlockingQueue<tubemq::ConsumerResult*>* queue, int64_t max_running_time_ms,
+                        const ConsumeFinishCallback& cb);
+
+    Status get_data_items(const tubemq::Message& msg, std::list<tubemq::DataItem>* data_items);
+
+private:
+    // blocking queue to receive msgs from all consumers
+    TimedBlockingQueue<tubemq::ConsumerResult*> _queue;
+};
+
 } // end namespace starrocks

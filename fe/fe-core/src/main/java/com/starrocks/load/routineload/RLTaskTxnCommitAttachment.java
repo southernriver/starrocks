@@ -65,6 +65,9 @@ public class RLTaskTxnCommitAttachment extends TxnCommitAttachment {
             case PULSAR:
                 this.progress = new PulsarProgress(rlTaskTxnCommitAttachment.getPulsarRLTaskProgress());
                 break;
+            case TUBE:
+                this.progress = new TubeProgress(rlTaskTxnCommitAttachment.getTubeRLTaskProgress());
+                break;
             default:
                 break;
         }

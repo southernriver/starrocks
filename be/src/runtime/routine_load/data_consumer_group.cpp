@@ -434,4 +434,205 @@ void PulsarDataConsumerGroup::get_backlog_nums(StreamLoadContext* ctx) {
     }
 }
 
+Status TubeDataConsumerGroup::assign_topic_partitions(StreamLoadContext* ctx) {
+    DCHECK(ctx->tube_info);
+    DCHECK(_consumers.size() >= 1);
+
+    // assign partition to consumers
+    int consumer_size = _consumers.size();
+    for (int i = 0; i < consumer_size; ++i) {
+        RETURN_IF_ERROR(std::static_pointer_cast<TubeDataConsumer>(_consumers[i])->set_group_consume_target(ctx));
+    }
+
+    return Status::OK();
+}
+
+TubeDataConsumerGroup::~TubeDataConsumerGroup() {
+    // clean the msgs left in queue
+    _queue.shutdown();
+    while (true) {
+        tubemq::ConsumerResult* consumer_result;
+        if (_queue.blocking_get(&consumer_result)) {
+            delete consumer_result;
+            consumer_result = nullptr;
+        } else {
+            break;
+        }
+    }
+    DCHECK(_queue.get_size() == 0);
+}
+
+Status TubeDataConsumerGroup::start_all(StreamLoadContext* ctx) {
+    Status result_st = Status::OK();
+    // start all consumers
+    for (auto& consumer : _consumers) {
+        if (!_thread_pool.offer([this, consumer, capture0 = &_queue, capture1 = ctx->max_interval_s * 1000,
+                                 capture2 = [this, &result_st](const Status& st) {
+                                     std::unique_lock<std::mutex> lock(_mutex);
+                                     _counter--;
+                                     VLOG(1) << "group counter is: " << _counter << ", grp: " << _grp_id;
+                                     if (_counter == 0) {
+                                         _queue.shutdown();
+                                         LOG(INFO)
+                                                 << "all consumers are finished. shutdown queue. group id: " << _grp_id;
+                                     }
+                                     if (result_st.ok() && !st.ok()) {
+                                         result_st = st;
+                                     }
+                                 }] { actual_consume(consumer, capture0, capture1, capture2); })) {
+            LOG(WARNING) << "failed to submit data consumer: " << consumer->id() << ", group id: " << _grp_id;
+            return Status::InternalError("failed to submit data consumer");
+        } else {
+            VLOG(1) << "submit a data consumer: " << consumer->id() << ", group id: " << _grp_id;
+        }
+    }
+
+    // consuming from queue and put data to stream load pipe
+    int64_t left_time = ctx->max_interval_s * 1000;
+    int64_t received_rows = 0;
+    int64_t left_bytes = ctx->max_batch_size;
+
+    std::shared_ptr<TubeConsumerPipe> tube_pipe = std::static_pointer_cast<TubeConsumerPipe>(ctx->body_sink);
+
+    LOG(INFO) << "start consumer group: " << _grp_id << ". max time(ms): " << left_time
+              << ", batch size: " << left_bytes << ". " << ctx->brief();
+
+    // copy one
+    std::map<std::string, int64_t> cmt_offset = ctx->tube_info->cmt_offset;
+
+    //improve performance
+    Status (TubeConsumerPipe::*append_data)(const char* data, size_t size, char row_delimiter);
+    char row_delimiter = '\n';
+    if (ctx->format == TFileFormatType::FORMAT_JSON) {
+        append_data = &TubeConsumerPipe::append_json;
+    } else {
+        append_data = &TubeConsumerPipe::append_with_row_delimiter;
+        auto& per_node_scan_ranges = ctx->put_result.params.params.per_node_scan_ranges;
+
+        if (!per_node_scan_ranges.empty()) {
+            DCHECK_GE(per_node_scan_ranges.begin()->second.size(), 1);
+
+            auto& scan_range = per_node_scan_ranges.begin()->second[0].scan_range;
+            auto& params = scan_range.broker_scan_range.params;
+            row_delimiter = static_cast<char>(params.row_delimiter);
+        }
+    }
+
+    MonotonicStopWatch watch;
+    watch.start();
+    bool eos = false;
+    while (true) {
+        if (eos || left_time <= 0 || left_bytes <= 0) {
+            LOG(INFO) << "consumer group done: " << _grp_id
+                      << ". consume time(ms)=" << ctx->max_interval_s * 1000 - left_time
+                      << ", received rows=" << received_rows << ", received bytes=" << ctx->max_batch_size - left_bytes
+                      << ", eos: " << eos << ", left_time: " << left_time << ", left_bytes: " << left_bytes
+                      << ", blocking get time(us): " << _queue.total_get_wait_time() / 1000
+                      << ", blocking put time(us): " << _queue.total_put_wait_time() / 1000;
+
+            // shutdown queue
+            _queue.shutdown();
+            // cancel all consumers
+            for (auto& consumer : _consumers) {
+                consumer->cancel(ctx);
+            }
+
+            // waiting all threads finished
+            _thread_pool.shutdown();
+            _thread_pool.join();
+
+            if (!result_st.ok()) {
+                // some consumers encounter errors, cancel this task
+                return result_st;
+            }
+
+            if (left_bytes == ctx->max_batch_size) {
+                // nothing to be consumed, we have to cancel it, because
+                // we do not allow finishing stream load pipe without data
+                tube_pipe->cancel(Status::Cancelled("Cancelled"));
+                return Status::Cancelled("Cancelled");
+            } else {
+                DCHECK(left_bytes < ctx->max_batch_size);
+                tube_pipe->finish();
+                ctx->receive_bytes = ctx->max_batch_size - left_bytes;
+                ctx->tube_info->cmt_offset = std::move(cmt_offset);
+                return Status::OK();
+            }
+        }
+
+        tubemq::ConsumerResult* consumer_result;
+        bool res = _queue.blocking_get(&consumer_result);
+        if (res) {
+            for (auto& msg : consumer_result->GetMessageList()) {
+                std::string topic = msg.GetTopic();
+                VLOG(3) << "get tube message: " << topic << " - " << msg.GetDataLength();
+
+                std::list<tubemq::DataItem> data_items;
+                Status st = get_data_items(msg, &data_items);
+                if (st.ok()) {
+                    for (auto& data_item : data_items) {
+                        std::size_t len = data_item.GetLength();
+                        st = (tube_pipe.get()->*append_data)(static_cast<const char*>(data_item.GetData()),
+                                                                    static_cast<size_t>(len),
+                                                                    row_delimiter);
+                        if (st.ok()) {
+                            received_rows++;
+                            left_bytes -= len;
+                            VLOG(3) << "consume parsed tube message: " << topic << " - " << len;
+                        } else {
+                            // failed to append this msg, we must stop
+                            LOG(WARNING) << "failed to append msg to pipe. grp: " << _grp_id
+                                         << ", errmsg=" << st.get_error_msg();
+                            break;
+                        }
+                    }
+                }
+                
+                // There could be tubemq parse error or inside pipe append error here
+                if (!st.ok()) {
+                    eos = true;
+                    {
+                        std::unique_lock<std::mutex> lock(_mutex);
+                        if (result_st.ok()) {
+                            result_st = st;
+                        }
+                    }
+                    break;
+                }
+            }
+            cmt_offset[consumer_result->GetPartitionKey()] = consumer_result->GetCurrOffset();
+            delete consumer_result;
+        } else {
+            // queue is empty and shutdown
+            eos = true;
+        }
+
+        left_time = ctx->max_interval_s * 1000 - watch.elapsed_time() / 1000 / 1000;
+    }
+
+    return Status::OK();
+}
+
+Status TubeDataConsumerGroup::get_data_items(const tubemq::Message& msg, std::list<tubemq::DataItem>* data_items) {
+    std::string err_info;
+    tubemq::TubeMQTDMsg tdmsg;
+    if (tdmsg.ParseTDMsg(msg.GetData(), msg.GetDataLength(), err_info)) {
+        for (auto attr_data : tdmsg.GetAttr2DataMap()) {
+            data_items->splice(data_items->end(), attr_data.second);
+        }
+    } else {
+        LOG(WARNING) << "failed to parse tube data: " << err_info;
+        return Status::InternalError("PAUSE: failed to parse tube data: " + err_info);
+    }
+
+    return Status::OK();
+}
+
+void TubeDataConsumerGroup::actual_consume(const std::shared_ptr<DataConsumer>& consumer,
+                                            TimedBlockingQueue<tubemq::ConsumerResult*>* queue, int64_t max_running_time_ms,
+                                            const ConsumeFinishCallback& cb) {
+    Status st = std::static_pointer_cast<TubeDataConsumer>(consumer)->group_consume(queue, max_running_time_ms);
+    cb(st);
+}
+
 } // namespace starrocks

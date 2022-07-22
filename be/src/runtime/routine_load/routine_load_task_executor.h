@@ -102,6 +102,9 @@ private:
     std::mutex _lock;
     // task id -> load context
     std::unordered_map<UniqueId, StreamLoadContext*> _task_map;
+
+    // for tubemq only
+    bool tubemq_service_started = false;
 };
 
 } // namespace starrocks
