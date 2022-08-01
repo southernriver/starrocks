@@ -436,6 +436,7 @@ Status PulsarDataConsumer::init(StreamLoadContext* ctx) {
     VLOG(3) << "finished to init pulsar consumer. " << ctx->brief();
 
     _init = true;
+    _init_time = time(nullptr);
     return Status::OK();
 }
 
@@ -605,6 +606,13 @@ bool PulsarDataConsumer::match(StreamLoadContext* ctx) {
     if (ctx->load_src_type != TLoadSourceType::PULSAR) {
         return false;
     }
+
+    // Recycle pulsar client every day for memory purpose
+    const static int32_t max_recycle_time_second = 86400;
+    if (difftime(time(nullptr), _init_time) >= max_recycle_time_second) {
+        return false;
+    }
+
     if (_service_url != ctx->pulsar_info->service_url || _topic != ctx->pulsar_info->topic ||
         _subscription != ctx->pulsar_info->subscription) {
         return false;

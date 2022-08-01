@@ -196,6 +196,8 @@ public:
     const std::string& get_partition();
 
 private:
+    time_t _init_time;
+
     std::string _service_url;
     std::string _topic;
     std::string _subscription;
