@@ -68,6 +68,7 @@ protected:
     std::unique_ptr<RowDescriptor> _row_desc;
 
     bool _strict_mode;
+    bool _ignore_tail_columns;
     int64_t _error_counter;
 
     // sources

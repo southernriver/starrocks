@@ -142,6 +142,7 @@ public class CreateRoutineLoadStmt extends DdlStmt {
             .add(STRIP_OUTER_ARRAY)
             .add(JSONROOT)
             .add(LoadStmt.STRICT_MODE)
+            .add(LoadStmt.IGNORE_TAIL_COLUMNS)
             .add(LoadStmt.TIMEZONE)
             .add(LoadStmt.PARTIAL_UPDATE)
             .build();
@@ -178,6 +179,7 @@ public class CreateRoutineLoadStmt extends DdlStmt {
     private long maxBatchIntervalS = -1;
     private long maxBatchRows = -1;
     private boolean strictMode = true;
+    private boolean ignoreTailColumns = false;
     private String timezone = TimeUtils.DEFAULT_TIME_ZONE;
     private boolean partialUpdate = false;
     /**
@@ -265,6 +267,10 @@ public class CreateRoutineLoadStmt extends DdlStmt {
 
     public boolean isStrictMode() {
         return strictMode;
+    }
+
+    public boolean isIgnoreTailColumns() {
+        return ignoreTailColumns;
     }
 
     public String getTimezone() {
@@ -464,6 +470,10 @@ public class CreateRoutineLoadStmt extends DdlStmt {
         strictMode = Util.getBooleanPropertyOrDefault(jobProperties.get(LoadStmt.STRICT_MODE),
                 RoutineLoadJob.DEFAULT_STRICT_MODE,
                 LoadStmt.STRICT_MODE + " should be a boolean");
+
+        ignoreTailColumns = Util.getBooleanPropertyOrDefault(jobProperties.get(LoadStmt.IGNORE_TAIL_COLUMNS),
+                RoutineLoadJob.DEFAULT_IGNORE_TAIL_COLUMNS,
+                LoadStmt.IGNORE_TAIL_COLUMNS + " should be a boolean");
 
         partialUpdate = Util.getBooleanPropertyOrDefault(jobProperties.get(LoadStmt.PARTIAL_UPDATE),
                 false,

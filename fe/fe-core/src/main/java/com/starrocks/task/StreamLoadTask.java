@@ -72,6 +72,7 @@ public class StreamLoadTask {
     private String path;
     private boolean negative;
     private boolean strictMode = false; // default is false
+    private boolean ignoreTailColumns = false; // default is false
     private String timezone = TimeUtils.DEFAULT_TIME_ZONE;
     private int timeout = Config.stream_load_default_timeout_second;
     private long execMemLimit = 0;
@@ -136,6 +137,10 @@ public class StreamLoadTask {
 
     public boolean isStrictMode() {
         return strictMode;
+    }
+
+    public boolean isIgnoreTailColumns() {
+        return ignoreTailColumns;
     }
 
     public String getTimezone() {
@@ -280,6 +285,7 @@ public class StreamLoadTask {
         rowDelimiter = routineLoadJob.getRowDelimiter();
         partitions = routineLoadJob.getPartitions();
         strictMode = routineLoadJob.isStrictMode();
+        ignoreTailColumns = routineLoadJob.isIgnoreTailColumns();
         timezone = routineLoadJob.getTimezone();
         timeout = (int) Config.routine_load_task_timeout_second;
         if (!routineLoadJob.getJsonPaths().isEmpty()) {

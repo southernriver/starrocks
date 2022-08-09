@@ -105,6 +105,7 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
 
     public static final long DEFAULT_TASK_SCHED_INTERVAL_SECOND = 10;
     public static final boolean DEFAULT_STRICT_MODE = false; // default is false
+    public static final boolean DEFAULT_IGNORE_TAIL_COLUMNS = false; // default is false
 
     protected static final String STAR_STRING = "*";
 
@@ -162,7 +163,7 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
     // maxErrorNum / (maxBatchRows * 10) = max error rate of routine load job
     // if current error rate is more than max error rate, the job will be paused
     protected long maxErrorNum = DEFAULT_MAX_ERROR_NUM; // optional
-    // include strict mode
+    // include strict mode and ignore tail columns
     protected Map<String, String> jobProperties = Maps.newHashMap();
 
     // sessionVariable's name -> sessionVariable's value
@@ -288,6 +289,7 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
         jobProperties.put(LoadStmt.PARTIAL_UPDATE, String.valueOf(stmt.isPartialUpdate()));
         jobProperties.put(LoadStmt.TIMEZONE, stmt.getTimezone());
         jobProperties.put(LoadStmt.STRICT_MODE, String.valueOf(stmt.isStrictMode()));
+        jobProperties.put(LoadStmt.IGNORE_TAIL_COLUMNS, String.valueOf(stmt.isIgnoreTailColumns()));
         if (Strings.isNullOrEmpty(stmt.getFormat()) || stmt.getFormat().equals("csv")) {
             jobProperties.put(PROPS_FORMAT, "csv");
             jobProperties.put(PROPS_STRIP_OUTER_ARRAY, "false");
@@ -463,6 +465,14 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
         String value = jobProperties.get(LoadStmt.STRICT_MODE);
         if (value == null) {
             return DEFAULT_STRICT_MODE;
+        }
+        return Boolean.valueOf(value);
+    }
+
+    public boolean isIgnoreTailColumns() {
+        String value = jobProperties.get(LoadStmt.IGNORE_TAIL_COLUMNS);
+        if (value == null) {
+            return DEFAULT_IGNORE_TAIL_COLUMNS;
         }
         return Boolean.valueOf(value);
     }

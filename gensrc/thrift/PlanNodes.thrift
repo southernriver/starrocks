@@ -216,6 +216,9 @@ struct TBrokerScanRangeParams {
     15: optional i32 hdfs_read_buffer_size_kb = 0
     // properties from hdfs-site.xml, core-site.xml and load_properties
     16: THdfsProperties hdfs_properties
+    // if ignore tail columns is true, the columns after TBrokerRangeDesc.num_of_columns_from_file
+    // will be ignored
+    17: optional bool ignore_tail_columns
 }
 
 // Broker scan range
