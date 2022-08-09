@@ -118,6 +118,11 @@ Status FileScanner::open() {
     if (_strict_mode && !_params.__isset.dest_sid_to_src_sid_without_trans) {
         return Status::InternalError("Slot map of dest to src must be set in strict mode");
     }
+
+    if (_params.__isset.ignore_tail_columns) {
+        _ignore_tail_columns = _params.ignore_tail_columns;
+    }
+
     return Status::OK();
 }
 

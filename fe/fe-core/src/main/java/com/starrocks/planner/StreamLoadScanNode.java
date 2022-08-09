@@ -198,6 +198,7 @@ public class StreamLoadScanNode extends LoadScanNode {
         }
 
         params.setStrict_mode(streamLoadInfo.isStrictMode());
+        params.setIgnore_tail_columns(streamLoadInfo.isIgnoreTailColumns());
         initColumns();
         initWhereExpr(streamLoadInfo.getWhereExpr(), analyzer);
     }

@@ -40,6 +40,7 @@ public class AlterRoutineLoadStmt extends DdlStmt {
             .add(CreateRoutineLoadStmt.JSONROOT)
             .add(CreateRoutineLoadStmt.STRIP_OUTER_ARRAY)
             .add(LoadStmt.STRICT_MODE)
+            .add(LoadStmt.IGNORE_TAIL_COLUMNS)
             .add(LoadStmt.TIMEZONE)
             .build();
 
@@ -148,6 +149,11 @@ public class AlterRoutineLoadStmt extends DdlStmt {
         if (jobProperties.containsKey(LoadStmt.STRICT_MODE)) {
             boolean strictMode = Boolean.valueOf(jobProperties.get(LoadStmt.STRICT_MODE));
             analyzedJobProperties.put(LoadStmt.STRICT_MODE, String.valueOf(strictMode));
+        }
+
+        if (jobProperties.containsKey(LoadStmt.IGNORE_TAIL_COLUMNS)) {
+            boolean ignoreTailColumns = Boolean.valueOf(jobProperties.get(LoadStmt.IGNORE_TAIL_COLUMNS));
+            analyzedJobProperties.put(LoadStmt.IGNORE_TAIL_COLUMNS, String.valueOf(ignoreTailColumns));
         }
 
         if (jobProperties.containsKey(LoadStmt.TIMEZONE)) {

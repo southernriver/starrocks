@@ -229,13 +229,17 @@ Status CSVScanner::_parse_csv(Chunk* chunk) {
         _curr_reader->split_record(record, &fields);
 
         if (fields.size() != _num_fields_in_csv) {
-            if (_counter->num_rows_filtered++ < 50) {
-                std::stringstream error_msg;
-                error_msg << "Value count does not match column count. "
-                          << "Expect " << _num_fields_in_csv << ", but got " << fields.size();
-                _report_error(record.to_string(), error_msg.str());
-            }
-            continue;
+            if (_ignore_tail_columns) {
+                fields.resize(_num_fields_in_csv);
+            } else {
+                if (_counter->num_rows_filtered++ < 50) {
+                    std::stringstream error_msg;
+                    error_msg << "Value count does not match column count. "
+                              << "Expect " << _num_fields_in_csv << ", but got " << fields.size();
+                    _report_error(record.to_string(), error_msg.str());
+                }
+                continue;
+            } 
         }
         if (!validate_utf8(record.data, record.size)) {
             if (_counter->num_rows_filtered++ < 50) {

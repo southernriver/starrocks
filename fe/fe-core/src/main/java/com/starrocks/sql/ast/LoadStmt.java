@@ -71,6 +71,7 @@ public class LoadStmt extends DdlStmt {
     public static final String CLUSTER_PROPERTY = "cluster";
     private static final String VERSION = "version";
     public static final String STRICT_MODE = "strict_mode";
+    public static final String IGNORE_TAIL_COLUMNS = "ignore_tail_columns";
     public static final String TIMEZONE = "timezone";
     public static final String PARTIAL_UPDATE = "partial_update";
     public static final String PRIORITY = "priority";
