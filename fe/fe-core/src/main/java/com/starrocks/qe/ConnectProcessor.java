@@ -441,7 +441,7 @@ public class ConnectProcessor {
                 ctx.setStartTime();
                 break;
             case COM_FIELD_LIST:
-                handleFieldList();
+                //handleFieldList();
                 break;
             case COM_CHANGE_USER:
                 handleChangeUser();
