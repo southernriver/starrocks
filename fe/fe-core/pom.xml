@@ -659,6 +659,11 @@ under the License.
             <scope>test</scope>
         </dependency>
 
+        <dependency>
+            <groupId>org.apache.ranger</groupId>
+            <artifactId>ranger-doris-plugin</artifactId>
+            <version>1.2.0-tq-0.1.0</version>
+        </dependency>
     </dependencies>
 
     <build>

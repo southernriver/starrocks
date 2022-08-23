@@ -1,7 +1,9 @@
 // This file is made available under Elastic License 2.0.
 package com.starrocks.utils;
 
+import com.starrocks.common.AnalysisException;
 import com.starrocks.mysql.MysqlPassword;
+import com.starrocks.qe.ConnectContext;
 import org.apache.commons.lang3.StringUtils;
 
 import java.util.Arrays;
@@ -39,7 +41,7 @@ public class TdwUtil {
             return username.startsWith("tdw_") ?
                     username : String.format(Locale.ROOT, "tdw_%s", username);
         }
-        return null;
+        return username;
     }
 
     public static String getUserName(String username) {
@@ -47,6 +49,12 @@ public class TdwUtil {
             return username.startsWith("tdw_") ?
                     username.substring(4) : username;
         }
-        return null;
+        return username;
     }
+
+    public static boolean hasQueryPrivilege(String dbName, String tableName) throws AnalysisException {
+        String userName = getTdwUserName(ConnectContext.get().getQualifiedUser());
+        return TdwRestClient.getInstance().queryPrivilegeForTable(userName, dbName, tableName);
+    }
+
 }
