@@ -121,6 +121,10 @@ public:
             : master_addr(t_info.master_addr),
               topic(t_info.topic),
               group_name(t_info.group_name) {
+                if (t_info.__isset.filters) {
+                  filters = t_info.filters;
+                }
+
                 if (t_info.__isset.consume_position) {
                   consume_position = t_info.consume_position;
                 }
@@ -137,6 +141,7 @@ public:
     std::string master_addr;
     std::string topic;
     std::string group_name;
+    std::string filters;
     int32_t consume_position = INVALID_CONSUME_POSITION;
 
     // partition -> offset, inclusive.

@@ -61,8 +61,12 @@ public class TubeRoutineLoadJob extends RoutineLoadJob {
     private String masterAddr;
     private String topic;
     private String groupName;
+    // optional, user want to specify filters.
+    private String filters = null;
     // optional, user want to specify consume position.
     private Integer consumePosition = null;
+
+    public static final String EMPTY_FILTER = "EMPTY_FILTER";
 
     public TubeRoutineLoadJob() {
         // for serialization, id is dummy
@@ -99,7 +103,7 @@ public class TubeRoutineLoadJob extends RoutineLoadJob {
                 for (int i = 0; i < currentConcurrentTaskNum; i++) {
                     long timeToExecuteMs = System.currentTimeMillis() + taskSchedIntervalS * 1000;
                     TubeTaskInfo tubeTaskInfo = new TubeTaskInfo(UUID.randomUUID(), id, clusterName,
-                            taskSchedIntervalS * 1000, timeToExecuteMs, consumePosition);
+                            taskSchedIntervalS * 1000, timeToExecuteMs, filters, consumePosition);
                     LOG.debug("tube routine load task created: " + tubeTaskInfo);
                     routineLoadTaskInfoList.add(tubeTaskInfo);
                     result.add(tubeTaskInfo);
@@ -242,11 +246,35 @@ public class TubeRoutineLoadJob extends RoutineLoadJob {
     }
 
     @Override
+    protected void setOptional(CreateRoutineLoadStmt stmt) throws UserException {
+        super.setOptional(stmt);
+
+        if (stmt.getTubeFilters() != null) {
+            setFilters(stmt.getTubeFilters());
+        }
+
+        if (stmt.getTubeConsumePosition() != null) {
+            setConsumePosition(stmt.getTubeConsumePosition());
+        }
+    }
+
+    protected void setFilters(String filters) {
+        this.filters = filters;
+    }
+
+    protected void setConsumePosition(int consumePosition) {
+        this.consumePosition = consumePosition;
+    }
+
+    @Override
     protected String dataSourcePropertiesJsonToString() {
         Map<String, String> dataSourceProperties = Maps.newHashMap();
         dataSourceProperties.put("MasterAddr", masterAddr);
         dataSourceProperties.put("topic", topic);
         dataSourceProperties.put("GroupName", groupName);
+        if (filters != null) {
+            dataSourceProperties.put("Filters", filters);
+        }
         if (consumePosition != null) {
             dataSourceProperties.put("ConsumePosition", String.valueOf(consumePosition));
         }
@@ -265,6 +293,11 @@ public class TubeRoutineLoadJob extends RoutineLoadJob {
         Text.writeString(out, masterAddr);
         Text.writeString(out, topic);
         Text.writeString(out, groupName);
+        if (filters == null) {
+            Text.writeString(out, EMPTY_FILTER);
+        } else {
+            Text.writeString(out, filters);
+        }
     }
 
     public void readFields(DataInput in) throws IOException {
@@ -272,6 +305,10 @@ public class TubeRoutineLoadJob extends RoutineLoadJob {
         masterAddr = Text.readString(in);
         topic = Text.readString(in);
         groupName = Text.readString(in);
+        filters = Text.readString(in);
+        if (filters.equals(EMPTY_FILTER)) {
+            filters = null;
+        }
     }
 
     @Override

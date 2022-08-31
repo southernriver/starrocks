@@ -116,8 +116,6 @@ public:
     ~TubeDataConsumerGroup() override;
 
     Status start_all(StreamLoadContext* ctx) override;
-    // assign topic partitions to all consumers equally
-    Status assign_topic_partitions(StreamLoadContext* ctx);
 
 private:
     // start a single consumer
