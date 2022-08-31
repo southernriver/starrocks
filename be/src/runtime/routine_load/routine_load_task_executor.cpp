@@ -281,14 +281,15 @@ Status RoutineLoadTaskExecutor::submit_task(const TRoutineLoadTask& task) {
             // TubeMQ service need to be started first
             if (!tubemq_service_started) {
                 tubemq::TubeMQServiceConfig serviceConfig;
-                std::string log_path = config::sys_log_dir + "/tubemq_log";
-                if (!boost::filesystem::is_directory(log_path)) {
+                std::string log_dir = config::sys_log_dir + "/tubemq_log";
+                if (!boost::filesystem::is_directory(log_dir)) {
                     boost::system::error_code ec;
-                    if (!boost::filesystem::create_directory(log_path, ec)) {
+                    if (!boost::filesystem::create_directory(log_dir, ec)) {
                         LOG(WARNING) << "Failed to create log path for tubemq service: " << ec.message();
                         return Status::InternalError("Failed to create log path for tubemq service: " + ec.message());
                     }
                 }
+                std::string log_path = log_dir + "/tubemq";
                 serviceConfig.SetLogCofigInfo(10 /*log_max_num*/, 100 /*log_max_size(MB)*/, 2 /*log_level(info)*/,
                                               log_path);
 
@@ -378,13 +379,8 @@ void RoutineLoadTaskExecutor::exec_task(StreamLoadContext* ctx, DataConsumerPool
         break;
     }
     case TLoadSourceType::TUBE: {
+        // Topic assignment has been done in consumer.init() stage
         pipe = std::make_shared<TubeConsumerPipe>();
-        Status st = std::static_pointer_cast<TubeDataConsumerGroup>(consumer_grp)->assign_topic_partitions(ctx);
-        if (!st.ok()) {
-            err_handler(ctx, st, st.get_error_msg());
-            cb(ctx);
-            return;
-        }
         break;
     }
     default: {

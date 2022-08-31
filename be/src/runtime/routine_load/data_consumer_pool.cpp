@@ -113,7 +113,7 @@ Status DataConsumerPool::get_consumer_grp(StreamLoadContext* ctx, std::shared_pt
         DCHECK(ctx->tube_info);
   
         // TODO(TUBE): 1 for now.
-        size_t consumer_num = 1;
+        size_t consumer_num = config::routine_load_tube_consumer_num_per_group;
         std::shared_ptr<TubeDataConsumerGroup> grp = std::make_shared<TubeDataConsumerGroup>(consumer_num);
   
         for (int i = 0; i < consumer_num; ++i) {

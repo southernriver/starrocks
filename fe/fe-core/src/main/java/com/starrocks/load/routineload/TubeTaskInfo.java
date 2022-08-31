@@ -42,17 +42,24 @@ import java.util.UUID;
 public class TubeTaskInfo extends RoutineLoadTaskInfo {
     private RoutineLoadManager routineLoadManager = Catalog.getCurrentCatalog().getRoutineLoadManager();
 
+    private String filters = null;
     private Integer consumePosition = null;
 
     public TubeTaskInfo(UUID id, long jobId, String clusterName, long taskScheduleIntervalMs, long timeToExecuteMs,
-                        Integer consumePosition) {
+                        String filters, Integer consumePosition) {
         super(id, jobId, clusterName, taskScheduleIntervalMs, timeToExecuteMs);
+        this.filters = filters;
         this.consumePosition = consumePosition;
     }
 
     public TubeTaskInfo(long timeToExecuteMs, TubeTaskInfo tubeTaskInfo) {
         super(UUID.randomUUID(), tubeTaskInfo.getJobId(), tubeTaskInfo.getClusterName(),
                 tubeTaskInfo.getTaskScheduleIntervalMs(), timeToExecuteMs, tubeTaskInfo.getBeId());
+        this.filters = tubeTaskInfo.getFilters();
+    }
+
+    public String getFilters() {
+        return filters;
     }
 
     public int getConsumePosition() {
@@ -99,6 +106,9 @@ public class TubeTaskInfo extends RoutineLoadTaskInfo {
         tTubeLoadInfo.setMaster_addr((routineLoadJob).getMasterAddr());
         tTubeLoadInfo.setTopic((routineLoadJob).getTopic());
         tTubeLoadInfo.setGroup_name((routineLoadJob).getGroupName());
+        if (filters != null) {
+            tTubeLoadInfo.setFilters(getFilters());
+        }
         if (consumePosition != null) {
             tTubeLoadInfo.setConsume_position(getConsumePosition());
         }
@@ -127,7 +137,7 @@ public class TubeTaskInfo extends RoutineLoadTaskInfo {
 
     @Override
     public String toString() {
-        return "Task id: " + getId() + ", consume position: " + consumePosition;
+        return "Task id: " + getId() + ", " + getTaskDataSourceProperties();
     }
 
     private TExecPlanFragmentParams plan(RoutineLoadJob routineLoadJob) throws UserException {

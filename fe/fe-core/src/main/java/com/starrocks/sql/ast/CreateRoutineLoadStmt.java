@@ -19,11 +19,13 @@ import com.starrocks.load.routineload.KafkaProgress;
 import com.starrocks.load.routineload.LoadDataSourceType;
 import com.starrocks.load.routineload.PulsarRoutineLoadJob;
 import com.starrocks.load.routineload.RoutineLoadJob;
+import com.starrocks.load.routineload.TubeRoutineLoadJob;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.OriginStatement;
 import com.starrocks.qe.SessionVariable;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.spark.sql.sources.In;
 
 import java.io.IOException;
 import java.util.List;
@@ -112,6 +114,7 @@ public class CreateRoutineLoadStmt extends DdlStmt {
     public static final String TUBE_MASTER_ADDR_PROPERTY = "tube_master_addr";
     public static final String TUBE_TOPIC_PROPERTY = "tube_topic";
     public static final String TUBE_GROUP_NAME_PROPERTY = "tube_group_name";
+    public static final String TUBE_FILTERS_PROPERTY = "tube_filters";
     // optional
     public static final String TUBE_CONSUME_POSITION = "tube_consume_position";
 
@@ -161,6 +164,7 @@ public class CreateRoutineLoadStmt extends DdlStmt {
             .add(TUBE_MASTER_ADDR_PROPERTY)
             .add(TUBE_TOPIC_PROPERTY)
             .add(TUBE_GROUP_NAME_PROPERTY)
+            .add(TUBE_FILTERS_PROPERTY)
             .add(TUBE_CONSUME_POSITION)
             .build();
 
@@ -220,7 +224,8 @@ public class CreateRoutineLoadStmt extends DdlStmt {
     private String tubeMasterAddr;
     private String tubeTopic;
     private String tubeGroupName;
-    private int tubeConsumePosition;
+    private String tubeFilters = null;
+    private Integer tubeConsumePosition = null;
 
     public static final Predicate<Long> DESIRED_CONCURRENT_NUMBER_PRED = (v) -> v > 0L;
     public static final Predicate<Long> MAX_ERROR_NUMBER_PRED = (v) -> v >= 0L;
@@ -382,7 +387,11 @@ public class CreateRoutineLoadStmt extends DdlStmt {
         return tubeGroupName;
     }
 
-    public int getTubeConsumePosition() {
+    public String getTubeFilters() {
+        return tubeFilters;
+    }
+
+    public Integer getTubeConsumePosition() {
         return tubeConsumePosition;
     }
 
@@ -843,6 +852,12 @@ public class CreateRoutineLoadStmt extends DdlStmt {
         tubeGroupName = Strings.nullToEmpty(dataSourceProperties.get(TUBE_GROUP_NAME_PROPERTY)).replaceAll(" ", "");
         if (Strings.isNullOrEmpty(tubeGroupName)) {
             throw new AnalysisException(TUBE_GROUP_NAME_PROPERTY + " is a required property");
+        }
+
+        // check filters
+        String filters = dataSourceProperties.get(TUBE_FILTERS_PROPERTY);
+        if (filters != null) {
+            tubeFilters = filters;
         }
 
         // check positions

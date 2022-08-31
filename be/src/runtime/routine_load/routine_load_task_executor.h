@@ -70,6 +70,13 @@ public:
             }
         }
         _task_map.clear();
+
+        if (tubemq_service_started) {
+            std::string err_info;
+            if (!tubemq::StopTubeMQService(err_info)) {
+                LOG(WARNING) << "Failed to StopTubeMQService: " << err_info;
+            }
+        }
     }
 
     // submit a routine load task

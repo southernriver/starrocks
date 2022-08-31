@@ -209,10 +209,10 @@ PULSAR_SOURCE=pulsar-2.10.1
 PULSAR_MD5SUM="3c387e7a8be4545a39e00611ed051918"
 
 # tube
-TUBE_DOWNLOAD="https://mirrors.tencent.com/repository/generic/doris_thirdparty/tubemq-0.1.6-C-0.5.0.tar.gz"
-TUBE_NAME=tubemq-0.1.6-C-0.5.0.tar.gz
-TUBE_SOURCE=tubemq-0.1.6-C-0.5.0
-TUBE_MD5SUM="06be83b1e715fdf28e976003f8172f48"
+TUBE_DOWNLOAD="https://mirrors.tencent.com/repository/generic/doris_thirdparty/tubemq-0.1.6.1-C-0.5.0.tar.gz"
+TUBE_NAME=tubemq-0.1.6.1-C-0.5.0.tar.gz
+TUBE_SOURCE=tubemq-0.1.6.1-C-0.5.0
+TUBE_MD5SUM="6f378bdd8b00da2fb7191cd75e80a254"
 
 # zstd
 ZSTD_DOWNLOAD="https://github.com/facebook/zstd/archive/v1.5.0.tar.gz"

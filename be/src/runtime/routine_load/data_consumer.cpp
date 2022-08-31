@@ -651,6 +651,11 @@ Status TubeDataConsumer::init(StreamLoadContext* ctx) {
     // _t_consumer_config.SetPartCheckSliceMs(60000);
     // _t_consumer_config.SetMsgNotFoundWaitPeriodMs(120000);
 
+    Status st = set_group_consume_target(ctx);
+    if (!st.ok()) {
+        return st;
+    }
+
     VLOG(3) << "finished to init tube consumer. " << ctx->brief();
 
     _init = true;
@@ -660,7 +665,8 @@ Status TubeDataConsumer::init(StreamLoadContext* ctx) {
 Status TubeDataConsumer::set_group_consume_target(StreamLoadContext* ctx) {
     std::stringstream ss;
     ss << "consumer: " << _id << ", grp: " << _grp_id << " consume target: " << _topic
-       << ", group name: " << _group_name << ", consume_position: " << ctx->tube_info->consume_position;
+       << ", group name: " << _group_name << ", filters: " << ctx->tube_info->filters
+       << ", consume_position: " << ctx->tube_info->consume_position;
     LOG(INFO) << ss.str();
 
     if (ctx->tube_info->consume_position != TubeLoadInfo::INVALID_CONSUME_POSITION) {
@@ -668,21 +674,40 @@ Status TubeDataConsumer::set_group_consume_target(StreamLoadContext* ctx) {
     }
 
     std::string err_info;
-    set<string> topic_list;
-    topic_list.insert(_topic);
-    if (!_t_consumer_config.SetGroupConsumeTarget(err_info, _group_name, topic_list)) {
-        LOG(WARNING) << "PAUSE: failed to set group consume target: " << ctx->brief(true)
-                     << ", err: " << err_info;
-        return Status::InternalError("PAUSE: failed to set group consume target: " + err_info);
+    boost::trim(ctx->tube_info->filters);
+    if (ctx->tube_info->filters.empty()) {
+        std::set<std::string> topic_set;
+        topic_set.insert(_topic);
+        if (!_t_consumer_config.SetGroupConsumeTarget(err_info, _group_name, topic_set)) {
+            LOG(WARNING) << "PAUSE: failed to set group consume target: " << ctx->brief(true)
+                         << ", err: " << err_info;
+            return Status::InternalError("PAUSE: failed to set group consume target: " + err_info);
+        }
+    } else {
+        std::set<std::string> filter_set;
+        std::vector<std::string> filter_list;
+        boost::split(filter_list, ctx->tube_info->filters, boost::is_any_of(","), boost::token_compress_on);
+        for (auto& filter : filter_list) {
+            filter_set.insert(filter);
+        }
+        std::map<std::string, std::set<std::string>> topic_to_filter{{_topic, filter_set}};
+        _t_consumer_config.SetGroupConsumeTarget(err_info, _group_name, topic_to_filter);
     }
 
-    if (!_t_consumer.Start(err_info, _t_consumer_config)) {
-        LOG(WARNING) << "PAUSE: failed to start tube consumer: " << ctx->brief(true)
-                     << ", err: " << err_info;
-        return Status::InternalError("PAUSE: failed to start tube consumer: " + err_info);
+    // Retry for 3 times if the error is "request timeout"
+    for (int i=0; i<3; i++) {
+        if (_t_consumer.Start(err_info, _t_consumer_config)) {
+            // Normal exit
+            return Status::OK();
+        } else if (err_info == "Request is timeout") {
+            LOG(WARNING) << "[Retry:" << i << "]Failed to start tube consumer, err: " << err_info;
+        } else {
+            break;
+        }
     }
 
-    return Status::OK();
+    LOG(WARNING) << "PAUSE: failed to start tube consumer: " << ctx->brief(true) << ", err: " << err_info;
+    return Status::InternalError("PAUSE: failed to start tube consumer: " + err_info);
 }
 
 Status TubeDataConsumer::group_consume(TimedBlockingQueue<tubemq::ConsumerResult*>* queue, int64_t max_running_time_ms) {
@@ -718,10 +743,11 @@ Status TubeDataConsumer::group_consume(TimedBlockingQueue<tubemq::ConsumerResult
         switch (res) {
         case tubemq::err_code::kErrSuccess: {
             int64_t row_num = msg_result->GetMessageList().size();
+            std::string confirm_context = msg_result->GetConfirmContext();
             if (!queue->blocking_put(msg_result.get())) {
                 {
                     tubemq::ConsumerResult confirm_result;
-                    if (!_t_consumer.Confirm(msg_result->GetConfirmContext(), false, confirm_result)) {
+                    if (!_t_consumer.Confirm(confirm_context, false, confirm_result)) {
                         // messages have been put on queue, so we have nothing todo.
                         LOG(WARNING) << "failed to confirm tube message : " << confirm_result.GetErrMessage();
                     }
@@ -732,7 +758,7 @@ Status TubeDataConsumer::group_consume(TimedBlockingQueue<tubemq::ConsumerResult
                 put_rows += row_num;
                 {
                     tubemq::ConsumerResult confirm_result;
-                    if (!_t_consumer.Confirm(msg_result->GetConfirmContext(), true, confirm_result)) {
+                    if (!_t_consumer.Confirm(confirm_context, true, confirm_result)) {
                         // messages have been put on queue, so we have nothing todo.
                         LOG(WARNING) << "failed to confirm tube message : " << confirm_result.GetErrMessage();
                     }
@@ -746,6 +772,7 @@ Status TubeDataConsumer::group_consume(TimedBlockingQueue<tubemq::ConsumerResult
         case tubemq::err_code::kErrNoPartAssigned:
         case tubemq::err_code::kErrAllPartInUse:
         case tubemq::err_code::kErrAllPartWaiting:
+        case tubemq::err_code::kErrNetWorkTimeout:
             // leave the status as OK, because this may happened
             // if consumption situation is not satisfied.
             LOG(INFO) << "tube consumer"
@@ -788,7 +815,6 @@ Status TubeDataConsumer::cancel(StreamLoadContext* ctx) {
 
 Status TubeDataConsumer::reset() {
     std::unique_lock<std::mutex> l(_lock);
-    _t_consumer.ShutDown();
     _cancelled = false;
     return Status::OK();
 }

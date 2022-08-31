@@ -434,19 +434,6 @@ void PulsarDataConsumerGroup::get_backlog_nums(StreamLoadContext* ctx) {
     }
 }
 
-Status TubeDataConsumerGroup::assign_topic_partitions(StreamLoadContext* ctx) {
-    DCHECK(ctx->tube_info);
-    DCHECK(_consumers.size() >= 1);
-
-    // assign partition to consumers
-    int consumer_size = _consumers.size();
-    for (int i = 0; i < consumer_size; ++i) {
-        RETURN_IF_ERROR(std::static_pointer_cast<TubeDataConsumer>(_consumers[i])->set_group_consume_target(ctx));
-    }
-
-    return Status::OK();
-}
-
 TubeDataConsumerGroup::~TubeDataConsumerGroup() {
     // clean the msgs left in queue
     _queue.shutdown();

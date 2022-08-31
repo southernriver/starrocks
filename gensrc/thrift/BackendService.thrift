@@ -64,7 +64,8 @@ struct TTubeLoadInfo {
     1: required string master_addr;
     2: required string topic;
     3: required string group_name;
-    4: optional i32 consume_position;
+    4: optional string filters;
+    5: optional i32 consume_position;
 }
 
 struct TRoutineLoadTask {
