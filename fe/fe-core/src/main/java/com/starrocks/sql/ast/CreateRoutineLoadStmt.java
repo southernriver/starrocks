@@ -114,7 +114,7 @@ public class CreateRoutineLoadStmt extends DdlStmt {
     public static final String TUBE_MASTER_ADDR_PROPERTY = "tube_master_addr";
     public static final String TUBE_TOPIC_PROPERTY = "tube_topic";
     public static final String TUBE_GROUP_NAME_PROPERTY = "tube_group_name";
-    public static final String TUBE_FILTERS_PROPERTY = "tube_filters";
+    public static final String TUBE_FILTERS_PROPERTY = "tube_tid";
     // optional
     public static final String TUBE_CONSUME_POSITION = "tube_consume_position";
 

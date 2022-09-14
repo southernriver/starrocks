@@ -701,6 +701,7 @@ Status TubeDataConsumer::set_group_consume_target(StreamLoadContext* ctx) {
             return Status::OK();
         } else if (err_info == "Request is timeout") {
             LOG(WARNING) << "[Retry:" << i << "]Failed to start tube consumer, err: " << err_info;
+            sleep(1);
         } else {
             break;
         }

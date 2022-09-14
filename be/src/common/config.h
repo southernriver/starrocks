@@ -528,6 +528,10 @@ CONF_mInt32(max_pulsar_consumer_num_per_group, "10");
 // this should be larger than FE config 'max_concurrent_task_num_per_be' (default 5).
 CONF_Int32(routine_load_thread_pool_size, "10");
 
+// the size of consumer pool.
+// this should be larger than max_consumer_num_per_group * routine_load_thread_pool_size
+CONF_Int32(routine_load_consumer_pool_size, "100");
+
 // kafka reqeust timeout
 CONF_Int32(routine_load_kafka_timeout_second, "10");
 
@@ -535,7 +539,7 @@ CONF_Int32(routine_load_kafka_timeout_second, "10");
 CONF_Int32(routine_load_pulsar_timeout_second, "10");
 
 // tube consumers per group
-CONF_Int32(routine_load_tube_consumer_num_per_group, "1");
+CONF_Int32(routine_load_tube_consumer_num_per_group, "10");
 
 // Is set to true, index loading failure will not causing BE exit,
 // and the tablet will be marked as bad, so that FE will try to repair it.
