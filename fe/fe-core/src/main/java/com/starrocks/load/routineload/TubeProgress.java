@@ -57,9 +57,8 @@ public class TubeProgress extends RoutineLoadProgress {
     }
 
     private void getReadableProgress(Map<String, String> showPartitionIdToPosition) {
-        for (Map.Entry<String, Long> entry : partitionToOffset.entrySet()) {
-            showPartitionIdToPosition.put(entry.getKey(), String.valueOf(entry.getValue()));
-        }
+        partitionToOffset.entrySet().stream().limit(200).
+                forEachOrdered(e -> showPartitionIdToPosition.put(e.getKey(), String.valueOf(e.getValue())));
     }
 
     @Override
@@ -75,7 +74,11 @@ public class TubeProgress extends RoutineLoadProgress {
         Map<String, String> showPartitionIdToPosition = Maps.newHashMap();
         getReadableProgress(showPartitionIdToPosition);
         Gson gson = new Gson();
-        return gson.toJson(showPartitionIdToPosition);
+        if (partitionToOffset.size() <= 200) {
+            return gson.toJson(showPartitionIdToPosition);
+        } else {
+            return gson.toJson(showPartitionIdToPosition) + "...";
+        }
     }
 
     @Override

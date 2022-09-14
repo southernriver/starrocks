@@ -50,7 +50,7 @@ public:
             : _exec_env(exec_env),
               _thread_pool("routine_load", config::routine_load_thread_pool_size,
                            config::routine_load_thread_pool_size),
-              _data_consumer_pool(10) {
+              _data_consumer_pool(config::routine_load_consumer_pool_size) {
         REGISTER_GAUGE_STARROCKS_METRIC(routine_load_task_count, [this]() {
             std::lock_guard<std::mutex> l(_lock);
             return _task_map.size();
