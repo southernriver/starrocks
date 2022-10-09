@@ -73,6 +73,7 @@ public class StreamLoadTask {
     private boolean negative;
     private boolean strictMode = false; // default is false
     private boolean ignoreTailColumns = false; // default is false
+    private boolean skipUtf8Check = false; // default is false
     private String timezone = TimeUtils.DEFAULT_TIME_ZONE;
     private int timeout = Config.stream_load_default_timeout_second;
     private long execMemLimit = 0;
@@ -141,6 +142,10 @@ public class StreamLoadTask {
 
     public boolean isIgnoreTailColumns() {
         return ignoreTailColumns;
+    }
+
+    public boolean isSkipUtf8Check() {
+        return skipUtf8Check;
     }
 
     public String getTimezone() {
@@ -286,6 +291,7 @@ public class StreamLoadTask {
         partitions = routineLoadJob.getPartitions();
         strictMode = routineLoadJob.isStrictMode();
         ignoreTailColumns = routineLoadJob.isIgnoreTailColumns();
+        skipUtf8Check = routineLoadJob.isSkipUtf8Check();
         timezone = routineLoadJob.getTimezone();
         timeout = (int) Config.routine_load_task_timeout_second;
         if (!routineLoadJob.getJsonPaths().isEmpty()) {

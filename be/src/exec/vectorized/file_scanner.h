@@ -68,7 +68,8 @@ protected:
     std::unique_ptr<RowDescriptor> _row_desc;
 
     bool _strict_mode;
-    bool _ignore_tail_columns;
+    bool _ignore_tail_columns = false;
+    bool _skip_utf8_check = false;
     int64_t _error_counter;
 
     // sources

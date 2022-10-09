@@ -219,6 +219,9 @@ struct TBrokerScanRangeParams {
     // if ignore tail columns is true, the columns after TBrokerRangeDesc.num_of_columns_from_file
     // will be ignored
     17: optional bool ignore_tail_columns
+    // if skip utf8 check is true, utf8 validation will be skipped for loaded data. Only for csv
+    // format
+    18: optional bool skip_utf8_check
 }
 
 // Broker scan range

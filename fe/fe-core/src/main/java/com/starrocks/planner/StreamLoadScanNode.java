@@ -143,6 +143,7 @@ public class StreamLoadScanNode extends LoadScanNode {
         TBrokerScanRangeParams params = new TBrokerScanRangeParams();
         params.setStrict_mode(streamLoadTask.isStrictMode());
         params.setIgnore_tail_columns(streamLoadTask.isIgnoreTailColumns());
+        params.setSkip_utf8_check(streamLoadTask.isSkipUtf8Check());
 
         Load.initColumns(dstTable, streamLoadTask.getColumnExprDescs(), null /* no hadoop function */,
                 exprsByName, analyzer, srcTupleDesc, slotDescByName,
