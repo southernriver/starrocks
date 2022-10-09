@@ -241,7 +241,8 @@ Status CSVScanner::_parse_csv(Chunk* chunk) {
                 continue;
             } 
         }
-        if (!validate_utf8(record.data, record.size)) {
+
+        if (!_skip_utf8_check && !validate_utf8(record.data, record.size)) {
             if (_counter->num_rows_filtered++ < 50) {
                 _report_error(record.to_string(), "Invalid UTF-8 row");
             }

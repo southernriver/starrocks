@@ -123,6 +123,10 @@ Status FileScanner::open() {
         _ignore_tail_columns = _params.ignore_tail_columns;
     }
 
+    if (_params.__isset.skip_utf8_check) {
+        _skip_utf8_check = _params.skip_utf8_check;
+    }
+
     return Status::OK();
 }
 

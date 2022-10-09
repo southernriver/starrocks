@@ -140,6 +140,7 @@ public class CreateRoutineLoadStmt extends DdlStmt {
             .add(JSONROOT)
             .add(LoadStmt.STRICT_MODE)
             .add(LoadStmt.IGNORE_TAIL_COLUMNS)
+            .add(LoadStmt.SKIP_UTF8_CHECK)
             .add(LoadStmt.TIMEZONE)
             .add(LoadStmt.PARTIAL_UPDATE)
             .add(LoadStmt.MERGE_CONDITION)
@@ -186,6 +187,7 @@ public class CreateRoutineLoadStmt extends DdlStmt {
     private long maxBatchRows = -1;
     private boolean strictMode = true;
     private boolean ignoreTailColumns = false;
+    private boolean skipUtf8Check = false;
     private String timezone = TimeUtils.DEFAULT_TIME_ZONE;
     private boolean partialUpdate = false;
     private String mergeConditionStr;
@@ -305,6 +307,10 @@ public class CreateRoutineLoadStmt extends DdlStmt {
 
     public boolean isIgnoreTailColumns() {
         return ignoreTailColumns;
+    }
+
+    public boolean isSkipUtf8Check() {
+        return skipUtf8Check;
     }
 
     public String getTimezone() {
@@ -508,6 +514,10 @@ public class CreateRoutineLoadStmt extends DdlStmt {
         ignoreTailColumns = Util.getBooleanPropertyOrDefault(jobProperties.get(LoadStmt.IGNORE_TAIL_COLUMNS),
                 RoutineLoadJob.DEFAULT_IGNORE_TAIL_COLUMNS,
                 LoadStmt.IGNORE_TAIL_COLUMNS + " should be a boolean");
+
+        skipUtf8Check = Util.getBooleanPropertyOrDefault(jobProperties.get(LoadStmt.SKIP_UTF8_CHECK),
+                RoutineLoadJob.DEFAULT_SKIP_UTF8_CHECK,
+                LoadStmt.SKIP_UTF8_CHECK + " should be a boolean");
 
         partialUpdate = Util.getBooleanPropertyOrDefault(jobProperties.get(LoadStmt.PARTIAL_UPDATE),
                 false,

@@ -349,6 +349,21 @@ void RoutineLoadTaskExecutor::exec_task(StreamLoadContext* ctx, DataConsumerPool
         }                                                                                  \
     } while (false);
 
+#define HANDLE_ERROR_AND_RETURN_CONSUMER(stmt, consumer_pool, consumer_grp, err_msg) \
+    do {                                                                             \
+        Status _status_ = (stmt);                                                    \
+        if (UNLIKELY(!_status_.ok())) {                                              \
+            if (LIKELY(_status_.code() == TStatusCode::CANCELLED)) {                 \
+                consumer_pool->return_consumers(consumer_grp.get());                 \
+            }                                                                        \
+            if (UNLIKELY(_status_.code() != TStatusCode::PUBLISH_TIMEOUT)) {         \
+                err_handler(ctx, _status_, err_msg);                                 \
+                cb(ctx);                                                             \
+                return;                                                              \
+            }                                                                        \
+        }                                                                            \
+    } while (false);
+
     LOG(INFO) << "begin to execute routine load task: " << ctx->brief();
 
     // create data consumer group
@@ -404,8 +419,13 @@ void RoutineLoadTaskExecutor::exec_task(StreamLoadContext* ctx, DataConsumerPool
     HANDLE_ERROR(_execute_plan_for_test(ctx), "test failed");
 #endif
 
-    // start to consume, this may block a while
-    HANDLE_ERROR(consumer_grp->start_all(ctx), "consuming failed");
+    if (ctx->load_src_type == TLoadSourceType::TUBE) {
+        // start to consume, this may block a while
+        HANDLE_ERROR_AND_RETURN_CONSUMER(consumer_grp->start_all(ctx), consumer_pool, consumer_grp, "consuming failed");
+    } else {
+        // start to consume, this may block a while
+        HANDLE_ERROR(consumer_grp->start_all(ctx), "consuming failed");
+    }
 
     // wait for all consumers finished
     HANDLE_ERROR(ctx->future.get(), "consume failed");
@@ -486,7 +506,7 @@ void RoutineLoadTaskExecutor::exec_task(StreamLoadContext* ctx, DataConsumerPool
         }
     } break;
     case TLoadSourceType::TUBE: {
-        // Cumulative confirm is not supported by tubemq, but we need to break here and 
+        // Cumulative confirm is not supported by tubemq, but we need to break here and
         // call cb(ctx) at last
     } break;
     default:
