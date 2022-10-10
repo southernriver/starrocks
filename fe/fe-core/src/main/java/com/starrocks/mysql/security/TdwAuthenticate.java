@@ -99,7 +99,7 @@ public class TdwAuthenticate {
         } else {
             try {
                 GlobalStateMgr.getCurrentState().getAuth().createUserInternal(
-                        userIdentity, null, new Password(new byte[0]), true, false);
+                        userIdentity, null, new Password(new byte[0]), false, false);
             } catch (DdlException e) {
                 LOG.error("failed to create user " + userIdentity.getQualifiedUser());
                 return false;
