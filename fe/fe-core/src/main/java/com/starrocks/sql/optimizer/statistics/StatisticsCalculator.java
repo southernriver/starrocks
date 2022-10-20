@@ -255,7 +255,8 @@ public class StatisticsCalculator extends OperatorVisitor<Void, ExpressionContex
             Statistics stats = IcebergTableStatisticCalculator.getTableStatistics(
                     // TODO: pass predicate to get table statistics
                     new ArrayList<>(),
-                    ((IcebergTable) table).getIcebergTable(), colRefToColumnMetaMap);
+                    ((IcebergTable) table).getIcebergTable(), colRefToColumnMetaMap,
+                    optimizerContext.getSessionVariable().isEnableIcebergFileStats());
             context.setStatistics(stats);
         }
         return visitOperator(node, context);

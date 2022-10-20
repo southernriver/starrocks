@@ -57,6 +57,8 @@ import java.util.stream.Collectors;
 public class Utils {
     private static final Logger LOG = LogManager.getLogger(Utils.class);
 
+    public static boolean isEnableIcebergFileStats = true;
+
     public static List<ScalarOperator> extractConjuncts(ScalarOperator root) {
         LinkedList<ScalarOperator> list = new LinkedList<>();
         if (null == root) {
@@ -398,9 +400,11 @@ public class Utils {
             } else if (operator instanceof LogicalIcebergScanOperator) {
                 IcebergTable table = (IcebergTable) scanOperator.getTable();
                 try {
+                    // TODO: pass predicate to get column statistics
                     List<ColumnStatistic> columnStatisticList = IcebergTableStatisticCalculator.getColumnStatistics(
                             new ArrayList<>(), table.getIcebergTable(),
-                            scanOperator.getColRefToColumnMetaMap());
+                            scanOperator.getColRefToColumnMetaMap(),
+                            isEnableIcebergFileStats);
                     return columnStatisticList.stream().anyMatch(ColumnStatistic::isUnknown);
                 } catch (Exception e) {
                     LOG.warn("Iceberg table {} get column failed. error : {}", table.getName(), e);

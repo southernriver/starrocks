@@ -5,6 +5,7 @@ package com.starrocks.external.iceberg.cost;
 import com.google.common.collect.ImmutableList;
 import com.starrocks.catalog.Column;
 import com.starrocks.external.iceberg.IcebergUtil;
+import com.starrocks.qe.SessionVariable;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
 import com.starrocks.sql.optimizer.statistics.ColumnStatistic;
 import com.starrocks.sql.optimizer.statistics.Statistics;
@@ -21,6 +22,7 @@ import org.apache.iceberg.types.Type;
 import org.apache.iceberg.types.Types;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import sun.tools.jconsole.Tab;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -41,22 +43,31 @@ public class IcebergTableStatisticCalculator {
     private static final Logger LOG = LogManager.getLogger(IcebergTableStatisticCalculator.class);
 
     private final Table icebergTable;
+    private final boolean isEnableIcebergFileStats;
 
     private IcebergTableStatisticCalculator(Table icebergTable) {
         this.icebergTable = icebergTable;
+        this.isEnableIcebergFileStats = true;
+    }
+
+    private IcebergTableStatisticCalculator(Table icebergTable, boolean isEnableIcebergFileStats) {
+        this.icebergTable = icebergTable;
+        this.isEnableIcebergFileStats = isEnableIcebergFileStats;
     }
 
     public static Statistics getTableStatistics(List<Expression> icebergPredicates,
                                                 Table icebergTable,
-                                                Map<ColumnRefOperator, Column> colRefToColumnMetaMap) {
-        return new IcebergTableStatisticCalculator(icebergTable)
+                                                Map<ColumnRefOperator, Column> colRefToColumnMetaMap,
+                                                boolean isEnableIcebergFileStats) {
+        return new IcebergTableStatisticCalculator(icebergTable, isEnableIcebergFileStats)
                 .makeTableStatistics(icebergPredicates, colRefToColumnMetaMap);
     }
 
     public static List<ColumnStatistic> getColumnStatistics(List<Expression> icebergPredicates,
                                                             Table icebergTable,
-                                                            Map<ColumnRefOperator, Column> colRefToColumnMetaMap) {
-        return new IcebergTableStatisticCalculator(icebergTable)
+                                                            Map<ColumnRefOperator, Column> colRefToColumnMetaMap,
+                                                            boolean isEnableIcebergFileStats) {
+        return new IcebergTableStatisticCalculator(icebergTable, isEnableIcebergFileStats)
                 .makeColumnStatistics(icebergPredicates, colRefToColumnMetaMap);
     }
 
@@ -64,14 +75,19 @@ public class IcebergTableStatisticCalculator {
                                                        Map<ColumnRefOperator, Column> colRefToColumnMetaMap) {
         List<ColumnStatistic> columnStatistics = new ArrayList<>();
         List<Types.NestedField> columns = icebergTable.schema().columns();
-        IcebergFileStats icebergFileStats = new IcebergTableStatisticCalculator(icebergTable).
-                generateIcebergFileStats(icebergPredicates, columns);
 
         Map<Integer, String> idToColumnNames = columns.stream().
                 filter(column -> !IcebergUtil.convertColumnType(column.type()).isUnknown())
                 .collect(Collectors.toMap(Types.NestedField::fieldId, Types.NestedField::name));
 
-        double recordCount = Math.max(icebergFileStats == null ? 0 : icebergFileStats.getRecordCount(), 1);
+        IcebergFileStats icebergFileStats = null;
+        if (isEnableIcebergFileStats) {
+            LOG.info(SessionVariable.CBO_ENABLE_ICEBRG_FILE_STATS + " is set to " + isEnableIcebergFileStats +
+                    ", use IcebergFileStats to aggregate statistics for a collection of files.");
+            icebergFileStats = new IcebergTableStatisticCalculator(icebergTable).
+                    generateIcebergFileStats(icebergPredicates, columns);
+        }
+
         for (Map.Entry<Integer, String> idColumn : idToColumnNames.entrySet()) {
             List<ColumnRefOperator> columnList = colRefToColumnMetaMap.keySet().stream().filter(
                     key -> key.getName().equalsIgnoreCase(idColumn.getValue())).collect(Collectors.toList());
@@ -81,9 +97,10 @@ public class IcebergTableStatisticCalculator {
                 continue;
             }
 
-            int fieldId = idColumn.getKey();
-            columnStatistics.add(
-                    generateColumnStatistic(icebergFileStats, fieldId, recordCount, columnList.get(0)));
+            ColumnStatistic columnStatistic = icebergFileStats == null ? ColumnStatistic.unknown() :
+                        generateColumnStatistic(icebergFileStats, idColumn.getKey(),
+                        Math.max(icebergFileStats.getRecordCount(), 1), columnList.get(0));
+            columnStatistics.add(columnStatistic);
         }
         return columnStatistics;
     }
@@ -92,14 +109,26 @@ public class IcebergTableStatisticCalculator {
                                            Map<ColumnRefOperator, Column> colRefToColumnMetaMap) {
         LOG.debug("Begin to make iceberg table statistics!");
         List<Types.NestedField> columns = icebergTable.schema().columns();
-        IcebergFileStats icebergFileStats = generateIcebergFileStats(icebergPredicates, columns);
+
+        double recordCount;
+        IcebergFileStats icebergFileStats = null;
+        if (isEnableIcebergFileStats) {
+            LOG.info(SessionVariable.CBO_ENABLE_ICEBRG_FILE_STATS + " is set to " + isEnableIcebergFileStats +
+                    ", use IcebergFileStats to aggregate statistics for a collection of files.");
+            icebergFileStats = new IcebergTableStatisticCalculator(icebergTable).
+                    generateIcebergFileStats(icebergPredicates, columns);
+            recordCount = Math.max(icebergFileStats == null ? 0 : icebergFileStats.getRecordCount(), 1);
+        } else {
+            LOG.info(SessionVariable.CBO_ENABLE_ICEBRG_FILE_STATS + " is set to " + isEnableIcebergFileStats +
+                    ", only count records from Datafiles.");
+            recordCount = new IcebergTableStatisticCalculator(icebergTable).generateIcebergRecordCount(icebergPredicates);
+        }
 
         Map<Integer, String> idToColumnNames = columns.stream()
                 .filter(column -> !IcebergUtil.convertColumnType(column.type()).isUnknown())
                 .collect(Collectors.toMap(Types.NestedField::fieldId, Types.NestedField::name));
 
         Statistics.Builder statisticsBuilder = Statistics.builder();
-        double recordCount = Math.max(icebergFileStats == null ? 0 : icebergFileStats.getRecordCount(), 1);
         for (Map.Entry<Integer, String> idColumn : idToColumnNames.entrySet()) {
             List<ColumnRefOperator> columnList = colRefToColumnMetaMap.keySet().stream().filter(
                     key -> key.getName().equalsIgnoreCase(idColumn.getValue())).collect(Collectors.toList());
@@ -109,9 +138,8 @@ public class IcebergTableStatisticCalculator {
                 continue;
             }
 
-            int fieldId = idColumn.getKey();
-            ColumnStatistic columnStatistic =
-                    generateColumnStatistic(icebergFileStats, fieldId, recordCount, columnList.get(0));
+            ColumnStatistic columnStatistic = icebergFileStats == null ? ColumnStatistic.unknown() :
+                    generateColumnStatistic(icebergFileStats, idColumn.getKey(), recordCount, columnList.get(0));
             statisticsBuilder.addColumnStatistic(columnList.get(0), columnStatistic);
         }
         statisticsBuilder.setOutputRowCount(recordCount);
@@ -194,6 +222,24 @@ public class IcebergTableStatisticCalculator {
         }
     }
 
+    private long generateIcebergRecordCount(List<Expression> icebergPredicates) {
+        long recordCount = 1;
+        Optional<Snapshot> snapshot = IcebergUtil.getCurrentTableSnapshot(icebergTable);
+        if (!snapshot.isPresent()) {
+            return recordCount;
+        }
+        TableScan tableScan = IcebergUtil.getTableScan(icebergTable,
+                snapshot.get(), icebergPredicates);
+        try (CloseableIterable<FileScanTask> fileScanTasks = tableScan.planFiles()) {
+            for (FileScanTask fileScanTask : fileScanTasks) {
+                recordCount += fileScanTask.file().recordCount();
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        return recordCount;
+    }
+
     private IcebergFileStats generateIcebergFileStats(List<Expression> icebergPredicates,
                                                       List<Types.NestedField> columns) {
         Optional<Snapshot> snapshot = IcebergUtil.getCurrentTableSnapshot(icebergTable);
@@ -258,6 +304,47 @@ public class IcebergTableStatisticCalculator {
                                                     int fieldId,
                                                     double recordCount,
                                                     ColumnRefOperator columnRefOperator) {
-        return ColumnStatistic.unknown();
+        ColumnStatistic.Builder columnBuilder = ColumnStatistic.builder();
+
+        boolean isEstimated = true;
+        // nulls fraction
+        Long nullCount = icebergFileStats.getNullCounts().get(fieldId);
+        if (nullCount != null) {
+            columnBuilder.setNullsFraction(nullCount / recordCount);
+        } else {
+            isEstimated = false;
+        }
+
+        // avg row size
+        if (icebergFileStats.getColumnSizes() != null) {
+            // Notice that columnSize here is column * row count which updated in updateColumnSizes below
+            Long columnSize = icebergFileStats.getColumnSizes().get(fieldId);
+            if (columnSize != null) {
+                columnBuilder.setAverageRowSize(columnSize / recordCount);
+            } else {
+                columnBuilder.setAverageRowSize(columnRefOperator.getType().getTypeSize());
+            }
+        } else {
+            columnBuilder.setAverageRowSize(columnRefOperator.getType().getTypeSize());
+        }
+
+        // min max stats
+        Object min = icebergFileStats.getMinValues().get(fieldId);
+        Object max = icebergFileStats.getMaxValues().get(fieldId);
+        if (min instanceof Number && max instanceof Number) {
+            columnBuilder.setMinValue(((Number) min).doubleValue());
+            columnBuilder.setMaxValue(((Number) max).doubleValue());
+        } else {
+            isEstimated = false;
+        }
+
+        // TODO: get num distinct value count from file stats
+        columnBuilder.setDistinctValuesCount(1);
+
+        if (isEstimated) {
+            return columnBuilder.build();
+        } else {
+            return ColumnStatistic.unknown();
+        }
     }
 }

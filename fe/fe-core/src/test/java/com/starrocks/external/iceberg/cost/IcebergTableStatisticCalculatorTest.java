@@ -46,7 +46,8 @@ public class IcebergTableStatisticCalculatorTest {
         Map<ColumnRefOperator, Column> colRefToColumnMetaMap = new HashMap<ColumnRefOperator, Column>();
         ColumnRefOperator columnRefOperator = new ColumnRefOperator(1000, Type.BIGINT, "col1", true);
         colRefToColumnMetaMap.put(columnRefOperator, new Column("col1", Type.BIGINT));
-        Statistics statistics = IcebergTableStatisticCalculator.getTableStatistics(null, iTable, colRefToColumnMetaMap);
+        Statistics statistics = IcebergTableStatisticCalculator.getTableStatistics(null, iTable,
+                colRefToColumnMetaMap, true);
         Assert.assertTrue(true);
         statistics.getColumnStatistic(columnRefOperator);
     }
@@ -103,7 +104,8 @@ public class IcebergTableStatisticCalculatorTest {
         ColumnRefOperator columnRefOperator2 = new ColumnRefOperator(1001, Type.ARRAY_INT, "colArray", true);
         colRefToColumnMetaMap.put(columnRefOperator1, new Column("col1", Type.BIGINT));
         colRefToColumnMetaMap.put(columnRefOperator2, new Column("colArray", Type.ARRAY_INT));
-        Statistics statistics = IcebergTableStatisticCalculator.getTableStatistics(null, iTable, colRefToColumnMetaMap);
+        Statistics statistics = IcebergTableStatisticCalculator.getTableStatistics(null, iTable,
+                colRefToColumnMetaMap, true);
         Assert.assertNotNull(statistics);
         ColumnStatistic arrayStatistic = statistics.getColumnStatistic(columnRefOperator2);
         Assert.assertNotNull(arrayStatistic);

@@ -7,13 +7,16 @@ import com.google.common.collect.Maps;
 import com.starrocks.analysis.CreateDbStmt;
 import com.starrocks.analysis.JoinOperator;
 import com.starrocks.catalog.Column;
+import com.starrocks.catalog.IcebergTable;
 import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.Partition;
+import com.starrocks.catalog.Table;
 import com.starrocks.catalog.Type;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.FeConstants;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.GlobalStateMgr;
+import com.starrocks.sql.optimizer.operator.logical.LogicalIcebergScanOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalJoinOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalOlapScanOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalProjectOperator;
@@ -27,10 +30,15 @@ import com.starrocks.sql.optimizer.statistics.ColumnStatistic;
 import com.starrocks.statistic.StatsConstants;
 import com.starrocks.utframe.StarRocksAssert;
 import com.starrocks.utframe.UtFrameUtils;
+import mockit.Expectations;
+import mockit.Mocked;
+import org.apache.iceberg.Schema;
+import org.apache.iceberg.types.Types;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -242,6 +250,40 @@ public class UtilsTest {
 
         assertEquals(5, ((ConstantOperator) rightChild.getChild(0)).getInt());
         assertEquals(6, ((ConstantOperator) rightChild.getChild(1)).getInt());
+    }
+
+    @Test
+    public void unknownIcebergStats(@Mocked IcebergTable table) {
+        Map<ColumnRefOperator, Column> columnRefMap = new HashMap<>();
+        columnRefMap.put(new ColumnRefOperator(1, Type.BIGINT, "v1", true),
+                new Column("v1", Type.BIGINT));
+        columnRefMap.put(new ColumnRefOperator(2, Type.BIGINT, "v2", true),
+                new Column("v2", Type.BIGINT));
+        columnRefMap.put(new ColumnRefOperator(3, Type.BIGINT, "v3", true),
+                new Column("v3", Type.BIGINT));
+
+        List<Types.NestedField> fields = new ArrayList<>();
+        fields.add(Types.NestedField.of(1, false, "v1", new Types.IntegerType()));
+        fields.add(Types.NestedField.of(2, false, "v2", new Types.IntegerType()));
+        fields.add(Types.NestedField.of(3, false, "v3", new Types.IntegerType()));
+        Schema schema = new Schema(fields);
+        new Expectations() {
+            {
+                table.getIcebergTable().schema();
+                result = schema;
+            }
+            {
+                // empty iceberg's snapshot is null or snapshot is not null but no datafile.
+                // so here mock iceberg table with null snapshot
+                table.getIcebergTable().currentSnapshot();
+                result = null;
+            }
+        };
+
+        OptExpression opt = new OptExpression(
+                new LogicalIcebergScanOperator(table, Table.TableType.ICEBERG,
+                        columnRefMap, Maps.newHashMap(), -1, null));
+        Assert.assertTrue(Utils.hasUnknownColumnsStats(opt));
     }
 
     @Test
