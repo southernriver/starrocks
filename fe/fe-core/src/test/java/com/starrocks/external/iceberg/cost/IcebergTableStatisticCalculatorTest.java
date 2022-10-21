@@ -15,6 +15,8 @@ import org.apache.iceberg.Table;
 import org.apache.iceberg.types.Types;
 import org.junit.Assert;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -22,7 +24,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+@RunWith(Parameterized.class)
 public class IcebergTableStatisticCalculatorTest {
+    @Parameterized.Parameters(name = "isEnableIcebergFileStats = {0}")
+    public static Object[] parameters() {
+        return new Object[] {true, false};
+    }
+
+    public final boolean isEnableIcebergFileStats;
+
+    public IcebergTableStatisticCalculatorTest(boolean isEnableIcebergFileStats) {
+        this.isEnableIcebergFileStats = isEnableIcebergFileStats;
+    }
+
     @Test
     public void testMakeTableStatistics(@Mocked Table iTable) {
         List<Types.NestedField> fields = new ArrayList<>();
@@ -47,7 +61,7 @@ public class IcebergTableStatisticCalculatorTest {
         ColumnRefOperator columnRefOperator = new ColumnRefOperator(1000, Type.BIGINT, "col1", true);
         colRefToColumnMetaMap.put(columnRefOperator, new Column("col1", Type.BIGINT));
         Statistics statistics = IcebergTableStatisticCalculator.getTableStatistics(null, iTable,
-                colRefToColumnMetaMap, true);
+                colRefToColumnMetaMap, isEnableIcebergFileStats);
         Assert.assertTrue(true);
         statistics.getColumnStatistic(columnRefOperator);
     }
@@ -105,7 +119,7 @@ public class IcebergTableStatisticCalculatorTest {
         colRefToColumnMetaMap.put(columnRefOperator1, new Column("col1", Type.BIGINT));
         colRefToColumnMetaMap.put(columnRefOperator2, new Column("colArray", Type.ARRAY_INT));
         Statistics statistics = IcebergTableStatisticCalculator.getTableStatistics(null, iTable,
-                colRefToColumnMetaMap, true);
+                colRefToColumnMetaMap, isEnableIcebergFileStats);
         Assert.assertNotNull(statistics);
         ColumnStatistic arrayStatistic = statistics.getColumnStatistic(columnRefOperator2);
         Assert.assertNotNull(arrayStatistic);

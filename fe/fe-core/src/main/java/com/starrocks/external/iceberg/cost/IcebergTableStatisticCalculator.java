@@ -22,7 +22,6 @@ import org.apache.iceberg.types.Type;
 import org.apache.iceberg.types.Types;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import sun.tools.jconsole.Tab;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
