@@ -4,6 +4,7 @@ package com.starrocks.sql.optimizer;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
+import com.starrocks.analysis.Expr;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.HiveMetaStoreTable;
 import com.starrocks.catalog.IcebergTable;
@@ -16,6 +17,7 @@ import com.starrocks.catalog.ScalarType;
 import com.starrocks.catalog.Table;
 import com.starrocks.catalog.Type;
 import com.starrocks.external.hive.HiveColumnStats;
+import com.starrocks.external.iceberg.ExpressionConverter;
 import com.starrocks.external.iceberg.cost.IcebergTableStatisticCalculator;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.GlobalStateMgr;
@@ -36,6 +38,10 @@ import com.starrocks.sql.optimizer.operator.scalar.CompoundPredicateOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ConstantOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
 import com.starrocks.sql.optimizer.statistics.ColumnStatistic;
+import com.starrocks.sql.plan.ScalarOperatorToExpr;
+import org.apache.iceberg.exceptions.ValidationException;
+import org.apache.iceberg.expressions.Binder;
+import org.apache.iceberg.expressions.Expression;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -66,6 +72,32 @@ public class Utils {
         }
         extractConjunctsImpl(root, list);
         return list;
+    }
+
+    /**
+     * Extracts predicates from conjuncts that can be pushed down to Iceberg.
+     * @param conjuncts
+     * @param table
+     * @return
+     */
+    public static List<Expression> preIcebergPredicates(List<Expr> conjuncts, Table table) {
+        List<Expression> expressions = new ArrayList<>(conjuncts.size());
+        ExpressionConverter convertor = new ExpressionConverter();
+        for (Expr expr : conjuncts) {
+            Expression filterExpr = convertor.convert(expr);
+            if (filterExpr != null) {
+                try {
+                    Binder.bind(((IcebergTable) table).getIcebergTable().schema().asStruct(), filterExpr, false);
+                    expressions.add(filterExpr);
+                } catch (ValidationException e) {
+                    LOG.debug("binding to the table schema failed, cannot be pushed down expression: {}",
+                            expr.toSql());
+                }
+            }
+        }
+        LOG.debug("Number of predicates pushed down / Total number of predicates: {}/{}",
+                expressions.size(), conjuncts.size());
+        return expressions;
     }
 
     public static void extractConjunctsImpl(ScalarOperator root, List<ScalarOperator> result) {
@@ -400,9 +432,9 @@ public class Utils {
             } else if (operator instanceof LogicalIcebergScanOperator) {
                 IcebergTable table = (IcebergTable) scanOperator.getTable();
                 try {
-                    // TODO: pass predicate to get column statistics
                     List<ColumnStatistic> columnStatisticList = IcebergTableStatisticCalculator.getColumnStatistics(
-                            new ArrayList<>(), table.getIcebergTable(),
+                            new ArrayList<>(),
+                            table.getIcebergTable(),
                             scanOperator.getColRefToColumnMetaMap(),
                             isEnableIcebergFileStats);
                     return columnStatisticList.stream().anyMatch(ColumnStatistic::isUnknown);
