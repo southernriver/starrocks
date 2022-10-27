@@ -1,3 +1,5 @@
+# CREATE MATERIALIZED VIEW
+
 ## Description
 
 Creates a materialized view. Creating a materialized view is asynchronous operation. Running this command successfully indicates that the task of creating the materialized view is submitted successfully. You can view the building status of the materialized view in a database via [SHOW ALTER](..//data-manipulation/SHOW%20ALTER.md) command. For usage information about materialized views, see [materialized view](../../../using_starrocks/Materialized_view.md).
@@ -17,12 +19,12 @@ StarRocks supports multi-table materialized views from v2.4. The major differenc
 
 ```SQL
 CREATE MATERIALIZED VIEW [IF NOT EXISTS] [database.]mv_name
-AS (query)
 [distribution_desc]
 [REFRESH refresh_scheme_desc]
 [partition_expression]
 [COMMENT ""]
-[PROPERTIES ("key"="value", ...)];
+[PROPERTIES ("key"="value", ...)]
+AS (query);
 ```
 
 Parameters in brackets [] is optional.
@@ -85,6 +87,8 @@ The refresh strategy of the materialized view. This parameter supports the follo
 - `ASYNC`: Asynchronous refresh mode. You can specify the refresh start time, refresh interval, or refresh task trigger mechanism for async refresh mode. The refresh interval supports the following units: `DAY`, `HOUR`, `MINUTE`, and `SECOND`.
 - `MANUAL`: Manual refresh mode.
 
+If this parameter is not specified, the default value `MANUAL` is used.
+
 **partition_expression** (optional)
 
 The partitioning strategy of the materialized view. As for the current version of StarRocks, only one partition expression is supported when creating a materialized view. This parameter supports the following values:
@@ -102,8 +106,6 @@ Comment on the materialized view.
 
 Properties of the materialized view.
 
-- `short_key`: the number of ORDER BY columns.
-- `timeout`: The timeout for building the materialized view. The unit is second.
 - `replication_num`: The number of materialized view replicas to create.
 - `storage_medium`: Storage medium type. `HDD` and `SSD` are supported.
 
