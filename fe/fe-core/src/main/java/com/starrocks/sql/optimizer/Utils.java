@@ -432,6 +432,7 @@ public class Utils {
             } else if (operator instanceof LogicalIcebergScanOperator) {
                 IcebergTable table = (IcebergTable) scanOperator.getTable();
                 try {
+                    // TODO: pass predicate to get column statistics
                     List<ColumnStatistic> columnStatisticList = IcebergTableStatisticCalculator.getColumnStatistics(
                             new ArrayList<>(),
                             table.getIcebergTable(),
