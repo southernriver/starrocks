@@ -195,7 +195,7 @@ public class BackendServiceClient {
     public Future<PPulsarProxyResult> getPulsarInfo(
             TNetworkAddress address, PPulsarProxyRequest request) throws RpcException {
         try {
-            final PBackendService service = BrpcProxy.getBackendService(address);
+            final PBackendService service = BrpcProxy.getInstance().getBackendService(address);
             return service.getPulsarInfo(request);
         } catch (Throwable e) {
             LOG.warn("failed to get info, address={}:{}", address.getHostname(), address.getPort(), e);
