@@ -46,6 +46,7 @@ import com.starrocks.analysis.StatementBase;
 import com.starrocks.analysis.StringLiteral;
 import com.starrocks.analysis.UnsupportedStmt;
 import com.starrocks.analysis.UpdateStmt;
+import com.starrocks.analysis.VariableExpr;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.ExternalOlapTable;
@@ -431,7 +432,7 @@ public class StmtExecutor {
 
                         handleQueryStmt(execPlan);
 
-                        if (context.getSessionVariable().isReportSucc()) {
+                        if (context.getSessionVariable().isReportSucc() && shouldWriteProfile()) {
                             writeProfile(beginTimeInNanoSecond);
                         }
                         break;
@@ -563,6 +564,16 @@ public class StmtExecutor {
             }
             context.setSessionVariable(sessionVariableBackup);
         }
+    }
+
+    private boolean shouldWriteProfile() {
+        if (parsedStmt instanceof QueryStatement) {
+            List<Expr> output = ((QueryStatement) parsedStmt).getQueryRelation().getOutputExpression();
+            if (output.size() == 1 && output.get(0) instanceof VariableExpr) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void handleCreateTableAsSelectStmt(long beginTimeInNanoSecond) throws Exception {
