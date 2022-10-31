@@ -1768,6 +1768,9 @@ public class Config extends ConfigBase {
     @ConfField(mutable = true)
     public static int heartbeat_timeout_second = 5;
 
+    @ConfField(mutable = true)
+    public static int monitor_timeout_second = 15;
+
     /**
      * The heartbeat retry times of be/broker/fe.
      * the default is 3
@@ -1963,6 +1966,12 @@ public class Config extends ConfigBase {
     @ConfField
     public static String ssl_truststore_password = "";
 
+    @ConfField(mutable = true)
+    public static double cluster_overload_mem_rate = 0.5;
+
+    @ConfField(mutable = true)
+    public static double cluster_overload_cpu_rate = 0.5;
+
     /**
      * ignore check db status when show proc '/catalog/catalog_name'
      */
@@ -1977,7 +1986,6 @@ public class Config extends ConfigBase {
 
     @ConfField(mutable = true)
     public static long max_per_node_grep_log_limit = 500000;
-
     @ConfField
     public static boolean enable_execute_script_on_frontend = true;
 }
