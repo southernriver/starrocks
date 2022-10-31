@@ -89,6 +89,7 @@ public class BDBEnvironment {
     private DatabaseConfig dbConfig;
     private TransactionConfig txnConfig;
     private CloseSafeDatabase epochDB = null;  // used for fencing
+    private CloseSafeDatabase monitorDB = null;  // used for monitor
     private ReplicationGroupAdmin replicationGroupAdmin = null;
 
     // mark whether environment is closing, if true, all calling to environment will fail
@@ -245,7 +246,7 @@ public class BDBEnvironment {
     }
 
     protected void setupEnvironment() throws JournalException, InterruptedException {
-        // open environment and epochDB
+        // open environment and epochDB/monitorDB
         JournalException exception = null;
         for (int i = 0; i < RETRY_TIME; i++) {
             if (i > 0) {
@@ -294,6 +295,9 @@ public class BDBEnvironment {
 
                 // open epochDB. the first parameter null means auto-commit
                 epochDB = new CloseSafeDatabase(replicatedEnvironment.openDatabase(null, "epochDB", dbConfig));
+
+                // open monitorDB. the first parameter null means auto-commit
+                monitorDB = new CloseSafeDatabase(replicatedEnvironment.openDatabase(null, "monitorDB", dbConfig));
                 LOG.info("end setup bdb environment after {} times", i + 1);
                 return;
             } catch (RestartRequiredException e) {
@@ -454,6 +458,11 @@ public class BDBEnvironment {
         return epochDB;
     }
 
+    // Return a handle to the monitorDB
+    public CloseSafeDatabase getMonitorDB() {
+        return monitorDB;
+    }
+
     // Return a handle to the environment
     public ReplicatedEnvironment getReplicatedEnvironment() {
         return replicatedEnvironment;
@@ -501,7 +510,7 @@ public class BDBEnvironment {
         List<String> names = replicatedEnvironment.getDatabaseNames();
         for (String name : names) {
             // We don't count epochDB
-            if (name.equals("epochDB")) {
+            if (name.equals("epochDB") || name.equals("monitorDB")) {
                 continue;
             }
 
@@ -547,6 +556,17 @@ public class BDBEnvironment {
                 }
             }
             LOG.info("close epoch database end");
+
+            LOG.info("start to close monitor database");
+            if (monitorDB != null) {
+                try {
+                    monitorDB.close();
+                } catch (DatabaseException exception) {
+                    LOG.error("Error closing db {}", monitorDB.getDatabaseName(), exception);
+                    closeSuccess = false;
+                }
+            }
+            LOG.info("close monitor database end");
 
             LOG.info("start to close replicated environment");
             if (replicatedEnvironment != null) {

@@ -54,6 +54,8 @@ public:
             std::make_unique<IntAtomicCounter>(MetricUnit::PERCENT),
             std::make_unique<IntAtomicCounter>(MetricUnit::PERCENT),
             std::make_unique<IntAtomicCounter>(MetricUnit::PERCENT)};
+
+    std::unique_ptr<IntAtomicCounter> num_hardware_cores = std::make_unique<IntAtomicCounter>(MetricUnit::NOUNIT);
     static const char* const cpu_metrics[cpu_num_metrics];
 };
 
@@ -149,6 +151,8 @@ void SystemMetrics::_install_cpu_metrics(MetricRegistry* registry) {
         registry->register_metric("cpu", MetricLabels().add("mode", CpuMetrics::cpu_metrics[i]),
                                   _cpu_metrics->metrics[i].get());
     }
+
+    registry->register_metric("cpu", MetricLabels().add("mode", "cores"), _cpu_metrics->num_hardware_cores.get());
 }
 
 #ifdef BE_TEST
@@ -190,6 +194,8 @@ void SystemMetrics::_update_cpu_metrics() {
         _cpu_metrics->metrics[i]->set_value(values[i]);
     }
 
+    _cpu_metrics->num_hardware_cores->set_value((int32_t)std::thread::hardware_concurrency());
+
     fclose(fp);
 }
 
@@ -213,6 +219,8 @@ void SystemMetrics::_install_memory_metrics(MetricRegistry* registry) {
     registry->register_metric("jemalloc_retained_bytes", &_memory_metrics->jemalloc_retained_bytes);
 #endif
 
+    registry->register_metric("process_mem_limit_bytes", &_memory_metrics->process_mem_limit_bytes);
+    registry->register_metric("query_mem_limit_bytes", &_memory_metrics->query_mem_limit_bytes);
     registry->register_metric("process_mem_bytes", &_memory_metrics->process_mem_bytes);
     registry->register_metric("query_mem_bytes", &_memory_metrics->query_mem_bytes);
     registry->register_metric("load_mem_bytes", &_memory_metrics->load_mem_bytes);
@@ -308,6 +316,15 @@ void SystemMetrics::_update_memory_metrics() {
     (void)ext->GetNumericProperty("tcmalloc.pageheap_unmapped_bytes", &value);
     _memory_metrics->pageheap_unmapped_bytes.set_value(value);
 #endif
+
+#define SET_MEM_METRIC_LIMIT_VALUE(tracker, key)                                                \
+    if (ExecEnv::GetInstance()->tracker() != nullptr) {                                   \
+        _memory_metrics->key.set_value(ExecEnv::GetInstance()->tracker()->limit()); \
+    }
+
+    SET_MEM_METRIC_LIMIT_VALUE(process_mem_tracker, process_mem_limit_bytes)
+    SET_MEM_METRIC_LIMIT_VALUE(query_pool_mem_tracker, query_mem_limit_bytes)
+#undef SET_MEM_METRIC_VALUE
 
 #define SET_MEM_METRIC_VALUE(tracker, key)                                                \
     if (ExecEnv::GetInstance()->tracker() != nullptr) {                                   \
