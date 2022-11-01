@@ -5,29 +5,21 @@ package com.starrocks.sql.optimizer.statistics;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.starrocks.analysis.ColumnDef;
+import com.starrocks.analysis.IntLiteral;
 import com.starrocks.analysis.JoinOperator;
-import com.starrocks.catalog.Column;
-import com.starrocks.catalog.OlapTable;
-import com.starrocks.catalog.Partition;
+import com.starrocks.catalog.*;
 import com.starrocks.catalog.Table;
-import com.starrocks.catalog.Type;
 import com.starrocks.common.FeConstants;
+import com.starrocks.external.iceberg.IcebergUtil;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.GlobalStateMgr;
-import com.starrocks.sql.optimizer.ExpressionContext;
-import com.starrocks.sql.optimizer.Group;
-import com.starrocks.sql.optimizer.GroupExpression;
-import com.starrocks.sql.optimizer.Memo;
-import com.starrocks.sql.optimizer.OptimizerContext;
-import com.starrocks.sql.optimizer.Utils;
+import com.starrocks.sql.optimizer.*;
 import com.starrocks.sql.optimizer.base.ColumnRefFactory;
 import com.starrocks.sql.optimizer.base.ColumnRefSet;
 import com.starrocks.sql.optimizer.base.LogicalProperty;
 import com.starrocks.sql.optimizer.operator.AggType;
-import com.starrocks.sql.optimizer.operator.logical.LogicalAggregationOperator;
-import com.starrocks.sql.optimizer.operator.logical.LogicalJoinOperator;
-import com.starrocks.sql.optimizer.operator.logical.LogicalOlapScanOperator;
-import com.starrocks.sql.optimizer.operator.logical.LogicalUnionOperator;
+import com.starrocks.sql.optimizer.operator.logical.*;
 import com.starrocks.sql.optimizer.operator.scalar.BinaryPredicateOperator;
 import com.starrocks.sql.optimizer.operator.scalar.CallOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
@@ -37,12 +29,19 @@ import com.starrocks.utframe.StarRocksAssert;
 import com.starrocks.utframe.UtFrameUtils;
 import mockit.Expectations;
 import mockit.Mocked;
+import org.apache.iceberg.*;
+import org.apache.iceberg.expressions.Expressions;
+import org.apache.iceberg.expressions.ResidualEvaluator;
+import org.apache.iceberg.io.CloseableIterable;
+import org.apache.iceberg.types.Conversions;
+import org.apache.iceberg.types.Types;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import java.nio.ByteBuffer;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -314,6 +313,164 @@ public class StatisticsCalculatorTest {
         Assert.assertEquals(30, columnStatistic.getDistinctValuesCount(), 0.001);
 
         FeConstants.runningUnitTest = true;
+    }
+
+    @Test
+    public void testLogicalIcebergTableScanPredicate1(@Mocked IcebergTable table) {
+        Map<ColumnRefOperator, Column> columnRefMap = new HashMap<>();
+        Column c1 = new Column("v1", Type.fromPrimitiveType(PrimitiveType.BIGINT), true, null, true,
+                new ColumnDef.DefaultValueDef(true, new IntLiteral(1)), "abc");
+        Column c2 = new Column("v2", Type.fromPrimitiveType(PrimitiveType.BIGINT), true, null, true,
+                new ColumnDef.DefaultValueDef(true, new IntLiteral(2)), "abc");
+        Column c3 = new Column("v3", Type.fromPrimitiveType(PrimitiveType.BIGINT), true, null, true,
+                new ColumnDef.DefaultValueDef(true, new IntLiteral(3)), "abc");
+
+        ColumnRefOperator columnRefOperator1 = new ColumnRefOperator(1, Type.BIGINT, "v1", true);
+        ColumnRefOperator columnRefOperator2 = new ColumnRefOperator(2, Type.BIGINT, "v2", true);
+        ColumnRefOperator columnRefOperator3 = new ColumnRefOperator(3, Type.BIGINT, "v3", true);
+
+        columnRefMap.put(columnRefOperator1, c1);
+        columnRefMap.put(columnRefOperator2, c2);
+        columnRefMap.put(columnRefOperator3, c3);
+
+        List<Types.NestedField> fields = new ArrayList<>();
+        fields.add(Types.NestedField.of(1, false, "v1", Types.IntegerType.get()));
+        fields.add(Types.NestedField.of(2, false, "v2", Types.IntegerType.get()));
+        fields.add(Types.NestedField.of(3, false, "v3", Types.IntegerType.get()));
+        Schema schema = new Schema(fields);
+
+        PartitionSpec partitionSpec = PartitionSpec.builderFor(schema).build();
+
+        Map<Integer, ByteBuffer> lowerBounds1 = new HashMap<>();
+        Map<Integer, ByteBuffer> upperBounds1 = new HashMap<>();
+        Map<Integer, Long> nullValueCounts1 = new HashMap<>();
+        Map<Integer, Long> nanValueCounts1 = new HashMap<>();
+
+        lowerBounds1.put(1, Conversions.toByteBuffer(Types.IntegerType.get(), 1));
+        upperBounds1.put(1, Conversions.toByteBuffer(Types.IntegerType.get(), 2));
+        lowerBounds1.put(2, Conversions.toByteBuffer(Types.IntegerType.get(), 10));
+        upperBounds1.put(2, Conversions.toByteBuffer(Types.IntegerType.get(), 20));
+        lowerBounds1.put(3, Conversions.toByteBuffer(Types.IntegerType.get(), 100));
+        upperBounds1.put(3, Conversions.toByteBuffer(Types.IntegerType.get(), 200));
+        nullValueCounts1.put(1, 100L);
+        nanValueCounts1.put(1, 200L);
+        nullValueCounts1.put(2, 100L);
+        nanValueCounts1.put(2, 200L);
+        nullValueCounts1.put(3, 100L);
+        nanValueCounts1.put(3, 200L);
+
+        Map<Integer, ByteBuffer> lowerBounds2 = new HashMap<>();
+        Map<Integer, ByteBuffer> upperBounds2 = new HashMap<>();
+        Map<Integer, Long> nullValueCounts2 = new HashMap<>();
+        Map<Integer, Long> nanValueCounts2 = new HashMap<>();
+
+        lowerBounds2.put(1, Conversions.toByteBuffer(Types.IntegerType.get(), 100));
+        upperBounds2.put(1, Conversions.toByteBuffer(Types.IntegerType.get(), 200));
+        lowerBounds2.put(2, Conversions.toByteBuffer(Types.IntegerType.get(), 10));
+        upperBounds2.put(2, Conversions.toByteBuffer(Types.IntegerType.get(), 20));
+        lowerBounds2.put(3, Conversions.toByteBuffer(Types.IntegerType.get(), 100));
+        upperBounds2.put(3, Conversions.toByteBuffer(Types.IntegerType.get(), 200));
+        nullValueCounts2.put(1, 100L);
+        nanValueCounts2.put(1, 200L);
+        nullValueCounts2.put(2, 100L);
+        nanValueCounts2.put(2, 200L);
+        nullValueCounts2.put(3, 100L);
+        nanValueCounts2.put(3, 200L);
+
+        Metrics metrics1 =
+                new Metrics(
+                        10L,
+                        new HashMap<>(),
+                        new HashMap<>(),
+                        nullValueCounts1,
+                        nanValueCounts1,
+                        lowerBounds1,
+                        upperBounds1);
+
+        DataFile dataFile1 = DataFiles.builder(partitionSpec)
+                .withFileSizeInBytes(10)
+                .withPath("/path/to/data1.parquet")
+                .withMetrics(metrics1)
+                .build();
+
+        Metrics metrics2 =
+                new Metrics(
+                        20L,
+                        new HashMap<>(),
+                        new HashMap<>(),
+                        nullValueCounts2,
+                        nanValueCounts2,
+                        lowerBounds2,
+                        upperBounds2);
+
+        DataFile dataFile2 = DataFiles.builder(partitionSpec)
+                .withFileSizeInBytes(100)
+                .withPath("/path/to/data2.parquet")
+                .withMetrics(metrics2)
+                .build();
+
+        FileScanTask fileScanTask1 = new BaseFileScanTask(dataFile1, null, "", "",
+                ResidualEvaluator.of(partitionSpec, Expressions.alwaysTrue(), false)).asFileScanTask();
+        FileScanTask fileScanTask2 = new BaseFileScanTask(dataFile2, null, "", "",
+                ResidualEvaluator.of(partitionSpec, Expressions.alwaysTrue(), false)).asFileScanTask();
+        List<FileScanTask> fileScanTaskList = new ArrayList<>();
+        fileScanTaskList.add(fileScanTask1);
+        fileScanTaskList.add(fileScanTask2);
+
+        CloseableIterable<FileScanTask> closeableIterableFileScanTaskList =
+                CloseableIterable.withNoopClose(fileScanTaskList);
+
+        CloseableIterable<FileScanTask> predicateCloseableIterableFileScanTaskList =
+                CloseableIterable.withNoopClose(fileScanTask1);
+
+        Snapshot snapshot = table.getIcebergTable().manageSnapshots().setCurrentSnapshot(1).apply();
+
+        new Expectations() {
+            {
+                table.getIcebergTable().schema();
+                result = schema;
+            }
+            {
+                // empty iceberg's snapshot is null or snapshot is not null but no datafile.
+                // so here mock iceberg table with null snapshot
+                table.getIcebergTable().currentSnapshot();
+                result = snapshot;
+            }
+            {
+                IcebergUtil.getTableScan(table.getIcebergTable(),
+                        snapshot, new ArrayList<>()).planFiles();
+                result = closeableIterableFileScanTaskList;
+            }
+        };
+
+        LogicalIcebergScanOperator logicalIcebergScanOperator1 =
+                new LogicalIcebergScanOperator(table, Table.TableType.ICEBERG,
+                        columnRefMap, Maps.newHashMap(), -1, null);
+        ColumnRefFactory columnRefFactory = new ColumnRefFactory();
+        OptimizerContext optimizerContext = new OptimizerContext(new Memo(), columnRefFactory, connectContext);
+        GroupExpression groupExpression1 = new GroupExpression(logicalIcebergScanOperator1, Lists.newArrayList());
+        groupExpression1.setGroup(new Group(0));
+        ExpressionContext expressionContext1 = new ExpressionContext(groupExpression1);
+        StatisticsCalculator statisticsCalculator1 = new StatisticsCalculator(expressionContext1,
+                columnRefFactory, optimizerContext);
+        statisticsCalculator1.visitLogicalIcebergScan(logicalIcebergScanOperator1, expressionContext1);
+
+        Assert.assertEquals(30.0, expressionContext1.getStatistics().getOutputRowCount(), 0.001);
+
+        BinaryPredicateOperator binaryPredicateOperator =
+                new BinaryPredicateOperator(BinaryPredicateOperator.BinaryType.GE,
+                        columnRefOperator1, ConstantOperator.createInt(15));
+        LogicalIcebergScanOperator logicalIcebergScanOperator2 =
+                new LogicalIcebergScanOperator(table, Table.TableType.ICEBERG,
+                        columnRefMap, Maps.newHashMap(), -1, binaryPredicateOperator);
+        GroupExpression groupExpression2 = new GroupExpression(logicalIcebergScanOperator2, Lists.newArrayList());
+        groupExpression2.setGroup(new Group(0));
+        ExpressionContext expressionContext2 = new ExpressionContext(groupExpression2);
+        StatisticsCalculator statisticsCalculator2 = new StatisticsCalculator(expressionContext2,
+                columnRefFactory, optimizerContext);
+        statisticsCalculator2.visitLogicalIcebergScan(logicalIcebergScanOperator2, expressionContext2);
+        // estimatePredicateRange
+        Assert.assertEquals(-158.04, expressionContext2.getStatistics().getOutputRowCount(), 0.001);
     }
 
     @Test

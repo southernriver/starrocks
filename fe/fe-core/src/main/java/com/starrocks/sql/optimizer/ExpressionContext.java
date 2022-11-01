@@ -4,13 +4,18 @@ package com.starrocks.sql.optimizer;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
+import com.starrocks.analysis.DescriptorTable;
+import com.starrocks.analysis.Expr;
 import com.starrocks.sql.optimizer.base.ColumnRefSet;
 import com.starrocks.sql.optimizer.base.LogicalProperty;
 import com.starrocks.sql.optimizer.base.PhysicalPropertySet;
 import com.starrocks.sql.optimizer.operator.Operator;
+import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
 import com.starrocks.sql.optimizer.statistics.Statistics;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * ExpressionContext to convey context wherever an expression is used in a shallow
@@ -31,6 +36,8 @@ public class ExpressionContext {
 
     private Statistics statistics;
     private final List<Statistics> childrenStatistics = Lists.newArrayList();
+    private final DescriptorTable descTbl = new DescriptorTable();
+    private final Map<ColumnRefOperator, Expr> colRefToExpr = new HashMap<>();
 
     public ExpressionContext(OptExpression expression) {
         this.expression = expression;
@@ -74,6 +81,14 @@ public class ExpressionContext {
             return expression.arity();
         }
         return groupExpression.arity();
+    }
+
+    public DescriptorTable getDescTbl() {
+        return descTbl;
+    }
+
+    public Map<ColumnRefOperator, Expr> getColRefToExpr() {
+        return colRefToExpr;
     }
 
     public LogicalProperty getRootProperty() {

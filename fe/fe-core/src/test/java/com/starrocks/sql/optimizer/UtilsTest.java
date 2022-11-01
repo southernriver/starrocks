@@ -7,13 +7,17 @@ import com.google.common.collect.Maps;
 import com.starrocks.analysis.CreateDbStmt;
 import com.starrocks.analysis.JoinOperator;
 import com.starrocks.catalog.Column;
+import com.starrocks.catalog.IcebergTable;
 import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.Partition;
 import com.starrocks.catalog.Type;
+import com.starrocks.catalog.Table;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.FeConstants;
+import com.starrocks.external.iceberg.IcebergUtil;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.GlobalStateMgr;
+import com.starrocks.sql.optimizer.operator.logical.LogicalIcebergScanOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalJoinOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalOlapScanOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalProjectOperator;
@@ -27,10 +31,28 @@ import com.starrocks.sql.optimizer.statistics.ColumnStatistic;
 import com.starrocks.statistic.StatsConstants;
 import com.starrocks.utframe.StarRocksAssert;
 import com.starrocks.utframe.UtFrameUtils;
+import mockit.Expectations;
+import mockit.Mocked;
+import org.apache.iceberg.BaseFileScanTask;
+import org.apache.iceberg.DataFile;
+import org.apache.iceberg.DataFiles;
+import org.apache.iceberg.FileScanTask;
+import org.apache.iceberg.Metrics;
+import org.apache.iceberg.PartitionSpec;
+import org.apache.iceberg.Schema;
+import org.apache.iceberg.Snapshot;
+
+import org.apache.iceberg.expressions.Expressions;
+import org.apache.iceberg.expressions.ResidualEvaluator;
+import org.apache.iceberg.io.CloseableIterable;
+import org.apache.iceberg.types.Conversions;
+import org.apache.iceberg.types.Types;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -242,6 +264,134 @@ public class UtilsTest {
 
         assertEquals(5, ((ConstantOperator) rightChild.getChild(0)).getInt());
         assertEquals(6, ((ConstantOperator) rightChild.getChild(1)).getInt());
+    }
+
+    @Test
+    public void knownIcebergColumnStats(@Mocked IcebergTable table) {
+        Map<ColumnRefOperator, Column> columnRefMap = new HashMap<>();
+        columnRefMap.put(new ColumnRefOperator(1, Type.BIGINT, "v1", true),
+                new Column("v1", Type.BIGINT));
+        columnRefMap.put(new ColumnRefOperator(2, Type.BIGINT, "v2", true),
+                new Column("v2", Type.BIGINT));
+        columnRefMap.put(new ColumnRefOperator(3, Type.BIGINT, "v3", true),
+                new Column("v3", Type.BIGINT));
+
+        List<Types.NestedField> fields = new ArrayList<>();
+        fields.add(Types.NestedField.of(1, false, "v1", Types.IntegerType.get()));
+        fields.add(Types.NestedField.of(2, false, "v2", Types.IntegerType.get()));
+        fields.add(Types.NestedField.of(3, false, "v3", Types.IntegerType.get()));
+        Schema schema = new Schema(fields);
+
+        PartitionSpec partitionSpec = PartitionSpec.builderFor(schema).build();
+
+        Map<Integer, ByteBuffer> lowerBounds = new HashMap<>();
+        Map<Integer, ByteBuffer> upperBounds = new HashMap<>();
+        Map<Integer, Long> nullValueCounts = new HashMap<>();
+        Map<Integer, Long> nanValueCounts = new HashMap<>();
+
+        lowerBounds.put(1, Conversions.toByteBuffer(Types.IntegerType.get(), 1));
+        upperBounds.put(1, Conversions.toByteBuffer(Types.IntegerType.get(), 2));
+        lowerBounds.put(2, Conversions.toByteBuffer(Types.IntegerType.get(), 10));
+        upperBounds.put(2, Conversions.toByteBuffer(Types.IntegerType.get(), 20));
+        lowerBounds.put(3, Conversions.toByteBuffer(Types.IntegerType.get(), 100));
+        upperBounds.put(3, Conversions.toByteBuffer(Types.IntegerType.get(), 200));
+        nullValueCounts.put(1, 100L);
+        nanValueCounts.put(1, 200L);
+        nullValueCounts.put(2, 100L);
+        nanValueCounts.put(2, 200L);
+        nullValueCounts.put(3, 100L);
+        nanValueCounts.put(3, 200L);
+
+        Metrics metrics =
+                new Metrics(
+                        2L,
+                        new HashMap<>(),
+                        new HashMap<>(),
+                        nullValueCounts,
+                        nanValueCounts,
+                        lowerBounds,
+                        upperBounds);
+
+        DataFile dataFile1 = DataFiles.builder(partitionSpec)
+                .withFileSizeInBytes(10)
+                .withRecordCount(1)
+                .withPath("/path/to/data1.parquet")
+                .withMetrics(metrics)
+                .build();
+
+        DataFile dataFile2 = DataFiles.builder(partitionSpec)
+                .withFileSizeInBytes(100)
+                .withRecordCount(1)
+                .withPath("/path/to/data2.parquet")
+                .withMetrics(metrics)
+                .build();
+
+        FileScanTask fileScanTask1 = new BaseFileScanTask(dataFile1, null, "", "",
+                ResidualEvaluator.of(partitionSpec, Expressions.alwaysTrue(), false)).asFileScanTask();
+        FileScanTask fileScanTask2 = new BaseFileScanTask(dataFile2, null, "", "",
+                ResidualEvaluator.of(partitionSpec, Expressions.alwaysTrue(), false)).asFileScanTask();
+        List<FileScanTask> fileScanTaskList = new ArrayList<>();
+        fileScanTaskList.add(fileScanTask1);
+        fileScanTaskList.add(fileScanTask2);
+
+        CloseableIterable<FileScanTask> closeableIterable = CloseableIterable.withNoopClose(fileScanTaskList);
+
+        Snapshot snapshot = table.getIcebergTable().manageSnapshots().setCurrentSnapshot(1).apply();
+
+        new Expectations() {
+            {
+                table.getIcebergTable().schema();
+                result = schema;
+            }
+            {
+                // empty iceberg's snapshot is null or snapshot is not null but no datafile.
+                // so here mock iceberg table with null snapshot
+                table.getIcebergTable().currentSnapshot();
+                result = snapshot;
+            }
+            {
+                IcebergUtil.getTableScan(table.getIcebergTable(),
+                        snapshot, new ArrayList<>()).planFiles();
+                result = closeableIterable;
+            }
+        };
+
+        connectContext.getSessionVariable().setEnableIcebergStats(false);
+        OptExpression opt = new OptExpression(
+                new LogicalIcebergScanOperator(table, Table.TableType.ICEBERG,
+                        columnRefMap, Maps.newHashMap(), -1, null));
+        Assert.assertFalse(Utils.hasUnknownColumnsStats(opt));
+    }
+
+    @Test
+    public void unKnownIcebergColumnStats(@Mocked IcebergTable table) {
+        Map<ColumnRefOperator, Column> columnRefMap = new HashMap<>();
+        columnRefMap.put(new ColumnRefOperator(1, Type.BIGINT, "v1", true),
+                new Column("v1", Type.BIGINT));
+        columnRefMap.put(new ColumnRefOperator(2, Type.BIGINT, "v2", true),
+                new Column("v2", Type.BIGINT));
+        columnRefMap.put(new ColumnRefOperator(3, Type.BIGINT, "v3", true),
+                new Column("v3", Type.BIGINT));
+
+        List<Types.NestedField> fields = new ArrayList<>();
+        fields.add(Types.NestedField.of(1, false, "v1", new Types.IntegerType()));
+        fields.add(Types.NestedField.of(2, false, "v2", new Types.IntegerType()));
+        fields.add(Types.NestedField.of(3, false, "v3", new Types.IntegerType()));
+        Schema schema = new Schema(fields);
+
+        new Expectations() {
+            {
+                table.getIcebergTable().schema();
+                result = schema;
+            }
+        };
+
+        OptExpression opt = new OptExpression(
+                new LogicalIcebergScanOperator(table, Table.TableType.ICEBERG,
+                        columnRefMap, Maps.newHashMap(), -1, null));
+
+        connectContext.getSessionVariable().setEnableIcebergStats(false);
+        Assert.assertTrue(Utils.hasUnknownColumnsStats(opt));
     }
 
     @Test
