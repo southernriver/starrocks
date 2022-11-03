@@ -63,6 +63,7 @@ public class Utils {
     private static final Logger LOG = LogManager.getLogger(Utils.class);
 
     public static boolean isEnableIcebergFileStats = true;
+    public static boolean enableHiveColumnStats = true;
 
     public static List<ScalarOperator> extractConjuncts(ScalarOperator root) {
         LinkedList<ScalarOperator> list = new LinkedList<>();
@@ -418,6 +419,9 @@ public class Utils {
                         GlobalStateMgr.getCurrentStatisticStorage().getColumnStatistics(table, colNames);
                 return columnStatisticList.stream().anyMatch(ColumnStatistic::isUnknown);
             } else if (operator instanceof LogicalHiveScanOperator || operator instanceof LogicalHudiScanOperator) {
+                if (!enableHiveColumnStats) {
+                    return true;
+                }
                 HiveMetaStoreTable hiveMetaStoreTable = (HiveMetaStoreTable) scanOperator.getTable();
                 try {
                     Map<String, HiveColumnStats> hiveColumnStatisticMap =
@@ -429,6 +433,9 @@ public class Utils {
                     return true;
                 }
             } else if (operator instanceof LogicalIcebergScanOperator) {
+                if (!isEnableIcebergFileStats) {
+                    return true;
+                }
                 IcebergTable table = (IcebergTable) scanOperator.getTable();
                 try {
                     // TODO: pass predicate to get column statistics

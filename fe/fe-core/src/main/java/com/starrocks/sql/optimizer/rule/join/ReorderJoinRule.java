@@ -140,6 +140,7 @@ public class ReorderJoinRule extends Rule {
             // In order to reorder the bottom join tree firstly
             Collections.reverse(innerJoinTrees);
             Utils.isEnableIcebergFileStats = context.getSessionVariable().isEnableIcebergFileStats();
+            Utils.enableHiveColumnStats = context.getSessionVariable().enableHiveColumnStats();
             for (OptExpression innerJoinRoot : innerJoinTrees) {
                 MultiJoinNode multiJoinNode = MultiJoinNode.toMultiJoinNode(innerJoinRoot);
 
