@@ -2,7 +2,7 @@
 
 StarRocks is a next-gen, high-performance analytical data warehouse that enables real-time, multi-dimensional, and highly concurrent data analysis. StarRocks has an MPP architecture and it is equipped with a fully vectorized execution engine, a columnar storage engine that supports real-time updates, and is powered by a rich set of features including a fully-customized cost-based optimizer (CBO), intelligent materialized view and more. StarRocks is also compatible with MySQL protocols and can be easily connected using MySQL clients and popular BI tools. StarRocks is highly scalable, available, and easy to maintain. It is widely adopted in the industry, powering a variety of OLAP scenarios, such as real-time analytics, ad-hoc queries, data lake analytics and more.
 
-Join our [Slack channel](https://join.slack.com/t/starrocks/shared_invite/zt-z5zxqr0k-U5lrTVlgypRIV8RbnCIAzg) for live support, discussion, or latest community news. You can also follow us on [LinkedIn](https://www.linkedin.com/company/starrocks) to get first-hand updates on new features, events, and sharing.
+Join our [Slack channel](https://join.slack.com/t/starrocks/shared_invite/zt-z5zxqr0k-U5lrTVlgypRIV8RbnCIAzg) for live support, discussion, or latest community news. You can also follow us on [Twitter](https://twitter.com/StarRocksLabs) to get first-hand updates on new features, events, and sharing.
 
 <NavBox>
 <NavBoxPart title="About StarRocks">
@@ -74,9 +74,9 @@ Join our [Slack channel](https://join.slack.com/t/starrocks/shared_invite/zt-z5z
 <NavBoxPart>
 <NavBoxPartItem title="Query external data sources​">
 
-- [Apache Hive™](../using_starrocks/catalog/hive_catalog.md)
-- [Apache Hudi](../using_starrocks/catalog/hudi_catalog.md)
-- [Apache Iceberg](../using_starrocks/catalog/iceberg_catalog.md)
+- [Apache Hive™](../data_source/catalog/hive_catalog.md)
+- [Apache Hudi](../data_source/catalog/hudi_catalog.md)
+- [Apache Iceberg](../data_source/catalog/iceberg_catalog.md)
 - [MySQL](../using_starrocks/External_table#mysql-external-table.md)
 - [Elasticsearch](../using_starrocks/External_table#elasticsearch-external-table.md)
 - [JDBC-compatible database](../using_starrocks/External_table#external-table-for-a-jdbc-compatible-database.md)
