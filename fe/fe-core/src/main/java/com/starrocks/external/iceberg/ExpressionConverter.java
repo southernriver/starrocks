@@ -40,6 +40,7 @@ import static org.apache.iceberg.expressions.Expressions.notEqual;
 import static org.apache.iceberg.expressions.Expressions.notIn;
 import static org.apache.iceberg.expressions.Expressions.notNull;
 import static org.apache.iceberg.expressions.Expressions.or;
+import static org.apache.iceberg.expressions.Expressions.notStartsWith;
 import static org.apache.iceberg.expressions.Expressions.startsWith;
 
 /**
@@ -57,6 +58,7 @@ import static org.apache.iceberg.expressions.Expressions.startsWith;
  * in -> InPredicate(..., ..., false)
  * notIn -> InPredicate(..., ..., true)
  * startsWith -> FunctionCallExpr("starts_with", ...) or LikePredicate(Operator.LIKE, ..., "prefix%")
+ * notStartsWith -> CompoundPredicate(not, FunctionCallExpr("not_starts_with", ...)) or CompoundPredicate(not, LikePredicate(Operator.LIKE, ..., "prefix%"))
  * <p>
  * Supported expression operations are:
  * and -> CompoundPredicate(and, ..., ...)
@@ -80,10 +82,13 @@ public class ExpressionConverter extends AstVisitor<Expression, Void> {
     public Expression visitCompoundPredicate(CompoundPredicate node, Void context) {
         CompoundPredicate.Operator op = node.getOp();
         if (op == CompoundPredicate.Operator.NOT) {
-            if (node.getChild(0) instanceof FunctionCallExpr ||
-                    node.getChild(0) instanceof LikePredicate) {
-                // TODO: No negation for operation: STARTS_WITH in the Apache Iceberg 0.12.1
-                return null;
+            if (node.getChild(0) instanceof FunctionCallExpr) {
+                FunctionCallExpr functionCallExpr = (FunctionCallExpr) node.getChild(0);
+                return visitFunctionCall(functionCallExpr, context);
+            }
+            if (node.getChild(0) instanceof LikePredicate) {
+                LikePredicate likePredicate = (LikePredicate) node.getChild(0);
+                return visitNotLikePredicate(likePredicate, context);
             }
             Expression expression = node.getChild(0).accept(this, null);
             if (expression != null) {
@@ -168,12 +173,17 @@ public class ExpressionConverter extends AstVisitor<Expression, Void> {
         if (columnName == null) {
             return null;
         }
-        if (!node.getFnName().getFunction().equalsIgnoreCase(FunctionSet.STARTS_WITH)) {
+        if (!node.getFnName().getFunction().equalsIgnoreCase(FunctionSet.STARTS_WITH) &&
+                !node.getFnName().getFunction().equalsIgnoreCase(FunctionSet.NOT_STARTS_WITH) ) {
             return null;
         }
         if (node.getChild(1) instanceof StringLiteral) {
             StringLiteral stringLiteral = (StringLiteral) node.getChild(1);
-            return startsWith(columnName, stringLiteral.getStringValue());
+            if (node.getFnName().getFunction().equalsIgnoreCase(FunctionSet.STARTS_WITH)) {
+                return startsWith(columnName, stringLiteral.getStringValue());
+            } else {
+                return notStartsWith(columnName, stringLiteral.getStringValue());
+            }
         }
         return null;
     }
@@ -190,6 +200,23 @@ public class ExpressionConverter extends AstVisitor<Expression, Void> {
                 String literal = stringLiteral.getUnescapedValue();
                 if (literal.indexOf("%") == literal.length() - 1) {
                     return startsWith(columnName, literal.substring(0, literal.length() - 1));
+                }
+            }
+        }
+        return null;
+    }
+
+    private Expression visitNotLikePredicate(LikePredicate node, Void context) {
+        String columnName = getColumnName(node.getChild(0));
+        if (columnName == null) {
+            return null;
+        }
+        if (node.getOp().equals(LikePredicate.Operator.LIKE)) {
+            if (node.getChild(1) instanceof StringLiteral) {
+                StringLiteral stringLiteral = (StringLiteral) node.getChild(1);
+                String literal = stringLiteral.getUnescapedValue();
+                if (literal.indexOf("%") == literal.length() - 1) {
+                    return notStartsWith(columnName, literal.substring(0, literal.length() - 1));
                 }
             }
         }
