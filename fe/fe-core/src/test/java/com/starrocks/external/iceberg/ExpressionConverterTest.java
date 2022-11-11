@@ -164,6 +164,22 @@ public class ExpressionConverterTest {
         Assert.assertEquals("Generated startsWith expression should be correct",
                 expectedExpression.toString(), convertedExpression.toString());
 
+        // not startsWith
+        params.clear();
+        params.add(0, ref);
+        params.add(new StringLiteral("a"));
+        expectedExpression = Expressions.notStartsWith("col_name", "a");
+
+        convertedExpression = converter.convert(new FunctionCallExpr("not_starts_with", params));
+        Assert.assertEquals("Generated not startsWith expression should be correct",
+                expectedExpression.toString(), convertedExpression.toString());
+
+
+        convertedExpression = converter.convert(new CompoundPredicate(CompoundPredicate.Operator.NOT,
+                new LikePredicate(LikePredicate.Operator.LIKE, ref, stringLiteral), null));
+        Assert.assertEquals("Generated not startsWith expression should be correct",
+                expectedExpression.toString(), convertedExpression.toString());
+
         // or
         Expr expr1 = new BinaryPredicate(BinaryPredicate.Operator.GT, ref, IntLiteral.create("10", Type.BIGINT));
         Expr expr2 = new BinaryPredicate(BinaryPredicate.Operator.LT, ref, IntLiteral.create("5", Type.BIGINT));

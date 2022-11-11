@@ -167,6 +167,7 @@ public class FunctionSet {
     public static final String SPLIT = "split";
     public static final String SPLIT_PART = "split_part";
     public static final String STARTS_WITH = "starts_with";
+    public static final String NOT_STARTS_WITH = "not_starts_with";
     public static final String STRLEFT = "strleft";
     public static final String STRRIGHT = "strright";
     public static final String HEX = "hex";
