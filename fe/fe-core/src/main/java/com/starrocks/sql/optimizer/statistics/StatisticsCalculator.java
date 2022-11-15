@@ -260,29 +260,32 @@ public class StatisticsCalculator extends OperatorVisitor<Void, ExpressionContex
                                         Map<ColumnRefOperator, Column> colRefToColumnMetaMap) {
         if (context.getStatistics() == null) {
             List<Expression> icebergPredicates = new ArrayList<>();
-            try {
-                context.getDescTbl().addReferencedTable(table);
-                TupleDescriptor tupleDescriptor = context.getDescTbl().createTupleDescriptor();
-                tupleDescriptor.setTable(table);
+            if (optimizerContext.getSessionVariable().isEnableIcebergPredicateFileStats()) {
+                try {
+                    context.getDescTbl().addReferencedTable(table);
+                    TupleDescriptor tupleDescriptor = context.getDescTbl().createTupleDescriptor();
+                    tupleDescriptor.setTable(table);
 
-                // set slot
-                for (Map.Entry<ColumnRefOperator, Column> entry : colRefToColumnMetaMap.entrySet()) {
-                    SlotDescriptor slotDescriptor =
-                            context.getDescTbl().addSlotDescriptor(tupleDescriptor, new SlotId(entry.getKey().getId()));
-                    slotDescriptor.setColumn(entry.getValue());
-                    slotDescriptor.setIsNullable(entry.getValue().isAllowNull());
-                    slotDescriptor.setIsMaterialized(true);
-                    context.getColRefToExpr().put(entry.getKey(), new SlotRef(entry.getKey().toString(), slotDescriptor));
+                    // set slot
+                    for (Map.Entry<ColumnRefOperator, Column> entry : colRefToColumnMetaMap.entrySet()) {
+                        SlotDescriptor slotDescriptor =
+                                context.getDescTbl().addSlotDescriptor(tupleDescriptor, new SlotId(entry.getKey().getId()));
+                        slotDescriptor.setColumn(entry.getValue());
+                        slotDescriptor.setIsNullable(entry.getValue().isAllowNull());
+                        slotDescriptor.setIsMaterialized(true);
+                        context.getColRefToExpr().put(entry.getKey(), new SlotRef(entry.getKey().toString(), slotDescriptor));
+                    }
+
+                    // set predicate.
+                    List<Expr> conjuncts = Utils.extractConjuncts(node.getPredicate()).stream()
+                            .map(e -> ScalarOperatorToExpr.buildExecExpression(e,
+                                    new ScalarOperatorToExpr.FormatterContext(context.getColRefToExpr())))
+                            .collect(Collectors.toList());
+                    icebergPredicates = Utils.preIcebergPredicates(conjuncts, table);
+                } catch (Exception exception) {
+                    LOG.info("Failed to push down expression: {}", node.getPredicate().debugString());
                 }
-
-                // set predicate.
-                List<Expr> conjuncts = Utils.extractConjuncts(node.getPredicate()).stream()
-                        .map(e -> ScalarOperatorToExpr.buildExecExpression(e,
-                                new ScalarOperatorToExpr.FormatterContext(context.getColRefToExpr())))
-                        .collect(Collectors.toList());
-                icebergPredicates = Utils.preIcebergPredicates(conjuncts, table);
-            } catch (Exception exception) {
-                LOG.info("Failed to push down expression: {}", node.getPredicate().debugString());
+                LOG.info("Pass predicate = {} to get table statistics.", icebergPredicates);
             }
 
             Statistics stats = IcebergTableStatisticCalculator.getTableStatistics(

@@ -220,6 +220,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     public static final String CBO_PRUNE_SHUFFLE_COLUMN_RATE = "cbo_prune_shuffle_column_rate";
     public static final String CBO_DEBUG_ALIVE_BACKEND_NUMBER = "cbo_debug_alive_backend_number";
     public static final String CBO_ENABLE_ICEBRG_FILE_STATS = "cbo_enable_iceberg_file_stats";
+    public static final String ENABLE_ICEBRG_PREDICATE_FILE_STATS = "enable_iceberg_predicate_file_stats";
+
 
     // --------  New planner session variables end --------
 
@@ -548,6 +550,9 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VariableMgr.VarAttr(name = CBO_ENABLE_ICEBRG_FILE_STATS)
     private boolean enableIcebergFileStats = true;
+
+    @VariableMgr.VarAttr(name = ENABLE_ICEBRG_PREDICATE_FILE_STATS)
+    private boolean enableIcebergPredicateFileStats = true;
 
     // value should be 0~4
     // 0 represents automatic selection, and 1, 2, 3, and 4 represent forced selection of AGG of
@@ -1042,12 +1047,20 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
         return enableIcebergFileStats;
     }
 
+    public boolean isEnableIcebergPredicateFileStats() {
+        return enableIcebergPredicateFileStats;
+    }
+
     public void setEnableLowCardinalityOptimize(boolean enableLowCardinalityOptimize) {
         this.enableLowCardinalityOptimize = enableLowCardinalityOptimize;
     }
 
     public void setEnableIcebergStats(boolean enableIcebergFileStats) {
         this.enableIcebergFileStats = enableIcebergFileStats;
+    }
+
+    public void setEnableIcebergPredicateFileStats(boolean enableIcebergPredicateFileStats) {
+        this.enableIcebergPredicateFileStats = enableIcebergPredicateFileStats;
     }
 
     public boolean isEnableColumnExprPredicate() {
