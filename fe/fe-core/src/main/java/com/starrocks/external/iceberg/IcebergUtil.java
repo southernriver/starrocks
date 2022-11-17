@@ -13,6 +13,8 @@ import com.starrocks.catalog.ScalarType;
 import com.starrocks.catalog.Type;
 import com.starrocks.common.DdlException;
 import com.starrocks.external.hive.HdfsFileFormat;
+import com.starrocks.qe.ConnectContext;
+import com.starrocks.qe.SessionVariable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.iceberg.BaseTable;
 import org.apache.iceberg.FileFormat;
@@ -20,6 +22,7 @@ import org.apache.iceberg.PartitionField;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.Table;
+import org.apache.iceberg.TableProperties;
 import org.apache.iceberg.TableScan;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.exceptions.NoSuchTableException;
@@ -130,6 +133,11 @@ public class IcebergUtil {
         // TODO: use planWith(executorService) after
         // https://github.com/apache/iceberg/commit/74db81f4dd81360bf3c0ad438d4be937c7a812d9 release
         TableScan tableScan = table.newScan().useSnapshot(snapshot.snapshotId()).includeColumnStats();
+        SessionVariable sessionVariable = ConnectContext.get().getSessionVariable();
+        if (sessionVariable.isEnableIcebergMetadataAlluxioCache()) {
+            tableScan = tableScan.option(TableProperties.READ_METADATA_ALLUXIO_CACHE_ENABLED, "true");
+        }
+
         Expression filterExpressions = Expressions.alwaysTrue();
         if (!icebergPredicates.isEmpty()) {
             filterExpressions = icebergPredicates.stream().reduce(Expressions.alwaysTrue(), Expressions::and);

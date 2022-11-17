@@ -284,7 +284,7 @@ public class StatisticsCalculator extends OperatorVisitor<Void, ExpressionContex
             } catch (Exception exception) {
                 LOG.info("Failed to push down expression: {}", node.getPredicate().debugString());
             }
-
+            LOG.info("Pass predicate = {} to get table statistics.", icebergPredicates);
             Statistics stats = IcebergTableStatisticCalculator.getTableStatistics(
                     icebergPredicates,
                     ((IcebergTable) table).getIcebergTable(), colRefToColumnMetaMap,

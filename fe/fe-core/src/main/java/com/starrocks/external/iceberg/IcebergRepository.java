@@ -14,9 +14,14 @@ public class IcebergRepository {
 
     public IcebergRepository() {
         if (Config.enable_iceberg_custom_worker_thread) {
-            LOG.info("Default iceberg worker thread number changed " + Config.iceberg_worker_num_threads);
+            // TODO this should be also changed to runtime session conf.
+            int availableProcessors = Runtime.getRuntime().availableProcessors();
+            int workerThreadPoolSize = Math.min(availableProcessors, Config.iceberg_worker_num_threads);
+            LOG.info("Available processors is {}, default iceberg_worker_num_threads is {}, and worker " +
+                    "thread pool size should change to {}.", availableProcessors, Config.iceberg_worker_num_threads,
+                    workerThreadPoolSize);
             Properties props = System.getProperties();
-            props.setProperty(ThreadPools.WORKER_THREAD_POOL_SIZE_PROP, String.valueOf(Config.iceberg_worker_num_threads));
+            props.setProperty(ThreadPools.WORKER_THREAD_POOL_SIZE_PROP, String.valueOf(workerThreadPoolSize));
         }
     }
 }
