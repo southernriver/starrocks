@@ -72,6 +72,7 @@ public class IcebergTableStatisticCalculator {
 
     private List<ColumnStatistic> makeColumnStatistics(List<Expression> icebergPredicates,
                                                        Map<ColumnRefOperator, Column> colRefToColumnMetaMap) {
+        LOG.debug("Begin to make iceberg column statistics!");
         List<ColumnStatistic> columnStatistics = new ArrayList<>();
         List<Types.NestedField> columns = icebergTable.schema().columns();
 
@@ -101,6 +102,7 @@ public class IcebergTableStatisticCalculator {
                         Math.max(icebergFileStats.getRecordCount(), 1), columnList.get(0));
             columnStatistics.add(columnStatistic);
         }
+        LOG.debug("Finish make iceberg column statistics!");
         return columnStatistics;
     }
 
@@ -109,7 +111,7 @@ public class IcebergTableStatisticCalculator {
         LOG.debug("Begin to make iceberg table statistics!");
         List<Types.NestedField> columns = icebergTable.schema().columns();
 
-        double recordCount;
+        double recordCount = 1;
         IcebergFileStats icebergFileStats = null;
         if (isEnableIcebergFileStats) {
             LOG.info(SessionVariable.CBO_ENABLE_ICEBRG_FILE_STATS + " is set to " + isEnableIcebergFileStats +
@@ -118,9 +120,9 @@ public class IcebergTableStatisticCalculator {
                     generateIcebergFileStats(icebergPredicates, columns);
             recordCount = Math.max(icebergFileStats == null ? 0 : icebergFileStats.getRecordCount(), 1);
         } else {
+            // TODO  we need to plan files to get accurate recordCount, otherwise recordCount should set to 1.
             LOG.info(SessionVariable.CBO_ENABLE_ICEBRG_FILE_STATS + " is set to " + isEnableIcebergFileStats +
-                    ", only count records from Datafiles.");
-            recordCount = new IcebergTableStatisticCalculator(icebergTable).generateIcebergRecordCount(icebergPredicates);
+                    ",  we need to plan files to get accurate recordCount, otherwise recordCount should set to 1.");
         }
 
         Map<Integer, String> idToColumnNames = columns.stream()
