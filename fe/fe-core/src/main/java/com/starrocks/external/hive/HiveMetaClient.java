@@ -73,6 +73,8 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
 
+import static org.apache.hadoop.hive.common.FileUtils.unescapePathName;
+
 public class HiveMetaClient {
     private static final Logger LOG = LogManager.getLogger(HiveMetaClient.class);
     public static final String PARTITION_NULL_VALUE = "__HIVE_DEFAULT_PARTITION__";
@@ -223,7 +225,7 @@ public class HiveMetaClient {
                 List<String> partNames = client.hiveClient.listPartitionNames(dbName, tableName, (short) -1);
                 Map<PartitionKey, Long> partitionKeys = Maps.newHashMapWithExpectedSize(partNames.size());
                 for (String partName : partNames) {
-                    List<String> values = client.hiveClient.partitionNameToVals(partName);
+                    List<String> values = toPartitionValues(partName);
                     PartitionKey partitionKey = Utils.createPartitionKey(values, partColumns, isHudiTable);
                     partitionKeys.put(partitionKey, nextPartitionId());
                 }
@@ -239,9 +241,31 @@ public class HiveMetaClient {
         }
     }
 
+    public static List<String> toPartitionValues(String partitionName) {
+        // mimics Warehouse.makeValsFromName
+        ImmutableList.Builder<String> resultBuilder = ImmutableList.builder();
+        int start = 0;
+        while (true) {
+            while (start < partitionName.length() && partitionName.charAt(start) != '=') {
+                start++;
+            }
+            start++;
+            int end = start;
+            while (end < partitionName.length() && partitionName.charAt(end) != '/') {
+                end++;
+            }
+            if (start > partitionName.length()) {
+                break;
+            }
+            resultBuilder.add(unescapePathName(partitionName.substring(start, end)));
+            start = end + 1;
+        }
+        return resultBuilder.build();
+    }
+
     public List<String> partitionNameToVals(String partName) throws DdlException {
-        try (AutoCloseClient client = getClient()) {
-            return client.hiveClient.partitionNameToVals(partName);
+        try {
+            return toPartitionValues(partName);
         } catch (Exception e) {
             LOG.warn("convert partitionName to vals failed", e);
             throw new DdlException("convert partition name to vals failed: " + e.getMessage());
