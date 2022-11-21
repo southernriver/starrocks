@@ -619,30 +619,32 @@ public class StatisticsCalculator extends OperatorVisitor<Void, ExpressionContex
         if (numRows >= 0) {
             return numRows;
         }
-        // 2. get row count from partition stats
-        List<PartitionKey> partitions = Lists.newArrayList();
-        for (long partitionId : selectedPartitionIds) {
-            partitions.add(idToPartitionKey.get(partitionId));
-        }
-        numRows = tableWithStats.getPartitionStatsRowCount(partitions);
-        LOG.debug("Get cardinality from partition stats: {}", numRows);
-        if (numRows >= 0) {
-            return numRows;
-        }
-        // 3. estimated row count for the given number of file bytes
-        long totalBytes = 0;
-        if (selectedPartitionIds.isEmpty()) {
-            return 0;
-        }
-
-        List<HivePartition> hivePartitions = tableWithStats.getPartitions(partitions);
-        for (HivePartition hivePartition : hivePartitions) {
-            for (HdfsFileDesc fileDesc : hivePartition.getFiles()) {
-                totalBytes += fileDesc.getLength();
+        if (optimizerContext.getSessionVariable().enableHiveColumnStats()) {
+            // 2. get row count from partition stats
+            List<PartitionKey> partitions = Lists.newArrayList();
+            for (long partitionId : selectedPartitionIds) {
+                partitions.add(idToPartitionKey.get(partitionId));
             }
+            numRows = tableWithStats.getPartitionStatsRowCount(partitions);
+            LOG.debug("Get cardinality from partition stats: {}", numRows);
+            if (numRows >= 0) {
+                return numRows;
+            }
+            // 3. estimated row count for the given number of file bytes
+            long totalBytes = 0;
+            if (selectedPartitionIds.isEmpty()) {
+                return 0;
+            }
+
+            List<HivePartition> hivePartitions = tableWithStats.getPartitions(partitions);
+            for (HivePartition hivePartition : hivePartitions) {
+                for (HdfsFileDesc fileDesc : hivePartition.getFiles()) {
+                    totalBytes += fileDesc.getLength();
+                }
+            }
+            numRows = totalBytes /
+                    table.getBaseSchema().stream().mapToInt(column -> column.getType().getTypeSize()).sum();
         }
-        numRows = totalBytes /
-                table.getBaseSchema().stream().mapToInt(column -> column.getType().getTypeSize()).sum();
         return numRows;
     }
 
