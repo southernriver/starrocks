@@ -29,7 +29,10 @@ import org.apache.iceberg.exceptions.NoSuchTableException;
 import org.apache.iceberg.expressions.Expression;
 import org.apache.iceberg.expressions.Expressions;
 import org.apache.iceberg.types.Types;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
+import java.net.URI;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,8 +41,11 @@ import java.util.stream.Collectors;
 
 import static com.starrocks.external.HiveMetaStoreTableUtils.connectorDbIdIdGenerator;
 import static com.starrocks.external.HiveMetaStoreTableUtils.connectorTableIdIdGenerator;
+import static org.apache.iceberg.TableProperties.READ_ALLUXIO_CACHE_URI;
+import static org.apache.iceberg.TableProperties.READ_ALLUXIO_CACHE_URI_DEFAULT;
 
 public class IcebergUtil {
+    private static final Logger LOG = LogManager.getLogger(IcebergUtil.class);
 
     /**
      * Get Iceberg table identifier by table property
@@ -134,7 +140,9 @@ public class IcebergUtil {
         // https://github.com/apache/iceberg/commit/74db81f4dd81360bf3c0ad438d4be937c7a812d9 release
         TableScan tableScan = table.newScan().useSnapshot(snapshot.snapshotId()).includeColumnStats();
         SessionVariable sessionVariable = ConnectContext.get().getSessionVariable();
-        if (sessionVariable.isEnableIcebergMetadataAlluxioCache()) {
+        String alluxioUri = table.properties().getOrDefault(READ_ALLUXIO_CACHE_URI, READ_ALLUXIO_CACHE_URI_DEFAULT);
+        if (sessionVariable.isEnableIcebergMetadataAlluxioCache() &&
+                isMountedHdfsToAlluxio(table, alluxioUri)) {
             tableScan = tableScan.option(TableProperties.READ_METADATA_ALLUXIO_CACHE_ENABLED, "true");
         }
 
@@ -144,6 +152,19 @@ public class IcebergUtil {
         }
 
         return tableScan.filter(filterExpressions);
+    }
+
+    public static boolean isMountedHdfsToAlluxio(Table table, String alluxioUri) {
+        URI pathUri = URI.create(table.location());
+        String mountedAlluxioUri = String.format("%s/%s", alluxioUri, pathUri.getHost());
+        boolean isMountedtoAlluxio = false;
+        try {
+            isMountedtoAlluxio = table.io().newInputFile(mountedAlluxioUri).exists();
+        } catch (Exception exception) {
+            LOG.error("Failed to check existence for file: {} of table: {}",
+                    mountedAlluxioUri, table.name());
+        }
+        return isMountedtoAlluxio;
     }
 
     public static void refreshTable(Table table) {
