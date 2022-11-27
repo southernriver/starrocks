@@ -366,7 +366,7 @@ public class HiveMetaStoreTableUtils {
         properties.put(HudiTable.HUDI_TABLE, hmsTable.getTableName());
         properties.put(HudiTable.HUDI_RESOURCE, resourceName);
 
-        return new HudiTable(connectorTableIdIdGenerator.getNextId().asInt(), hudiSchema.getName(),
+        return new HudiTable(connectorTableIdIdGenerator.getNextId().asInt(), hmsTable.getTableName(),
                 fullSchema, properties);
     }
 

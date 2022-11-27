@@ -403,8 +403,9 @@ public class StmtExecutor {
             }
 
             if (parsedStmt instanceof QueryStmt || parsedStmt instanceof QueryStatement) {
-                context.getState().setIsQuery(true);
-
+                if (isNotVariableSelect()) {
+                    context.getState().setIsQuery(true);
+                }
                 // sql's blacklist is enabled through enable_sql_blacklist.
                 if (Config.enable_sql_blacklist) {
                     String originSql = parsedStmt.getOrigStmt().originStmt.trim().toLowerCase().replaceAll(" +", " ");
@@ -432,7 +433,7 @@ public class StmtExecutor {
 
                         handleQueryStmt(execPlan);
 
-                        if (context.getSessionVariable().isReportSucc() && shouldWriteProfile()) {
+                        if (context.getSessionVariable().isReportSucc() && isNotVariableSelect()) {
                             writeProfile(beginTimeInNanoSecond);
                         }
                         break;
@@ -513,11 +514,13 @@ public class StmtExecutor {
             context.getState().setError(e.getMessage());
             throw e;
         } catch (UserException e) {
+            dumpException(e);
             // analysis exception only print message, not print the stack
             LOG.info("execute Exception. {}", e.getMessage());
             context.getState().setError(e.getMessage());
             context.getState().setErrType(QueryState.ErrType.ANALYSIS_ERR);
         } catch (Throwable e) {
+            dumpException(e);
             String sql = originStmt != null ? originStmt.originStmt : "";
             LOG.warn("execute Exception, sql " + sql, e);
             context.getState().setError(e.getMessage());
@@ -566,12 +569,11 @@ public class StmtExecutor {
         }
     }
 
-    private boolean shouldWriteProfile() {
+    private boolean isNotVariableSelect() {
         if (parsedStmt instanceof QueryStatement) {
             List<Expr> output = ((QueryStatement) parsedStmt).getQueryRelation().getOutputExpression();
-            if (output.size() == 1 && output.get(0) instanceof VariableExpr) {
-                return false;
-            }
+            output = output.stream().filter(o -> !(o instanceof VariableExpr)).collect(Collectors.toList());
+            return !output.isEmpty();
         }
         return true;
     }
@@ -619,7 +621,7 @@ public class StmtExecutor {
         }
     }
 
-    private void dumpException(Exception e) {
+    private void dumpException(Throwable e) {
         context.getDumpInfo().addException(ExceptionUtils.getStackTrace(e));
         if (context.getSessionVariable().getEnableQueryDump() && !context.isQueryDump()) {
             QueryDumpLog.getQueryDump().log(GsonUtils.GSON.toJson(context.getDumpInfo()));

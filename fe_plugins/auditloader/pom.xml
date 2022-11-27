@@ -17,7 +17,7 @@
     <dependencies>
         <dependency>
             <groupId>com.starrocks</groupId>
-            <artifactId>starrocks-fe</artifactId>
+            <artifactId>fe-core</artifactId>
             <version>3.4.0</version>
             <scope>system</scope>
             <systemPath>${basedir}/../../fe/fe-core/target/starrocks-fe.jar</systemPath>

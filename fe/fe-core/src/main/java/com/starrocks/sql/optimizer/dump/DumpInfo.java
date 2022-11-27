@@ -11,6 +11,8 @@ public interface DumpInfo {
 
     void addException(String exception);
 
+    void addCatalog(String catalog);
+
     void addTable(String dbName, Table table);
 
     void addView(View view);

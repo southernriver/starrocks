@@ -240,7 +240,7 @@ public class IcebergUtil {
             fullSchema.add(column);
         }
 
-        return new IcebergTable(connectorTableIdIdGenerator.getNextId().asInt(), icebergTable.name(),
+        return new IcebergTable(connectorTableIdIdGenerator.getNextId().asInt(), properties.get(IcebergTable.ICEBERG_TABLE),
                 fullSchema, properties);
     }
 

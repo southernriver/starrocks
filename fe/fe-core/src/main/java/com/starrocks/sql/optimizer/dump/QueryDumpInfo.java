@@ -9,15 +9,21 @@ import com.starrocks.common.Pair;
 import com.starrocks.qe.SessionVariable;
 import com.starrocks.qe.VariableMgr;
 import com.starrocks.sql.optimizer.statistics.ColumnStatistic;
+import org.apache.commons.lang3.StringUtils;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class QueryDumpInfo implements DumpInfo {
     private String originStmt = "";
+
+    private final Set<String> catalogSet = new HashSet<>();
     // tableId-><dbName, table>
     private final Map<Long, Pair<String, Table>> tableMap = new HashMap<>();
     // viewId->view
@@ -82,6 +88,7 @@ public class QueryDumpInfo implements DumpInfo {
         this.tableStatisticsMap.clear();
         this.createTableStmtMap.clear();
         this.exceptionList.clear();
+        this.catalogSet.clear();
     }
 
     public void addPartitionRowCount(String tableName, String partition, long rowCount) {
@@ -115,6 +122,16 @@ public class QueryDumpInfo implements DumpInfo {
         return tableMap;
     }
 
+    public String getDbNames() {
+        return StringUtils.join(
+               tableMap.values().stream().map(p -> p.first).collect(Collectors.toList()), ",");
+    }
+
+    public String getTables() {
+        return StringUtils.join(
+                tableMap.values().stream().map(p -> p.second.getName()).collect(Collectors.toList()), ",");
+    }
+
     public Map<Long, View> getViewMap() {
         return viewMap;
     }
@@ -140,6 +157,15 @@ public class QueryDumpInfo implements DumpInfo {
 
     public void addViewCreateStmt(String viewName, String createViewStmt) {
         createViewStmtMap.put(viewName, createViewStmt);
+    }
+
+    @Override
+    public void addCatalog(String catalog) {
+        catalogSet.add(catalog);
+    }
+
+    public Set<String> getCatalog() {
+        return catalogSet;
     }
 
     @Override

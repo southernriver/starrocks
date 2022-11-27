@@ -16,6 +16,11 @@ public class MockDumpInfo implements DumpInfo {
     }
 
     @Override
+    public void addCatalog(String catalog) {
+
+    }
+
+    @Override
     public void addTable(String dbName, Table table) {
     }
 

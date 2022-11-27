@@ -282,6 +282,7 @@ public class QueryAnalyzer {
             node.setColumns(columns.build());
             String dbName = node.getName().getDb();
 
+            session.getDumpInfo().addCatalog(node.getName().getCatalog());
             session.getDumpInfo().addTable(dbName, table);
 
             Scope scope = new Scope(RelationId.of(node), new RelationFields(fields.build()));

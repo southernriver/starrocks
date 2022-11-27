@@ -35,6 +35,7 @@ import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Config;
 import com.starrocks.common.ErrorCode;
 import com.starrocks.common.ErrorReport;
+import com.starrocks.common.QueryDumpLog;
 import com.starrocks.common.UserException;
 import com.starrocks.common.util.DebugUtil;
 import com.starrocks.common.util.UUIDUtil;
@@ -47,17 +48,21 @@ import com.starrocks.mysql.MysqlPacket;
 import com.starrocks.mysql.MysqlProto;
 import com.starrocks.mysql.MysqlSerializer;
 import com.starrocks.mysql.MysqlServerStatusFlag;
+import com.starrocks.persist.gson.GsonUtils;
 import com.starrocks.plugin.AuditEvent.EventType;
 import com.starrocks.proto.PQueryStatistics;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.service.FrontendOptions;
 import com.starrocks.sql.ast.QueryStatement;
 import com.starrocks.sql.common.SqlDigestBuilder;
+import com.starrocks.sql.optimizer.dump.QueryDumpInfo;
 import com.starrocks.sql.parser.ParsingException;
 import com.starrocks.thrift.TMasterOpRequest;
 import com.starrocks.thrift.TMasterOpResult;
 import com.starrocks.thrift.TQueryOptions;
 import org.apache.commons.codec.binary.Hex;
+import org.apache.commons.lang.exception.ExceptionUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -153,6 +158,19 @@ public class ConnectProcessor {
                 .setReturnRows(ctx.getReturnRows())
                 .setStmtId(ctx.getStmtId())
                 .setQueryId(ctx.getQueryId() == null ? "NaN" : ctx.getQueryId().toString());
+        QueryDumpInfo dumpInfo = (QueryDumpInfo) ctx.getDumpInfo();
+        if (!dumpInfo.getCatalog().isEmpty()) {
+            ctx.getAuditEventBuilder().setCatalog(StringUtils.join(dumpInfo.getCatalog(), ","));
+        }
+
+        if (!((QueryDumpInfo) ctx.getDumpInfo()).getTableMap().isEmpty()) {
+            ctx.getAuditEventBuilder().setDb(dumpInfo.getDbNames());
+            ctx.getAuditEventBuilder().setTable(dumpInfo.getTables());
+        }
+
+        if (!((QueryDumpInfo) ctx.getDumpInfo()).getExceptionList().isEmpty()) {
+            ctx.getAuditEventBuilder().setException(StringUtils.join(dumpInfo.getExceptionList(), ","));
+        }
 
         if (ctx.getState().isQuery()) {
             MetricRepo.COUNTER_QUERY_ALL.increase(1L);
@@ -333,15 +351,18 @@ public class ConnectProcessor {
                 }
             }
         } catch (IOException e) {
+            dumpException(e);
             // Client failed.
             LOG.warn("Process one query failed because IOException: ", e);
             ctx.getState().setError("StarRocks process failed");
         } catch (UserException e) {
+            dumpException(e);
             LOG.warn("Process one query failed because.", e);
             ctx.getState().setError(e.getMessage());
             // set is as ANALYSIS_ERR so that it won't be treated as a query failure.
             ctx.getState().setErrType(QueryState.ErrType.ANALYSIS_ERR);
         } catch (Throwable e) {
+            dumpException(e);
             // Catch all throwable.
             // If reach here, maybe StarRocks bug.
             LOG.warn("Process one query failed because unknown reason: ", e);
@@ -364,6 +385,13 @@ public class ConnectProcessor {
         }
 
         addFinishedQueryDetail();
+    }
+
+    private void dumpException(Throwable e) {
+        ctx.getDumpInfo().addException(ExceptionUtils.getStackTrace(e));
+        if (ctx.getSessionVariable().getEnableQueryDump() && !ctx.isQueryDump()) {
+            QueryDumpLog.getQueryDump().log(GsonUtils.GSON.toJson(ctx.getDumpInfo()));
+        }
     }
 
     // Get the column definitions of a table

@@ -68,6 +68,8 @@ public class AuditEvent {
     public String catalog = "";
     @AuditField(value = "Db")
     public String db = "";
+    @AuditField(value = "Table")
+    public String table = "";
     @AuditField(value = "State")
     public String state = "";
     @AuditField(value = "ErrorCode")
@@ -100,6 +102,9 @@ public class AuditEvent {
     public double planCpuCosts = 0.0;
     @AuditField(value = "PlanMemCost")
     public double planMemCosts = 0.0;
+
+    @AuditField(value = "Exception")
+    public String exception = "";
 
     public static class AuditEventBuilder {
 
@@ -149,6 +154,11 @@ public class AuditEvent {
 
         public AuditEventBuilder setDb(String db) {
             auditEvent.db = db;
+            return this;
+        }
+
+        public AuditEventBuilder setTable(String table) {
+            auditEvent.table = table;
             return this;
         }
 
@@ -232,6 +242,11 @@ public class AuditEvent {
 
         public AuditEventBuilder setPlanMemCosts(double memCosts) {
             auditEvent.planMemCosts = memCosts;
+            return this;
+        }
+
+        public AuditEventBuilder setException(String exception) {
+            auditEvent.exception = exception;
             return this;
         }
 
