@@ -622,6 +622,14 @@ struct TTubeRLTaskProgress {
     1: required map<string,i64> partitionCmtOffset
 }
 
+struct TRLTaskStatistics {
+    1: required i64 consumeTime
+    2: required i64 blockingGetTime
+    3: required i64 blockingPutTime
+    4: required i64 receivedRows
+    5: required i64 receivedBytes
+}
+
 struct TRLTaskTxnCommitAttachment {
     1: required Types.TLoadSourceType loadSourceType
     2: required Types.TUniqueId id
@@ -636,6 +644,7 @@ struct TRLTaskTxnCommitAttachment {
     11: optional string errorLogUrl
     12: optional TPulsarRLTaskProgress pulsarRLTaskProgress
     13: optional TTubeRLTaskProgress tubeRLTaskProgress
+    14: optional TRLTaskStatistics statistics
 }
 
 struct TMiniLoadTxnCommitAttachment {

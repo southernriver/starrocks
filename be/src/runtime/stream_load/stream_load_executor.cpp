@@ -346,6 +346,15 @@ bool StreamLoadExecutor::collect_load_stat(StreamLoadContext* ctx, TTxnCommitAtt
         rl_attach.__set_loadedBytes(ctx->loaded_bytes);
         rl_attach.__set_loadCostMs(ctx->load_cost_nanos / 1000 / 1000);
 
+        TRLTaskStatistics task_statistics;
+        task_statistics.consumeTime = ctx->rltask_statistics.get_consume_time();
+        task_statistics.blockingGetTime = ctx->rltask_statistics.get_blocking_get_time();
+        task_statistics.blockingPutTime = ctx->rltask_statistics.get_blocking_put_time();
+        task_statistics.receivedRows = ctx->rltask_statistics.get_received_rows();
+        task_statistics.receivedBytes = ctx->rltask_statistics.get_received_bytes();
+        rl_attach.statistics = task_statistics;
+        rl_attach.__isset.statistics = true;
+
         attach->rlTaskTxnCommitAttachment = rl_attach;
         attach->__isset.rlTaskTxnCommitAttachment = true;
         break;

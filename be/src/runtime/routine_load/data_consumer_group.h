@@ -67,7 +67,7 @@ protected:
 // for kafka
 class KafkaDataConsumerGroup : public DataConsumerGroup {
 public:
-    KafkaDataConsumerGroup(size_t sz) : DataConsumerGroup(sz), _queue(500) {}
+    KafkaDataConsumerGroup(size_t sz) : DataConsumerGroup(sz), _queue(config::routine_load_consumer_group_queue_size) {}
 
     ~KafkaDataConsumerGroup() override;
 
@@ -88,7 +88,8 @@ private:
 // for pulsar
 class PulsarDataConsumerGroup : public DataConsumerGroup {
 public:
-    PulsarDataConsumerGroup(size_t sz) : DataConsumerGroup(sz), _queue(500) {}
+    PulsarDataConsumerGroup(size_t sz)
+            : DataConsumerGroup(sz), _queue(config::routine_load_consumer_group_queue_size) {}
 
     ~PulsarDataConsumerGroup() override;
 
@@ -111,7 +112,7 @@ private:
 // for tube
 class TubeDataConsumerGroup : public DataConsumerGroup {
 public:
-    TubeDataConsumerGroup(size_t sz) : DataConsumerGroup(sz), _queue(500) {}
+    TubeDataConsumerGroup(size_t sz) : DataConsumerGroup(sz), _queue(config::routine_load_consumer_group_queue_size) {}
 
     ~TubeDataConsumerGroup() override;
 

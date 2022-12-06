@@ -171,6 +171,9 @@ Status KafkaDataConsumerGroup::start_all(StreamLoadContext* ctx) {
                 kafka_pipe->finish();
                 ctx->kafka_info->cmt_offset = std::move(cmt_offset);
                 ctx->receive_bytes = ctx->max_batch_size - left_bytes;
+                ctx->rltask_statistics = RoutineLoadTaskStatistics(
+                        ctx->max_interval_s * 1000 - left_time, _queue.total_get_wait_time() / 1000,
+                        _queue.total_put_wait_time() / 1000, received_rows, ctx->receive_bytes);
                 return Status::OK();
             }
         }
@@ -366,6 +369,9 @@ Status PulsarDataConsumerGroup::start_all(StreamLoadContext* ctx) {
                 pulsar_pipe->finish();
                 ctx->pulsar_info->ack_offset = std::move(ack_offset);
                 ctx->receive_bytes = ctx->max_batch_size - left_bytes;
+                ctx->rltask_statistics = RoutineLoadTaskStatistics(
+                        ctx->max_interval_s * 1000 - left_time, _queue.total_get_wait_time() / 1000,
+                        _queue.total_put_wait_time() / 1000, received_rows, ctx->receive_bytes);
                 get_backlog_nums(ctx);
                 return Status::OK();
             }
@@ -543,6 +549,9 @@ Status TubeDataConsumerGroup::start_all(StreamLoadContext* ctx) {
                 tube_pipe->finish();
                 ctx->receive_bytes = ctx->max_batch_size - left_bytes;
                 ctx->tube_info->cmt_offset = std::move(cmt_offset);
+                ctx->rltask_statistics = RoutineLoadTaskStatistics(
+                        ctx->max_interval_s * 1000 - left_time, _queue.total_get_wait_time() / 1000,
+                        _queue.total_put_wait_time() / 1000, received_rows, ctx->receive_bytes);
                 return Status::OK();
             }
         }
@@ -560,8 +569,7 @@ Status TubeDataConsumerGroup::start_all(StreamLoadContext* ctx) {
                     for (auto& data_item : data_items) {
                         std::size_t len = data_item.GetLength();
                         st = (tube_pipe.get()->*append_data)(static_cast<const char*>(data_item.GetData()),
-                                                                    static_cast<size_t>(len),
-                                                                    row_delimiter);
+                                                             static_cast<size_t>(len), row_delimiter);
                         if (st.ok()) {
                             received_rows++;
                             left_bytes -= len;
@@ -574,7 +582,7 @@ Status TubeDataConsumerGroup::start_all(StreamLoadContext* ctx) {
                         }
                     }
                 }
-                
+
                 // There could be tubemq parse error or inside pipe append error here
                 if (!st.ok()) {
                     eos = true;
@@ -616,8 +624,8 @@ Status TubeDataConsumerGroup::get_data_items(const tubemq::Message& msg, std::li
 }
 
 void TubeDataConsumerGroup::actual_consume(const std::shared_ptr<DataConsumer>& consumer,
-                                            TimedBlockingQueue<tubemq::ConsumerResult*>* queue, int64_t max_running_time_ms,
-                                            const ConsumeFinishCallback& cb) {
+                                           TimedBlockingQueue<tubemq::ConsumerResult*>* queue,
+                                           int64_t max_running_time_ms, const ConsumeFinishCallback& cb) {
     Status st = std::static_pointer_cast<TubeDataConsumer>(consumer)->group_consume(queue, max_running_time_ms);
     cb(st);
 }

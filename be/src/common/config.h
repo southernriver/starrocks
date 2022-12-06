@@ -532,6 +532,9 @@ CONF_Int32(routine_load_thread_pool_size, "10");
 // this should be larger than max_consumer_num_per_group * routine_load_thread_pool_size
 CONF_Int32(routine_load_consumer_pool_size, "100");
 
+// the size of consumer group queue
+CONF_Int32(routine_load_consumer_group_queue_size, "500");
+
 // kafka reqeust timeout
 CONF_Int32(routine_load_kafka_timeout_second, "10");
 

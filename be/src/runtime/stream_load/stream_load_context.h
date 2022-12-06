@@ -118,17 +118,15 @@ public:
 class TubeLoadInfo {
 public:
     explicit TubeLoadInfo(const TTubeLoadInfo& t_info)
-            : master_addr(t_info.master_addr),
-              topic(t_info.topic),
-              group_name(t_info.group_name) {
-                if (t_info.__isset.filters) {
-                  filters = t_info.filters;
-                }
+            : master_addr(t_info.master_addr), topic(t_info.topic), group_name(t_info.group_name) {
+        if (t_info.__isset.filters) {
+            filters = t_info.filters;
+        }
 
-                if (t_info.__isset.consume_position) {
-                  consume_position = t_info.consume_position;
-                }
-              }
+        if (t_info.__isset.consume_position) {
+            consume_position = t_info.consume_position;
+        }
+    }
 
     void reset_offset() {
         // clear the cmt_offset
@@ -146,6 +144,45 @@ public:
 
     // partition -> offset, inclusive.
     std::map<std::string, int64_t> cmt_offset;
+};
+
+class RoutineLoadTaskStatistics {
+public:
+    explicit RoutineLoadTaskStatistics() {}
+    explicit RoutineLoadTaskStatistics(int64_t consume_time, int64_t blocking_get_time, int64_t blocking_put_time,
+                                    int64_t received_rows, int64_t received_bytes)
+            : _consume_time(consume_time),
+              _blocking_get_time(blocking_get_time),
+              _blocking_put_time(blocking_put_time),
+              _received_rows(received_rows),
+              _received_bytes(received_bytes) {}
+
+    int64_t get_consume_time() {
+        return _consume_time;
+    }
+
+    int64_t get_blocking_get_time() {
+        return _blocking_get_time;
+    }
+
+    int64_t get_blocking_put_time() {
+        return _blocking_put_time;
+    }
+
+    int64_t get_received_rows() {
+        return _received_rows;
+    }
+
+    int64_t get_received_bytes() {
+        return _received_bytes;
+    }
+
+private:
+    int64_t _consume_time;
+    int64_t _blocking_get_time;
+    int64_t _blocking_put_time;
+    int64_t _received_rows;
+    int64_t _received_bytes;
 };
 
 class MessageBodySink;
@@ -261,6 +298,7 @@ public:
     std::unique_ptr<KafkaLoadInfo> kafka_info;
     std::unique_ptr<PulsarLoadInfo> pulsar_info;
     std::unique_ptr<TubeLoadInfo> tube_info;
+    RoutineLoadTaskStatistics rltask_statistics;
 
     std::vector<TTabletCommitInfo> commit_infos;
     std::vector<TTabletFailInfo> fail_infos;

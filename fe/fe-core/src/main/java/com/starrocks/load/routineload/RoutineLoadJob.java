@@ -1022,6 +1022,7 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
                 TransactionState.TxnStatusChangeReason.fromString(txnStatusChangeReasonStr))) {
             // step2: update job progress
             updateProgress(rlTaskTxnCommitAttachment);
+            routineLoadTaskInfo.setStatistics(rlTaskTxnCommitAttachment.getStatistics());
         }
 
         if (rlTaskTxnCommitAttachment != null && !Strings.isNullOrEmpty(rlTaskTxnCommitAttachment.getErrorLogUrl())) {

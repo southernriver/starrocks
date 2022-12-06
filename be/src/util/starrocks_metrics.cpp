@@ -56,6 +56,7 @@ StarRocksMetrics::StarRocksMetrics() : _metrics(_s_registry_name) {
     REGISTER_STARROCKS_METRIC(update_del_vector_bytes_total);
     REGISTER_STARROCKS_METRIC(update_del_vector_deletes_total);
     REGISTER_STARROCKS_METRIC(update_del_vector_deletes_new);
+    REGISTER_STARROCKS_METRIC(routine_load_consumer_pool_size);
 
     // push request
     _metrics.register_metric("push_requests_total", MetricLabels().add("status", "SUCCESS"),

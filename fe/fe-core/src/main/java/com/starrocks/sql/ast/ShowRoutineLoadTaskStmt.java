@@ -35,6 +35,7 @@ public class ShowRoutineLoadTaskStmt extends ShowStmt {
                     .add("ExecuteStartTime")
                     .add("Timeout")
                     .add("BeId")
+                    .add("Statistics")
                     .add("DataSourceProperties")
                     .add("Message")
                     .build();

@@ -54,7 +54,8 @@ public class TubeTaskInfo extends RoutineLoadTaskInfo {
 
     public TubeTaskInfo(long timeToExecuteMs, TubeTaskInfo tubeTaskInfo) {
         super(UUID.randomUUID(), tubeTaskInfo.getJobId(), tubeTaskInfo.getClusterName(),
-                tubeTaskInfo.getTaskScheduleIntervalMs(), timeToExecuteMs, tubeTaskInfo.getBeId());
+                tubeTaskInfo.getTaskScheduleIntervalMs(), timeToExecuteMs, tubeTaskInfo.getBeId(),
+                tubeTaskInfo.getStatistics());
         this.filters = tubeTaskInfo.getFilters();
     }
 

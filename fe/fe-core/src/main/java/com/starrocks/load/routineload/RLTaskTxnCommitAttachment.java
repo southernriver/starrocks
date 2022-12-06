@@ -43,6 +43,7 @@ public class RLTaskTxnCommitAttachment extends TxnCommitAttachment {
     private long taskExecutionTimeMs;
     private RoutineLoadProgress progress;
     private String errorLogUrl;
+    private RoutineLoadTaskStatistics taskStatistics;
 
     public RLTaskTxnCommitAttachment() {
         super(TransactionState.LoadJobSourceType.ROUTINE_LOAD_TASK);
@@ -74,6 +75,10 @@ public class RLTaskTxnCommitAttachment extends TxnCommitAttachment {
 
         if (rlTaskTxnCommitAttachment.isSetErrorLogUrl()) {
             this.errorLogUrl = rlTaskTxnCommitAttachment.getErrorLogUrl();
+        }
+
+        if (rlTaskTxnCommitAttachment.isSetStatistics()) {
+            this.taskStatistics = new RoutineLoadTaskStatistics(rlTaskTxnCommitAttachment.getStatistics());
         }
     }
 
@@ -117,6 +122,10 @@ public class RLTaskTxnCommitAttachment extends TxnCommitAttachment {
         return errorLogUrl;
     }
 
+    public RoutineLoadTaskStatistics getStatistics() {
+        return taskStatistics;
+    }
+
     @Override
     public String toString() {
         return "RLTaskTxnCommitAttachment [filteredRows=" + filteredRows
@@ -126,6 +135,7 @@ public class RLTaskTxnCommitAttachment extends TxnCommitAttachment {
                 + ", taskExecutionTimeMs=" + taskExecutionTimeMs
                 + ", taskId=" + taskId
                 + ", jobId=" + jobId
+                + ", taskStatistics =" + taskStatistics
                 + ", progress=" + progress.toString() + "]";
     }
 
