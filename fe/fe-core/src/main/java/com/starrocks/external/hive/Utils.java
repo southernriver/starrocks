@@ -15,7 +15,10 @@ import com.starrocks.common.AnalysisException;
 import com.starrocks.common.DdlException;
 import com.starrocks.external.HiveMetaStoreTableUtils;
 import org.apache.hadoop.hive.common.StatsSetupConst;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -204,4 +207,27 @@ public class Utils {
         throw new DdlException("Failed to get varchar length at " + typeStr);
     }
 
+    /**
+     * Convert different query instant time format to the commit time format for hudi.
+     * Currently we support three kinds of instant time format for time travel query:
+     * 1、yyyy-MM-dd HH:mm:ss
+     * 2、yyyy-MM-dd
+     *   This will convert to 'yyyyMMdd000000'.
+     * 3、yyyyMMddHHmmss
+     */
+    public static String formatQueryInstant(String queryInstant) throws Exception {
+        int instantLength = queryInstant.length();
+        if (instantLength == 19 || instantLength == 23) { // for yyyy-MM-dd HH:mm:ss[.SSS]
+            return HoodieInstantTimeGenerator.getInstantForDateString(queryInstant);
+        } else if (instantLength == HoodieInstantTimeGenerator.SECS_INSTANT_ID_LENGTH
+                || instantLength  == HoodieInstantTimeGenerator.MILLIS_INSTANT_ID_LENGTH) { // for yyyyMMddHHmmss[SSS]
+            HoodieActiveTimeline.parseDateFromInstantTime(queryInstant); // validate the format
+            return queryInstant;
+        } else if (instantLength == 10) { // for yyyy-MM-dd
+            return HoodieActiveTimeline.formatDate(new SimpleDateFormat("yyyy-MM-dd").parse(queryInstant));
+        } else {
+            throw new IllegalArgumentException("Unsupported query instant time format: " + queryInstant +
+                    ", Supported time format are: 'yyyy-MM-dd: HH:mm:ss.SSS' or 'yyyy-MM-dd' or 'yyyyMMddHHmmssSSS'");
+        }
+    }
 }

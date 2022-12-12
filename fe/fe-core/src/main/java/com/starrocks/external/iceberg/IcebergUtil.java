@@ -33,6 +33,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.net.URI;
+import java.sql.Timestamp;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -138,9 +139,24 @@ public class IcebergUtil {
                                          List<Expression> icebergPredicates) {
         // TODO: use planWith(executorService) after
         // https://github.com/apache/iceberg/commit/74db81f4dd81360bf3c0ad438d4be937c7a812d9 release
-        TableScan tableScan = table.newScan().useSnapshot(snapshot.snapshotId()).includeColumnStats();
-        SessionVariable sessionVariable = ConnectContext.get().getSessionVariable();
+        TableScan tableScan = table.newScan();
         String alluxioUri = table.properties().getOrDefault(READ_ALLUXIO_CACHE_URI, READ_ALLUXIO_CACHE_URI_DEFAULT);
+        SessionVariable sessionVariable = ConnectContext.get().getSessionVariable();
+        if (!sessionVariable.getIcebergVersionAsOf().isEmpty() && !sessionVariable.getIcebergTimestampAsOf().isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Cannot scan using both snapshot-id and as-of-timestamp to select the table snapshot");
+        }
+        long snapshotId = sessionVariable.getIcebergVersionAsOf().isEmpty() ?
+                snapshot.snapshotId() : formatQueryVersionToSnapshotId(sessionVariable.getIcebergVersionAsOf());
+
+        tableScan = tableScan.useSnapshot(snapshotId);
+
+        if (!sessionVariable.getIcebergTimestampAsOf().isEmpty()) {
+            long asOfTimestamp = formatQueryInstantToTimeStamp(sessionVariable.getIcebergTimestampAsOf());
+            tableScan = tableScan.asOfTime(asOfTimestamp);
+        }
+
+        tableScan = tableScan.includeColumnStats();
         if (sessionVariable.isEnableIcebergMetadataAlluxioCache() &&
                 isMountedHdfsToAlluxio(table, alluxioUri)) {
             tableScan = tableScan.option(TableProperties.READ_METADATA_ALLUXIO_CACHE_ENABLED, "true");
@@ -304,5 +320,32 @@ public class IcebergUtil {
 
     private static ArrayType convertToArrayType(org.apache.iceberg.types.Type icebergType) {
         return new ArrayType(convertColumnType(icebergType.asNestedType().asListType().elementType()));
+    }
+
+    /**
+     * Convert query time format to the commit time format for iceberg.
+     * Currently we support one kind of time format for time travel query:
+     * yyyy-MM-dd HH:mm:ss[.SSS]
+     */
+    public static long formatQueryInstantToTimeStamp(String queryInstant) {
+        try {
+            return Timestamp.valueOf(queryInstant).getTime();
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("Unsupported query instant time format: " + queryInstant +
+                    ", Supported time format are: 'yyyy-MM-dd: HH:mm:ss[.SSS]'");
+        }
+    }
+
+    /**
+     * Convert query version to snapshot id for iceberg. The version should be long format like:
+     * 8263546889800136858
+     */
+    public static long formatQueryVersionToSnapshotId(String queryVersion) {
+        try {
+            return Long.parseLong(queryVersion);
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("Unsupported query version format: " + queryVersion +
+                    ", Supported version could be converted to Long type.");
+        }
     }
 }
