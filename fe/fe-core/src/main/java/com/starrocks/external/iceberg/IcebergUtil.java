@@ -138,9 +138,26 @@ public class IcebergUtil {
                                          List<Expression> icebergPredicates) {
         // TODO: use planWith(executorService) after
         // https://github.com/apache/iceberg/commit/74db81f4dd81360bf3c0ad438d4be937c7a812d9 release
-        TableScan tableScan = table.newScan().useSnapshot(snapshot.snapshotId()).includeColumnStats();
+        TableScan tableScan = table.newScan();
         SessionVariable sessionVariable = ConnectContext.get().getSessionVariable();
         String alluxioUri = table.properties().getOrDefault(READ_ALLUXIO_CACHE_URI, READ_ALLUXIO_CACHE_URI_DEFAULT);
+        long currentSnapshotId = snapshot.snapshotId();
+        long snapshotId = sessionVariable.getIcebergVersionAsOf();
+        long asOfTimestamp = sessionVariable.getIcebergVersionAsOf();
+        if (snapshotId != -1 && asOfTimestamp != -1) {
+            throw new IllegalArgumentException(
+                    "Cannot scan using both snapshot-id and as-of-timestamp to select the table snapshot");
+        }
+        if (snapshotId != -1) {
+            currentSnapshotId = snapshotId;
+        }
+        tableScan = tableScan.useSnapshot(currentSnapshotId);
+
+        if (asOfTimestamp != -1) {
+            tableScan = tableScan.asOfTime(asOfTimestamp);
+        }
+
+        tableScan = tableScan.includeColumnStats();
         if (sessionVariable.isEnableIcebergMetadataAlluxioCache() &&
                 isMountedHdfsToAlluxio(table, alluxioUri)) {
             tableScan = tableScan.option(TableProperties.READ_METADATA_ALLUXIO_CACHE_ENABLED, "true");
