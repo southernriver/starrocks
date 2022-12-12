@@ -221,6 +221,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     public static final String CBO_DEBUG_ALIVE_BACKEND_NUMBER = "cbo_debug_alive_backend_number";
     public static final String CBO_ENABLE_ICEBRG_FILE_STATS = "cbo_enable_iceberg_file_stats";
     public static final String ENABLE_ICEBRG_METADATA_ALLUXIO_CACHE = "enable_iceberg_metadata_alluxio_cache";
+    public static final String ICEBERG_VERSION_AS_OF = "iceberg_version_as_of";
+    public static final String ICEBERG_TIMESTAMP_AS_OF = "iceberg_timestamp_as_of";
 
     // --------  New planner session variables end --------
 
@@ -268,6 +270,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
             .add(DISABLE_BUCKET_JOIN)
             .add(CBO_ENABLE_REPLICATED_JOIN)
             .add(FOREIGN_KEY_CHECKS)
+            .add(ICEBERG_VERSION_AS_OF)
+            .add(ICEBERG_TIMESTAMP_AS_OF)
             .add("enable_cbo")
             .add("enable_vectorized_engine")
             .add("vectorized_engine_enable")
@@ -552,6 +556,12 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VariableMgr.VarAttr(name = ENABLE_ICEBRG_METADATA_ALLUXIO_CACHE)
     private boolean enableIcebergMetadataAlluxioCache = true;
+
+    @VariableMgr.VarAttr(name = ICEBERG_VERSION_AS_OF)
+    private long icebergVersionAsOf = -1;
+
+    @VariableMgr.VarAttr(name = ICEBERG_TIMESTAMP_AS_OF)
+    private long icebergTimestampAsOf = -1;
 
     // value should be 0~4
     // 0 represents automatic selection, and 1, 2, 3, and 4 represent forced selection of AGG of
@@ -1062,6 +1072,14 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
         this.enableIcebergMetadataAlluxioCache = enableIcebergMetadataAlluxioCache;
     }
 
+    public void setIcebergVersionAsOf(long icebergVersionAsOf) {
+        this.icebergVersionAsOf = icebergVersionAsOf;
+    }
+
+    public void setIcebergTimestampAsOf(long icebergTimestampAsOf) {
+        this.icebergTimestampAsOf = icebergTimestampAsOf;
+    }
+
     public boolean isEnableColumnExprPredicate() {
         return enableColumnExprPredicate;
     }
@@ -1076,6 +1094,14 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public void setAllowDefaultPartition(boolean allowDefaultPartition) {
         this.allowDefaultPartition = allowDefaultPartition;
+    }
+
+    public long getIcebergVersionAsOf() {
+        return icebergVersionAsOf;
+    }
+
+    public long getIcebergTimestampAsOf() {
+        return icebergTimestampAsOf;
     }
 
     /**
