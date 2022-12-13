@@ -556,7 +556,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     private boolean enableIcebergMetadataAlluxioCache = true;
 
     @VariableMgr.VarAttr(name = ICEBERG_VERSION_AS_OF)
-    private long icebergVersionAsOf= -1;
+    private long icebergVersionAsOf = -1;
 
     @VariableMgr.VarAttr(name = ICEBERG_TIMESTAMP_AS_OF)
     private long icebergTimestampAsOf = -1;

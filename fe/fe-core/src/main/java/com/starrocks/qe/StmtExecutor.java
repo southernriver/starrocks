@@ -329,19 +329,33 @@ public class StmtExecutor {
                 if (parsedStmt instanceof SelectStmt) {
                     SelectStmt selectStmt = (SelectStmt) parsedStmt;
                     optHints = selectStmt.getSelectList().getOptHints();
-                } else if (parsedStmt instanceof QueryStatement &&
+                    System.out.println("SelectStmt optHints:" + optHints + ",optHints.size:" + optHints.size());
+                }
+                if (parsedStmt instanceof QueryStatement &&
                         ((QueryStatement) parsedStmt).getQueryRelation() instanceof SelectRelation) {
                     SelectRelation selectRelation = (SelectRelation) ((QueryStatement) parsedStmt).getQueryRelation();
                     optHints = selectRelation.getSelectList().getOptHints();
+                    System.out.println("QueryStatement optHints:" + optHints + ",optHints.size:" + optHints.size());
                 }
 
                 if (optHints != null) {
+                    System.out.println("optHints:" + optHints + ",optHints.size:" + optHints.size());
+
                     SessionVariable sessionVariable = (SessionVariable) sessionVariableBackup.clone();
                     for (String key : optHints.keySet()) {
                         VariableMgr.setVar(sessionVariable, new SetVar(key, new StringLiteral(optHints.get(key))),
                                 true);
+                        System.out.println("key = " + key + ", optHints.get(key) = " + optHints.get(key));
                     }
                     context.setSessionVariable(sessionVariable);
+
+
+                    System.out.println("sessionVariable:" + sessionVariable.getBroadcastRowCountLimit());
+                    System.out.println("context.getSessionVariable().getBroadcastRowCountLimit():" +
+                            context.getSessionVariable().getBroadcastRowCountLimit() +
+                            ", optHints:" + optHints + ",optHints.size:" + optHints.size());
+                    System.out.println("optHints.get(\"broadcast_row_limit\"):" +
+                            optHints.get("broadcast_row_limit"));
                 }
             }
 
@@ -390,6 +404,8 @@ public class StmtExecutor {
                 analyze(context.getSessionVariable().toThrift());
             }
 
+            System.out.println("execute()1 last -> sessionVariable:" + context.sessionVariable.getBroadcastRowCountLimit());
+
             if (context.isQueryDump()) {
                 return;
             }
@@ -407,6 +423,7 @@ public class StmtExecutor {
                 if (Config.enable_sql_blacklist) {
                     String originSql = parsedStmt.getOrigStmt().originStmt.trim().toLowerCase().replaceAll(" +", " ");
 
+                    System.out.println("originSql:" + originSql);
                     // If this sql is in blacklist, show message.
                     SqlBlackList.verifying(originSql);
                 }
@@ -561,6 +578,7 @@ public class StmtExecutor {
                 }
             }
             context.setSessionVariable(sessionVariableBackup);
+            System.out.println("execute() last -> sessionVariable:" + context.sessionVariable.getBroadcastRowCountLimit());
         }
     }
 

@@ -92,6 +92,7 @@ public class StatementPlanner {
         boolean canUsePipeline =
                 isEnablePipeline && ResultSink.canUsePipeLine(resultSinkType) && logicalPlan.canUsePipeline();
         boolean forceDisablePipeline = isEnablePipeline && !canUsePipeline;
+        System.out.println("forceDisablePipeline:" + forceDisablePipeline);
         try {
             if (forceDisablePipeline) {
                 session.getSessionVariable().setEnablePipelineEngine(false);

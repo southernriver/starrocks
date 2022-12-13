@@ -163,6 +163,8 @@ public class PlanFragmentBuilder {
         createOutputFragment(new PhysicalPlanTranslator(columnRefFactory).visit(plan, execPlan), execPlan,
                 outputColumns, hasOutputFragment);
         execPlan.setPlanCount(plan.getPlanCount());
+        System.out.println("createPhysicalPlan getBroadcastRowCountLimit:" +
+                connectContext.getSessionVariable().getBroadcastRowCountLimit());
         return finalizeFragments(execPlan, resultSinkType);
     }
 
@@ -314,6 +316,8 @@ public class PlanFragmentBuilder {
 
         @Override
         public PlanFragment visitPhysicalProject(OptExpression optExpr, ExecPlan context) {
+            System.out.println("visitPhysicalProject getBroadcastRowCountLimit:" +
+                    context.getConnectContext().getSessionVariable().getBroadcastRowCountLimit());
             PhysicalProjectOperator node = (PhysicalProjectOperator) optExpr.getOp();
             PlanFragment inputFragment = visit(optExpr.inputAt(0), context);
 
@@ -603,7 +607,8 @@ public class PlanFragmentBuilder {
         @Override
         public PlanFragment visitPhysicalMetaScan(OptExpression optExpression, ExecPlan context) {
             PhysicalMetaScanOperator scan = (PhysicalMetaScanOperator) optExpression.getOp();
-
+            System.out.println("visitPhysicalMetaScan:" +
+                    context.getConnectContext().getSessionVariable().getBroadcastRowCountLimit());
             context.getDescTbl().addReferencedTable(scan.getTable());
             TupleDescriptor tupleDescriptor = context.getDescTbl().createTupleDescriptor();
             tupleDescriptor.setTable(scan.getTable());
@@ -735,6 +740,8 @@ public class PlanFragmentBuilder {
 
         @Override
         public PlanFragment visitPhysicalHiveScan(OptExpression optExpression, ExecPlan context) {
+            System.out.println("visitPhysicalHiveScan:" +
+                    context.getConnectContext().getSessionVariable().getBroadcastRowCountLimit());
             PhysicalHiveScanOperator node = (PhysicalHiveScanOperator) optExpression.getOp();
             ScanOperatorPredicates predicates = node.getScanOperatorPredicates();
 

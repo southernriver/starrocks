@@ -2,12 +2,12 @@
 package com.starrocks.sql.analyzer;
 
 import com.starrocks.analysis.StatementBase;
+import com.starrocks.analysis.VariableExpr;
+import com.starrocks.common.AnalysisException;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.SqlModeHelper;
-import com.starrocks.sql.ast.QueryRelation;
-import com.starrocks.sql.ast.QueryStatement;
-import com.starrocks.sql.ast.SelectRelation;
-import com.starrocks.sql.ast.TableRelation;
+import com.starrocks.qe.VariableMgr;
+import com.starrocks.sql.ast.*;
 import com.starrocks.sql.parser.SqlParser;
 import com.starrocks.utframe.UtFrameUtils;
 import org.junit.Assert;
@@ -530,7 +530,7 @@ public class AnalyzeSingleTest {
     }
 
     @Test
-    public void testSetVar() {
+    public void testSetVar() throws AnalysisException {
         StatementBase statementBase = analyzeSuccess("SELECT /*+ SET_VAR(time_zone='Asia/Shanghai') */ current_timestamp() AS time");
         SelectRelation selectRelation = (SelectRelation) ((QueryStatement) statementBase).getQueryRelation();
         Assert.assertEquals("Asia/Shanghai", selectRelation.getSelectList().getOptHints().get("time_zone"));
@@ -538,6 +538,13 @@ public class AnalyzeSingleTest {
         statementBase = analyzeSuccess("select /*+ SET_VAR(broadcast_row_limit=1) */ * from t0");
         selectRelation = (SelectRelation) ((QueryStatement) statementBase).getQueryRelation();
         Assert.assertEquals("1", selectRelation.getSelectList().getOptHints().get("broadcast_row_limit"));
+
+        System.out.println("broadcast_row_limit:" + getConnectContext().getUserVariables("broadcast_row_limit"));
+
+
+        VariableExpr desc = new VariableExpr("broadcast_row_limit");
+        String limit = VariableMgr.getValue(getConnectContext().getSessionVariable(), desc);
+        System.out.println("limit:" + limit);
     }
 
     @Test

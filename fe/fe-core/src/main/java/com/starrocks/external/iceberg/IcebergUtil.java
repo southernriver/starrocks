@@ -4,6 +4,7 @@ package com.starrocks.external.iceberg;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
+import com.starrocks.analysis.VariableExpr;
 import com.starrocks.catalog.ArrayType;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
@@ -15,6 +16,7 @@ import com.starrocks.common.DdlException;
 import com.starrocks.external.hive.HdfsFileFormat;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.SessionVariable;
+import com.starrocks.qe.VariableMgr;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.iceberg.BaseTable;
 import org.apache.iceberg.FileFormat;
@@ -140,6 +142,9 @@ public class IcebergUtil {
         // https://github.com/apache/iceberg/commit/74db81f4dd81360bf3c0ad438d4be937c7a812d9 release
         TableScan tableScan = table.newScan();
         SessionVariable sessionVariable = ConnectContext.get().getSessionVariable();
+        VariableExpr desc = new VariableExpr("iceberg_version_as_of");
+
+
         String alluxioUri = table.properties().getOrDefault(READ_ALLUXIO_CACHE_URI, READ_ALLUXIO_CACHE_URI_DEFAULT);
         long currentSnapshotId = snapshot.snapshotId();
         long snapshotId = sessionVariable.getIcebergVersionAsOf();
@@ -155,6 +160,14 @@ public class IcebergUtil {
 
         if (asOfTimestamp != -1) {
             tableScan = tableScan.asOfTime(asOfTimestamp);
+        }
+
+        try {
+            String value = VariableMgr.getValue(sessionVariable, desc);
+            LOG.error("CurrentSnapshotId = {}, snapshotId = {}, asOfTimestamp = {}, value = {}",
+                    currentSnapshotId, snapshotId, asOfTimestamp, value);
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("");
         }
 
         tableScan = tableScan.includeColumnStats();

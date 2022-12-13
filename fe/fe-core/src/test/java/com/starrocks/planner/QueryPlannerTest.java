@@ -21,25 +21,27 @@
 
 package com.starrocks.planner;
 
-import com.starrocks.analysis.CreateDbStmt;
-import com.starrocks.analysis.DropDbStmt;
-import com.starrocks.analysis.ShowCreateDbStmt;
-import com.starrocks.analysis.StatementBase;
+import com.starrocks.analysis.*;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.util.UUIDUtil;
 import com.starrocks.meta.BlackListSql;
 import com.starrocks.meta.SqlBlackList;
 import com.starrocks.qe.ConnectContext;
+import com.starrocks.qe.SessionVariable;
 import com.starrocks.qe.StmtExecutor;
+import com.starrocks.qe.VariableMgr;
 import com.starrocks.sql.parser.SqlParser;
 import com.starrocks.utframe.StarRocksAssert;
 import com.starrocks.utframe.UtFrameUtils;
+import org.apache.commons.validator.Var;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.util.List;
 import java.util.Map;
+
+import static com.starrocks.sql.analyzer.AnalyzeTestUtil.getConnectContext;
 
 public class QueryPlannerTest {
     private static ConnectContext connectContext;
@@ -124,6 +126,28 @@ public class QueryPlannerTest {
         ShowCreateDbStmt showCreateDbStmt =
                 (ShowCreateDbStmt) UtFrameUtils.parseStmtWithNewParser(showCreateDbSql, connectContext);
         Assert.assertEquals(showCreateDbStmt.toSql(), showCreateSchemaStmt.toSql());
+    }
+
+    @Test
+    public void testSqlBlackList1() throws Exception {
+        String sql = "select /*+ SET_VAR(broadcast_row_limit=1) */  k1 from test.baseall";
+        StatementBase statement = SqlParser.parse(sql, connectContext.getSessionVariable().getSqlMode()).get(0);
+        StmtExecutor stmtExecutor = new StmtExecutor(connectContext, statement);
+
+        long broadcastRowCountLimit = connectContext.getSessionVariable().getBroadcastRowCountLimit();
+
+        long broadcastRowCountLimitVariable = VariableMgr.getDefaultSessionVariable().getBroadcastRowCountLimit();
+
+        stmtExecutor.execute();
+
+
+
+//        VariableExpr desc = new VariableExpr("broadcast_row_limit");
+//        SessionVariable sessionVariable = (SessionVariable) getConnectContext().getSessionVariable().clone();
+//        String limit = VariableMgr.getValue(sessionVariable, desc);
+
+        System.out.println("broadcastRowCountLimit:" + broadcastRowCountLimit + ",broadcastRowCountLimitVariable:" +
+                broadcastRowCountLimitVariable + "，limit:");
     }
 
     @Test

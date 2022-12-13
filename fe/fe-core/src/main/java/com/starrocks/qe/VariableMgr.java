@@ -263,6 +263,7 @@ public class VariableMgr {
     public static void setVar(SessionVariable sessionVariable, SetVar setVar, boolean onlySetSessionVar)
             throws DdlException {
         if (SessionVariable.DEPRECATED_VARIABLES.stream().anyMatch(c -> c.equalsIgnoreCase(setVar.getVariable()))) {
+            System.out.println("return");
             return;
         }
 
