@@ -181,6 +181,7 @@ public class ConnectProcessor {
             if (ctx.getState().getStateType() == QueryState.MysqlStateType.ERR) {
                 // err query
                 MetricRepo.COUNTER_QUERY_ERR.increase(1L);
+                MetricRepo.COUNTER_REQUEST_ERR.increase(1L);
                 ResourceGroupMetricMgr.increaseQueryErr(ctx, 1L);
             } else {
                 // ok query
@@ -194,9 +195,25 @@ public class ConnectProcessor {
             }
             ctx.getAuditEventBuilder().setIsQuery(true);
         } else {
+            if (ctx.getState().getRequestType().equals(QueryState.RequestType.INSERT)) {
+                MetricRepo.COUNTER_INSERT_ALL.increase(1L);
+                if (ctx.getState().getStateType() == QueryState.MysqlStateType.ERR) {
+                    // err query
+                    MetricRepo.COUNTER_INSERT_ERR.increase(1L);
+                    MetricRepo.COUNTER_REQUEST_ERR.increase(1L);
+                } else {
+                    // ok query
+                    MetricRepo.COUNTER_INSERT_SUCCESS.increase(1L);
+                    MetricRepo.HISTO_INSERT_LATENCY.update(elapseMs);
+                    if (elapseMs > Config.qe_slow_log_ms || ctx.getSessionVariable().isEnableSQLDigest()) {
+                        MetricRepo.COUNTER_SLOW_INSERT.increase(1L);
+                        ctx.getAuditEventBuilder().setDigest(computeStatementDigest(parsedStmt));
+                    }
+                }
+            }
             ctx.getAuditEventBuilder().setIsQuery(false);
         }
-
+        ctx.getAuditEventBuilder().setRequestType(ctx.getState().getRequestType());
         ctx.getAuditEventBuilder().setFeIp(FrontendOptions.getLocalHostAddress());
 
         if (!ctx.getState().isQuery() && (parsedStmt != null && parsedStmt.needAuditEncryption())) {

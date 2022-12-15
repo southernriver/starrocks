@@ -21,6 +21,8 @@
 
 package com.starrocks.plugin;
 
+import com.starrocks.qe.QueryState;
+
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
@@ -94,6 +96,8 @@ public class AuditEvent {
     public String queryId = "";
     @AuditField(value = "IsQuery")
     public boolean isQuery = false;
+    @AuditField(value = "RequestType")
+    public String requestType = "";
     @AuditField(value = "feIp")
     public String feIp = "";
     @AuditField(value = "Stmt")
@@ -219,6 +223,11 @@ public class AuditEvent {
 
         public AuditEventBuilder setIsQuery(boolean isQuery) {
             auditEvent.isQuery = isQuery;
+            return this;
+        }
+
+        public AuditEventBuilder setRequestType(QueryState.RequestType requestType) {
+            auditEvent.requestType = requestType.name();
             return this;
         }
 
