@@ -223,6 +223,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     public static final String ENABLE_ICEBRG_METADATA_ALLUXIO_CACHE = "enable_iceberg_metadata_alluxio_cache";
     public static final String ICEBERG_VERSION_AS_OF = "iceberg_version_as_of";
     public static final String ICEBERG_TIMESTAMP_AS_OF = "iceberg_timestamp_as_of";
+    public static final String HUDI_TIMESTAMP_AS_OF = "hudi_timestamp_as_of";
 
     // --------  New planner session variables end --------
 
@@ -270,8 +271,6 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
             .add(DISABLE_BUCKET_JOIN)
             .add(CBO_ENABLE_REPLICATED_JOIN)
             .add(FOREIGN_KEY_CHECKS)
-            .add(ICEBERG_VERSION_AS_OF)
-            .add(ICEBERG_TIMESTAMP_AS_OF)
             .add("enable_cbo")
             .add("enable_vectorized_engine")
             .add("vectorized_engine_enable")
@@ -558,10 +557,13 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     private boolean enableIcebergMetadataAlluxioCache = true;
 
     @VariableMgr.VarAttr(name = ICEBERG_VERSION_AS_OF)
-    private long icebergVersionAsOf = -1;
+    private String icebergVersionAsOf = "";
 
     @VariableMgr.VarAttr(name = ICEBERG_TIMESTAMP_AS_OF)
-    private long icebergTimestampAsOf = -1;
+    private String icebergTimestampAsOf = "";
+
+    @VariableMgr.VarAttr(name = HUDI_TIMESTAMP_AS_OF)
+    private String hudiTimestampAsOf = "";
 
     // value should be 0~4
     // 0 represents automatic selection, and 1, 2, 3, and 4 represent forced selection of AGG of
@@ -1072,12 +1074,16 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
         this.enableIcebergMetadataAlluxioCache = enableIcebergMetadataAlluxioCache;
     }
 
-    public void setIcebergVersionAsOf(long icebergVersionAsOf) {
+    public void setIcebergVersionAsOf(String icebergVersionAsOf) {
         this.icebergVersionAsOf = icebergVersionAsOf;
     }
 
-    public void setIcebergTimestampAsOf(long icebergTimestampAsOf) {
+    public void setIcebergTimestampAsOf(String icebergTimestampAsOf) {
         this.icebergTimestampAsOf = icebergTimestampAsOf;
+    }
+
+    public void setHudiTimestampAsOf(String hudiTimestampAsOf) {
+        this.hudiTimestampAsOf = hudiTimestampAsOf;
     }
 
     public boolean isEnableColumnExprPredicate() {
@@ -1096,12 +1102,16 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
         this.allowDefaultPartition = allowDefaultPartition;
     }
 
-    public long getIcebergVersionAsOf() {
+    public String getIcebergVersionAsOf() {
         return icebergVersionAsOf;
     }
 
-    public long getIcebergTimestampAsOf() {
+    public String getIcebergTimestampAsOf() {
         return icebergTimestampAsOf;
+    }
+
+    public String getHudiTimestampAsOf() {
+        return hudiTimestampAsOf;
     }
 
     /**

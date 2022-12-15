@@ -17,6 +17,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static com.starrocks.external.iceberg.IcebergUtil.convertColumnType;
+import static com.starrocks.external.iceberg.IcebergUtil.formatQueryInstantToTimeStamp;
 
 
 public class IcebergUtilTest {
@@ -76,5 +77,14 @@ public class IcebergUtilTest {
                 Types.StringType.get(), Types.StringType.get());
         Type resType = convertColumnType(icebergType);
         Assert.assertEquals(resType, ScalarType.createType(PrimitiveType.UNKNOWN_TYPE));
+    }
+
+    @Test
+    public void testFormatQueryInstantToTimeStamp() {
+        String startInstantTime = "2022-12-12 16:15:41";
+        String endInstantTime = "2022-12-12 16:15:42.100";
+        long startTimeStamp = formatQueryInstantToTimeStamp(startInstantTime);
+        long endTimeStamp = formatQueryInstantToTimeStamp(endInstantTime);
+        Assert.assertEquals(1100, endTimeStamp - startTimeStamp);
     }
 }

@@ -16,6 +16,8 @@ import com.starrocks.common.Config;
 import com.starrocks.common.DdlException;
 import com.starrocks.external.ObjectStorageUtils;
 import com.starrocks.external.hive.text.TextFileFormatDesc;
+import com.starrocks.qe.ConnectContext;
+import com.starrocks.qe.SessionVariable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.fs.FileStatus;
@@ -50,6 +52,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -329,6 +332,19 @@ public class HiveMetaClient {
         HoodieTimeline activeInstants = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
         Option<HoodieInstant> latestInstant = activeInstants.lastInstant();
         String queryInstant = latestInstant.get().getTimestamp();
+        if (ConnectContext.get() != null) {
+            SessionVariable sessionVariable = ConnectContext.get().getSessionVariable();
+            if (!sessionVariable.getIcebergTimestampAsOf().isEmpty()) {
+                LOG.info("Latest query instant is {}, and hudi_timestamp_as_of is set to {}, ", queryInstant,
+                        sessionVariable.getHudiTimestampAsOf());
+                queryInstant = Utils.formatQueryInstant(sessionVariable.getHudiTimestampAsOf());
+            }
+        }
+
+        if (queryInstant != null && !activeInstants.containsInstant(queryInstant)) {
+            throw new HoodieIOException(String.format("Query instant (%s) not found in the timeline", queryInstant));
+        }
+
         Iterator<HoodieBaseFile> hoodieBaseFileIterator = fileSystemView
                 .getLatestBaseFilesBeforeOrOn(partName, queryInstant).iterator();
         while (hoodieBaseFileIterator.hasNext()) {
