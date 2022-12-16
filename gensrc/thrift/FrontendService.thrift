@@ -602,6 +602,10 @@ struct TStreamLoadPutRequest {
     31: optional string merge_condition
     // only valid when file type is CSV
     50: optional string rowDelimiter
+    // if ignore tail columns is true, 
+    // the columns after TBrokerRangeDesc.num_of_columns_from_file will be ignored
+    51: optional bool ignoreTailColumns
+    52: optional bool skipUtf8Check
 }
 
 struct TStreamLoadPutResult {

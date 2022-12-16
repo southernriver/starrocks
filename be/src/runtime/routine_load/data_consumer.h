@@ -214,7 +214,7 @@ private:
 class TubeDataConsumer : public DataConsumer {
 public:
     TubeDataConsumer(StreamLoadContext* ctx)
-            : DataConsumer(ctx),
+            : DataConsumer(),
               _master_addr(ctx->tube_info->master_addr),
               _topic(ctx->tube_info->topic),
               _group_name(ctx->tube_info->group_name) {}

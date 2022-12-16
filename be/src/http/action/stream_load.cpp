@@ -492,6 +492,26 @@ Status StreamLoadAction::_process_put(HttpRequest* http_req, StreamLoadContext* 
             return Status::InvalidArgument("Invalid load_dop format");
         }
     }
+
+    if (!http_req->header(HTTP_IGNORE_TAIL_COLUMNS).empty()) {
+        if (boost::iequals(http_req->header(HTTP_IGNORE_TAIL_COLUMNS), "false")) {
+            request.__set_ignoreTailColumns(false);
+        } else if (boost::iequals(http_req->header(HTTP_IGNORE_TAIL_COLUMNS), "true")) {
+            request.__set_ignoreTailColumns(true);
+        } else {
+            return Status::InvalidArgument("Invalid ignore_tail_columns format. Must be bool type");
+        }
+    }
+    if (!http_req->header(HTTP_SKIP_UTF8_CHECK).empty()) {
+        if (boost::iequals(http_req->header(HTTP_SKIP_UTF8_CHECK), "false")) {
+            request.__set_skipUtf8Check(false);
+        } else if (boost::iequals(http_req->header(HTTP_SKIP_UTF8_CHECK), "true")) {
+            request.__set_skipUtf8Check(true);
+        } else {
+            return Status::InvalidArgument("Invalid skip_utf8_check format. Must be bool type");
+        }
+    }
+
     int32_t rpc_timeout_ms = config::txn_commit_rpc_timeout_ms;
     if (ctx->timeout_second != -1) {
         request.__set_timeout(ctx->timeout_second);

@@ -288,6 +288,12 @@ public class StreamLoadInfo {
         if (request.isSetRowDelimiter()) {
             rowDelimiter = new RowDelimiter(request.getRowDelimiter());
         }
+        if (request.isSetIgnoreTailColumns()) {
+            ignoreTailColumns = request.isIgnoreTailColumns();
+        }
+        if (request.isSetSkipUtf8Check()) {
+            skipUtf8Check = request.isSkipUtf8Check();
+        }
         if (request.isSetPartitions()) {
             String[] partNames = PART_NAME_SPLIT.split(request.getPartitions().trim());
             if (request.isSetIsTempPartition()) {
