@@ -23,6 +23,9 @@ import com.starrocks.connector.RemoteFileDesc;
 import com.starrocks.connector.RemoteFileIO;
 import com.starrocks.connector.RemotePathKey;
 import com.starrocks.connector.exception.StarRocksConnectorException;
+import com.starrocks.lake.Utils;
+import com.starrocks.qe.ConnectContext;
+import com.starrocks.qe.SessionVariable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -36,6 +39,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -83,6 +87,18 @@ public class HudiRemoteFileIO implements RemoteFileIO {
             HoodieTableFileSystemView fileSystemView = new HoodieTableFileSystemView(metaClient,
                     timeline, statuses.toArray(new FileStatus[0]));
             String queryInstant = latestInstant.get().getTimestamp();
+            if (ConnectContext.get() != null) {
+                SessionVariable sessionVariable = ConnectContext.get().getSessionVariable();
+                if (!sessionVariable.getIcebergTimestampAsOf().isEmpty()) {
+                    LOG.info("Latest query instant is {}, and hudi_timestamp_as_of is set to {}, ", queryInstant,
+                            sessionVariable.getHudiTimestampAsOf());
+                    queryInstant = Utils.formatQueryInstant(sessionVariable.getHudiTimestampAsOf());
+                }
+            }
+
+            if (queryInstant != null && !timeline.containsInstant(queryInstant)) {
+                throw new HoodieIOException(String.format("Query instant (%s) not found in the timeline", queryInstant));
+            }
             Iterator<FileSlice> hoodieFileSliceIterator = fileSystemView
                     .getLatestMergedFileSlicesBeforeOrOn(partitionName, queryInstant).iterator();
             while (hoodieFileSliceIterator.hasNext()) {
