@@ -204,7 +204,6 @@ public class ConnectProcessor {
                     MetricRepo.HISTO_INSERT_LATENCY.update(elapseMs);
                     if (elapseMs > Config.qe_slow_log_ms || ctx.getSessionVariable().isEnableSQLDigest()) {
                         MetricRepo.COUNTER_SLOW_INSERT.increase(1L);
-                        ctx.getAuditEventBuilder().setDigest(computeStatementDigest(parsedStmt));
                     }
                 }
             }
