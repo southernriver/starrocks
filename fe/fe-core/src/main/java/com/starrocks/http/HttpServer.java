@@ -47,7 +47,6 @@ import com.starrocks.http.meta.MetaService.VersionAction;
 import com.starrocks.http.rest.BootstrapFinishAction;
 import com.starrocks.http.rest.CancelStreamLoad;
 import com.starrocks.http.rest.CheckDecommissionAction;
-import com.starrocks.http.rest.ClusterLoadAction;
 import com.starrocks.http.rest.ConnectionAction;
 import com.starrocks.http.rest.GetDdlStmtAction;
 import com.starrocks.http.rest.GetLoadInfoAction;
@@ -165,7 +164,6 @@ public class HttpServer {
         ConnectionAction.registerAction(controller);
         ShowDataAction.registerAction(controller);
         QueryDumpAction.registerAction(controller);
-        ClusterLoadAction.registerAction(controller);
 
         // meta service action
         File imageDir = MetaHelper.getLeaderImageDir();

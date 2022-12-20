@@ -42,7 +42,6 @@ import com.starrocks.ha.BDBHA;
 import com.starrocks.ha.FrontendNodeType;
 import com.starrocks.ha.LeaderInfo;
 import com.starrocks.http.meta.MetaBaseAction;
-import com.starrocks.http.rest.ClusterLoadAction;
 import com.starrocks.leader.MetaHelper;
 import com.starrocks.meta.MetaContext;
 import com.starrocks.persist.Storage;
@@ -108,7 +107,6 @@ public class NodeMgr {
     private final SystemInfoService systemInfo;
     private final BrokerMgr brokerMgr;
     private final HeartbeatMgr heartbeatMgr;
-    private final ClusterLoadAction.MonitorMgr monitorMgr;
 
     private final GlobalStateMgr stateMgr;
 
@@ -119,7 +117,6 @@ public class NodeMgr {
         this.leaderIp = "";
         this.systemInfo = new SystemInfoService();
         this.heartbeatMgr = new HeartbeatMgr(systemInfo, !isCheckpoint);
-        this.monitorMgr = new ClusterLoadAction.MonitorMgr();
         this.brokerMgr = new BrokerMgr();
         this.stateMgr = globalStateMgr;
     }
@@ -132,10 +129,6 @@ public class NodeMgr {
     public void startHearbeat(long epoch) {
         heartbeatMgr.setLeader(clusterId, token, epoch);
         heartbeatMgr.start();
-    }
-
-    public void startMonitor() {
-        monitorMgr.start();
     }
 
     private boolean tryLock(boolean mustLock) {

@@ -1022,7 +1022,6 @@ public class GlobalStateMgr {
 
         // heartbeat mgr
         nodeMgr.startHearbeat(epoch);
-        nodeMgr.startMonitor();
         // New load scheduler
         pendingLoadTaskScheduler.start();
         loadingLoadTaskScheduler.start();
