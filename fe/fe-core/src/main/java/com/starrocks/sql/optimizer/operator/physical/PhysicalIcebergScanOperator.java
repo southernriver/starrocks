@@ -32,6 +32,8 @@ import java.util.Map;
 
 public class PhysicalIcebergScanOperator extends PhysicalScanOperator {
     private ScanOperatorPredicates predicates;
+    // Optional temporal clause for querying historical data
+    private String temporalClause;
 
     public PhysicalIcebergScanOperator(Table table,
                                        Map<ColumnRefOperator, Column> columnRefMap,
@@ -41,6 +43,14 @@ public class PhysicalIcebergScanOperator extends PhysicalScanOperator {
                                        Projection projection) {
         super(OperatorType.PHYSICAL_ICEBERG_SCAN, table, columnRefMap, limit, predicate, projection);
         this.predicates = predicates;
+    }
+
+    public String getTemporalClause() {
+        return temporalClause;
+    }
+
+    public void setTemporalClause(String temporalClause) {
+        this.temporalClause = temporalClause;
     }
 
     @Override
