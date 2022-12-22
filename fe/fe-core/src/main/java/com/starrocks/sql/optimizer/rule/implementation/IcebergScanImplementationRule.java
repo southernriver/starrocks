@@ -46,6 +46,10 @@ public class IcebergScanImplementationRule extends ImplementationRule {
                     scan.getPredicate(),
                     scan.getProjection());
 
+            if (scan.getTemporalClause() != null) {
+                physicalIcebergScan.setTemporalClause(scan.getTemporalClause());
+            }
+
             result = new OptExpression(physicalIcebergScan);
         }
         return Lists.newArrayList(result);

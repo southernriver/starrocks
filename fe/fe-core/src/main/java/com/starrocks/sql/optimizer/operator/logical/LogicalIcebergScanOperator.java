@@ -29,6 +29,7 @@ import java.util.Map;
 
 public class LogicalIcebergScanOperator extends LogicalScanOperator {
     private ScanOperatorPredicates predicates = new ScanOperatorPredicates();
+    private String temporalClause;
 
     public LogicalIcebergScanOperator(Table table,
                                       Map<ColumnRefOperator, Column> colRefToColumnMetaMap,
@@ -55,6 +56,14 @@ public class LogicalIcebergScanOperator extends LogicalScanOperator {
                 builder.getProjection());
 
         this.predicates = builder.predicates;
+    }
+
+    public String getTemporalClause() {
+        return this.temporalClause;
+    }
+
+    public void setTemporalClause(String temporalClause) {
+        this.temporalClause = temporalClause;
     }
 
     @Override

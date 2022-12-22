@@ -91,6 +91,8 @@ public class IcebergScanNode extends ScanNode {
 
     private boolean isFinalized = false;
 
+    private String temporalClause; // optional temporal clause for historical queries
+
     public IcebergScanNode(PlanNodeId id, TupleDescriptor desc, String planNodeName) {
         super(id, desc, planNodeName);
         srIcebergTable = (IcebergTable) desc.getTable();
@@ -100,6 +102,14 @@ public class IcebergScanNode extends ScanNode {
     public void init(Analyzer analyzer) throws UserException {
         super.init(analyzer);
         getAliveBackends();
+    }
+
+    public void setTemporalClause(String temporalClause) {
+        this.temporalClause = temporalClause;
+    }
+
+    public String getTemporalClause() {
+        return temporalClause;
     }
 
     private void getAliveBackends() throws UserException {
@@ -206,6 +216,7 @@ public class IcebergScanNode extends ScanNode {
             return;
         }
 
+        // TODO suport timetravel for iceberg
         for (CombinedScanTask combinedScanTask : IcebergUtil.getTableScan(
                 srIcebergTable.getIcebergTable(), snapshot.get(), icebergPredicate).planTasks()) {
             for (FileScanTask task : combinedScanTask.files()) {
@@ -263,6 +274,10 @@ public class IcebergScanNode extends ScanNode {
         MoreObjects.ToStringHelper helper = MoreObjects.toStringHelper(this);
         helper.addValue(super.debugString());
         helper.add("icebergTable=", srIcebergTable.getName());
+        if (temporalClause != null && !temporalClause.isEmpty()) {
+            helper.addValue(" ");
+            helper.addValue(temporalClause);
+        }
         return helper.toString();
     }
 
