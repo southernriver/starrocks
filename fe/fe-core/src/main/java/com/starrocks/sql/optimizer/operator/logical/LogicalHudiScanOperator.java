@@ -32,6 +32,7 @@ import java.util.Set;
 public class LogicalHudiScanOperator extends LogicalScanOperator {
     private ScanOperatorPredicates predicates = new ScanOperatorPredicates();
     private boolean hasUnknownColumn;
+    private String temporalClause;
 
     public LogicalHudiScanOperator(Table table,
                                    Map<ColumnRefOperator, Column> colRefToColumnMetaMap,
@@ -61,6 +62,14 @@ public class LogicalHudiScanOperator extends LogicalScanOperator {
 
         this.predicates = builder.predicates;
         this.partitionColumns = builder.partitionColumns;
+    }
+
+    public String getTemporalClause() {
+        return this.temporalClause;
+    }
+
+    public void setTemporalClause(String temporalClause) {
+        this.temporalClause = temporalClause;
     }
 
     @Override

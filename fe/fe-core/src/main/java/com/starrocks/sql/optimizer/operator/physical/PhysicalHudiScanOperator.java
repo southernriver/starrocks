@@ -32,6 +32,8 @@ import java.util.Map;
 
 public class PhysicalHudiScanOperator extends PhysicalScanOperator {
     private ScanOperatorPredicates predicates;
+    // Optional temporal clause for querying historical data
+    private String temporalClause;
 
     public PhysicalHudiScanOperator(Table table,
                                     Map<ColumnRefOperator, Column> columnRefMap,
@@ -41,6 +43,14 @@ public class PhysicalHudiScanOperator extends PhysicalScanOperator {
                                     Projection projection) {
         super(OperatorType.PHYSICAL_HUDI_SCAN, table, columnRefMap, limit, predicate, projection);
         this.predicates = predicates;
+    }
+
+    public String getTemporalClause() {
+        return temporalClause;
+    }
+
+    public void setTemporalClause(String temporalClause) {
+        this.temporalClause = temporalClause;
     }
 
     @Override

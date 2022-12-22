@@ -43,6 +43,9 @@ public class HudiScanImplementationRule extends ImplementationRule {
                     scan.getLimit(),
                     scan.getPredicate(),
                     scan.getProjection());
+            if (scan.getTemporalClause() != null) {
+                physicalHudiScan.setTemporalClause(scan.getTemporalClause());
+            }
 
             result = new OptExpression(physicalHudiScan);
         }

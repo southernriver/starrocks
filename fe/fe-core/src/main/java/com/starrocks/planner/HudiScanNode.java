@@ -36,6 +36,7 @@ public class HudiScanNode extends ScanNode {
 
     private HudiTable hudiTable;
     private HDFSScanNodePredicates scanNodePredicates = new HDFSScanNodePredicates();
+    private String temporalClause; // optional temporal clause for historical queries
 
     public HudiScanNode(PlanNodeId id, TupleDescriptor desc, String planNodeName) {
         super(id, desc, planNodeName);
@@ -50,15 +51,28 @@ public class HudiScanNode extends ScanNode {
         return hudiTable;
     }
 
+    public void setTemporalClause(String temporalClause) {
+        this.temporalClause = temporalClause;
+    }
+
+    public String getTemporalClause() {
+        return temporalClause;
+    }
+
     @Override
     protected String debugString() {
         MoreObjects.ToStringHelper helper = MoreObjects.toStringHelper(this);
         helper.addValue(super.debugString());
         helper.addValue("hudiTable=" + hudiTable.getName());
+        if (temporalClause != null && !temporalClause.isEmpty()) {
+            helper.addValue(" ");
+            helper.addValue(temporalClause);
+        }
         return helper.toString();
     }
 
     public void setupScanRangeLocations(DescriptorTable descTbl) throws UserException {
+        // TODO support timetravel for hudi.
         scanRangeLocations.setupScanRangeLocations(descTbl, hudiTable, scanNodePredicates);
     }
 

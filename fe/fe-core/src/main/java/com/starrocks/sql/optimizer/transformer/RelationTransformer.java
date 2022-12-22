@@ -470,6 +470,9 @@ public class RelationTransformer extends AstVisitor<LogicalPlan, ExpressionMappi
         } else if (Table.TableType.HUDI.equals(node.getTable().getType())) {
             scanOperator = new LogicalHudiScanOperator(node.getTable(), colRefToColumnMetaMapBuilder.build(),
                     columnMetaToColRefMap, Operator.DEFAULT_LIMIT, null);
+            if (node.getTemporalClause() != null) {
+                ((LogicalHudiScanOperator) scanOperator).setTemporalClause(node.getTemporalClause());
+            }
         } else if (Table.TableType.DELTALAKE.equals(node.getTable().getType())) {
             scanOperator = new LogicalDeltaLakeScanOperator(node.getTable(), colRefToColumnMetaMapBuilder.build(),
                     columnMetaToColRefMap, Operator.DEFAULT_LIMIT, null);

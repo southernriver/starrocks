@@ -769,6 +769,9 @@ public class PlanFragmentBuilder {
             HudiScanNode hudiScanNode =
                     new HudiScanNode(context.getNextNodeId(), tupleDescriptor, "HudiScanNode");
             hudiScanNode.computeStatistics(optExpression.getStatistics());
+            if (node.getTemporalClause() != null) {
+                hudiScanNode.setTemporalClause(node.getTemporalClause());
+            }
             try {
                 HDFSScanNodePredicates scanNodePredicates = hudiScanNode.getScanNodePredicates();
                 scanNodePredicates.setSelectedPartitionIds(predicates.getSelectedPartitionIds());
