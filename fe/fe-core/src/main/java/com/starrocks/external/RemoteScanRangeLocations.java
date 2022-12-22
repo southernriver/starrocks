@@ -8,6 +8,7 @@ import com.starrocks.catalog.HiveMetaStoreTable;
 import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.Table;
 import com.starrocks.common.Config;
+import com.starrocks.common.ThreadPoolManager;
 import com.starrocks.common.UserException;
 import com.starrocks.external.hive.HdfsFileBlockDesc;
 import com.starrocks.external.hive.HdfsFileDesc;
@@ -26,11 +27,16 @@ import org.apache.logging.log4j.Logger;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
 
 public class RemoteScanRangeLocations {
     private static final Logger LOG = LogManager.getLogger(RemoteScanRangeLocations.class);
 
     private final List<TScanRangeLocations> result = new ArrayList<>();
+
+    private final ExecutorService partitionDaemonExecutor =
+            ThreadPoolManager.newDaemonFixedThreadPool(Config.hive_table_split_range_location_concurrency,
+                    Integer.MAX_VALUE, "hive-table-split-range-locations_concurrency", true);
 
     private void addScanRangeLocations(long partitionId, HivePartition partition, HdfsFileDesc fileDesc,
                                        HdfsFileBlockDesc blockDesc
@@ -132,15 +138,18 @@ public class RemoteScanRangeLocations {
         for (int i = 0; i < partitions.size(); i++) {
             descTbl.addReferencedPartitions(table, partitionInfos.get(i));
             for (HdfsFileDesc fileDesc : partitions.get(i).getFiles()) {
+                int index = i;
                 if (fileDesc.getLength() == 0) {
                     continue;
                 }
-                for (HdfsFileBlockDesc blockDesc : fileDesc.getBlockDescs()) {
-                    addScanRangeLocations(partitionInfos.get(i).getId(), partitions.get(i), fileDesc, blockDesc);
-                    LOG.debug("Add scan range success. partition: {}, file: {}, block: {}-{}",
-                            partitions.get(i).getFullPath(), fileDesc.getFileName(), blockDesc.getOffset(),
-                            blockDesc.getLength());
-                }
+                partitionDaemonExecutor.execute(() -> {
+                    for (HdfsFileBlockDesc blockDesc : fileDesc.getBlockDescs()) {
+                        addScanRangeLocations(partitionInfos.get(index).getId(), partitions.get(index), fileDesc, blockDesc);
+                        LOG.debug("Add scan range success. partition: {}, file: {}, block: {}-{}",
+                                partitions.get(index).getFullPath(), fileDesc.getFileName(), blockDesc.getOffset(),
+                                blockDesc.getLength());
+                    }
+                });
             }
         }
         LOG.debug("Get {} scan range locations cost: {} ms",

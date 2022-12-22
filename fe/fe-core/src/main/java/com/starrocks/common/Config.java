@@ -1479,6 +1479,12 @@ public class Config extends ConfigBase {
     public static long hive_meta_cache_ttl_s = 3600L * 24L;
 
     /**
+     * Number of threads to prepare range locations concurrency.
+     */
+    @ConfField
+    public static int hive_table_split_range_location_concurrency = 32;
+
+    /**
      * Hive MetaStore Client socket timeout in seconds.
      */
     @ConfField
