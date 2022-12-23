@@ -47,7 +47,7 @@ under the License.
         <spark.version>2.4.6</spark.version>
         <tomcat.version>8.5.70</tomcat.version>
         <parquet.version>1.10.1</parquet.version>
-        <hadoop.version>3.3.3</hadoop.version>
+        <hadoop.version>3.2.1-tq-0.2.6</hadoop.version>
         <skip.plugin>false</skip.plugin>
         <hudi.version>0.10.1</hudi.version>
         <hive-apache.version>3.1.2-13</hive-apache.version>
@@ -586,7 +586,7 @@ under the License.
             <dependency>
                 <groupId>org.apache.hadoop</groupId>
                 <artifactId>hadoop-aws</artifactId>
-                <version>${hadoop.version}</version>
+                <version>3.3.4</version>
             </dependency>
 
             <!-- https://mvnrepository.com/artifact/com.fasterxml.uuid/java-uuid-generator -->
@@ -601,6 +601,12 @@ under the License.
                 <groupId>org.apache.hudi</groupId>
                 <artifactId>hudi-common</artifactId>
                 <version>${hudi.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>org.apache.hbase</groupId>
+                        <artifactId>hbase-server</artifactId>
+                    </exclusion>
+                </exclusions>
             </dependency>
 
             <!-- https://mvnrepository.com/artifact/org.apache.hudi/hudi-hadoop-mr -->
