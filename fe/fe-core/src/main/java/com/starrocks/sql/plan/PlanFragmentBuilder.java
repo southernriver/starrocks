@@ -955,9 +955,11 @@ public class PlanFragmentBuilder {
                     new IcebergScanNode(context.getNextNodeId(), tupleDescriptor, "IcebergScanNode");
             icebergScanNode.computeStatistics(optExpression.getStatistics());
 
-            if (node.getTemporalClause() != null) {
-                icebergScanNode.setTemporalClause(node.getTemporalClause());
+            if (node.getTimeTravelSpec() != null) {
+                icebergScanNode.setTimeTravelSpec(node.getTimeTravelSpec());
             }
+
+            LOG.info("node.getTimeTravelSpec():" + node.getTimeTravelSpec());
             try {
                 // set predicate
                 ScalarOperatorToExpr.FormatterContext formatterContext =

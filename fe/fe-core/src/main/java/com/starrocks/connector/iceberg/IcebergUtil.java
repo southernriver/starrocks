@@ -32,8 +32,7 @@ import com.starrocks.common.DdlException;
 import com.starrocks.connector.HdfsEnvironment;
 import com.starrocks.connector.hive.RemoteFileInputFormat;
 import com.starrocks.connector.iceberg.glue.IcebergGlueCatalog;
-import com.starrocks.qe.ConnectContext;
-import com.starrocks.qe.SessionVariable;
+import com.starrocks.sql.ast.TimeTravelSpec;
 import org.apache.iceberg.BaseTable;
 import org.apache.iceberg.FileFormat;
 import org.apache.iceberg.FileScanTask;
@@ -174,23 +173,27 @@ public class IcebergUtil {
      */
     public static TableScan getTableScan(Table table,
                                          Snapshot snapshot,
-                                         Expression icebergPredicate) {
+                                         Expression icebergPredicate,
+                                         TimeTravelSpec timeTravelSpec) {
         // TODO: use planWith(executorService) after
         // https://github.com/apache/iceberg/commit/74db81f4dd81360bf3c0ad438d4be937c7a812d9 release
         TableScan tableScan = table.newScan();
-        SessionVariable sessionVariable = ConnectContext.get().getSessionVariable();
-        if (!sessionVariable.getIcebergVersionAsOf().isEmpty() && !sessionVariable.getIcebergTimestampAsOf().isEmpty()) {
-            throw new IllegalArgumentException(
-                    "Cannot scan using both snapshot-id and as-of-timestamp to select the table snapshot");
-        }
-        long snapshotId = sessionVariable.getIcebergVersionAsOf().isEmpty() ?
-                snapshot.snapshotId() : formatQueryVersionToSnapshotId(sessionVariable.getIcebergVersionAsOf());
+        if (timeTravelSpec != null && !timeTravelSpec.isEmpty()) {
+            if (!timeTravelSpec.getVersion().isEmpty() && !timeTravelSpec.getTimestamp().isEmpty()) {
+                throw new IllegalArgumentException(
+                        "Cannot scan using both snapshot-id and as-of-timestamp to select the table snapshot");
+            }
 
-        tableScan = tableScan.useSnapshot(snapshotId);
-
-        if (!sessionVariable.getIcebergTimestampAsOf().isEmpty()) {
-            long asOfTimestamp = formatQueryInstantToTimeStamp(sessionVariable.getIcebergTimestampAsOf());
-            tableScan = tableScan.asOfTime(asOfTimestamp);
+            if (!timeTravelSpec.getVersion().isEmpty()) {
+                long snapshotId = formatQueryVersionToSnapshotId(timeTravelSpec.getVersion());
+                tableScan = tableScan.useSnapshot(snapshotId);
+            } else  {
+                long asOfTimestamp = formatQueryInstantToTimeStamp(timeTravelSpec.getTimestamp());
+                tableScan = tableScan.asOfTime(asOfTimestamp);
+            }
+            LOG.info("Current timeTravelSpec is set to {} for table {}", timeTravelSpec, table.name());
+        } else {
+            tableScan = tableScan.useSnapshot(snapshot.snapshotId());
         }
 
         tableScan = tableScan.includeColumnStats();
@@ -455,7 +458,7 @@ public class IcebergUtil {
             return Timestamp.valueOf(queryInstant).getTime();
         } catch (Exception exception) {
             throw new IllegalArgumentException("Unsupported query instant time format: " + queryInstant +
-                    ", Supported time format are: 'yyyy-MM-dd: HH:mm:ss[.SSS]'");
+                    ", Supported time format are: 'yyyy-MM-dd HH:mm:ss[.SSS]'");
         }
     }
 

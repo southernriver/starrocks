@@ -212,7 +212,7 @@ public class Utils {
             return HoodieActiveTimeline.formatDate(new SimpleDateFormat("yyyy-MM-dd").parse(queryInstant));
         } else {
             throw new IllegalArgumentException("Unsupported query instant time format: " + queryInstant +
-                    ", Supported time format are: 'yyyy-MM-dd: HH:mm:ss.SSS' or 'yyyy-MM-dd' or 'yyyyMMddHHmmssSSS'");
+                    ", Supported time format are: 'yyyy-MM-dd HH:mm:ss.SSS' or 'yyyy-MM-dd' or 'yyyyMMddHHmmssSSS'");
         }
     }
 }
