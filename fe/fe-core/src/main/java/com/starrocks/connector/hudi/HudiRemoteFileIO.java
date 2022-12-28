@@ -23,6 +23,8 @@ import com.starrocks.connector.RemoteFileDesc;
 import com.starrocks.connector.RemoteFileIO;
 import com.starrocks.connector.RemotePathKey;
 import com.starrocks.connector.exception.StarRocksConnectorException;
+import com.starrocks.lake.Utils;
+import com.starrocks.sql.ast.TimeTravelSpec;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -84,6 +86,12 @@ public class HudiRemoteFileIO implements RemoteFileIO {
             HoodieTableFileSystemView fileSystemView = new HoodieTableFileSystemView(metaClient,
                     timeline, statuses.toArray(new FileStatus[0]));
             String queryInstant = latestInstant.get().getTimestamp();
+            TimeTravelSpec timeTravelSpec = pathKey.getTimeTravelSpec();
+            if (timeTravelSpec != null  && !timeTravelSpec.getTimestamp().isEmpty()) {
+                LOG.info("Latest query instant is {}, and timestamp is set to {}, ", queryInstant,
+                        timeTravelSpec.getTimestamp());
+                queryInstant = Utils.formatQueryInstant(timeTravelSpec.getTimestamp());
+            }
 
             if (queryInstant != null && !timeline.containsInstant(queryInstant)) {
                 throw new HoodieIOException(String.format("Query instant (%s) not found in the timeline", queryInstant));
