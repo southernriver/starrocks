@@ -30,6 +30,7 @@ import com.starrocks.analysis.Analyzer;
 import com.starrocks.analysis.Expr;
 import com.starrocks.analysis.RedirectStatus;
 import com.starrocks.analysis.StringLiteral;
+import com.starrocks.analysis.VariableExpr;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.ExternalOlapTable;
@@ -409,7 +410,9 @@ public class StmtExecutor {
             }
 
             if (parsedStmt instanceof QueryStatement) {
-                context.getState().setIsQuery(true);
+                if (isNotVariableSelect()) {
+                    context.getState().setIsQuery(true);
+                }
 
                 // sql's blacklist is enabled through enable_sql_blacklist.
                 if (Config.enable_sql_blacklist && !parsedStmt.isExplain()) {
@@ -441,7 +444,7 @@ public class StmtExecutor {
 
                         handleQueryStmt(execPlan);
 
-                        if (context.getSessionVariable().isEnableProfile()) {
+                        if (context.getSessionVariable().isEnableProfile() && isNotVariableSelect()) {
                             writeProfile(beginTimeInNanoSecond);
                         }
                         break;
@@ -562,6 +565,14 @@ public class StmtExecutor {
 
             context.setSessionVariable(sessionVariableBackup);
         }
+    }
+    private boolean isNotVariableSelect() {
+        if (parsedStmt instanceof QueryStatement) {
+            List<Expr> output = ((QueryStatement) parsedStmt).getQueryRelation().getOutputExpression();
+            output = output.stream().filter(o -> !(o instanceof VariableExpr)).collect(Collectors.toList());
+            return !output.isEmpty();
+        }
+        return true;
     }
 
     private void handleCreateTableAsSelectStmt(long beginTimeInNanoSecond) throws Exception {
