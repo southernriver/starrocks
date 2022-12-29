@@ -21,6 +21,7 @@
 
 package com.starrocks.connector.hive;
 
+import com.starrocks.common.Config;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.common.ValidTxnList;
 import org.apache.hadoop.hive.common.ValidWriteIdList;
@@ -509,8 +510,13 @@ public class HiveMetaStoreThriftClient implements IMetaStoreClient, AutoCloseabl
                     if (isConnected && !useSasl && MetastoreConf.getBoolVar(conf, ConfVars.EXECUTE_SET_UGI)) {
                         // Call set_ugi, only in unsecure mode.
                         try {
-                            UserGroupInformation ugi = SecurityUtils.getUGI();
-                            client.set_ugi(ugi.getUserName(), Arrays.asList(ugi.getGroupNames()));
+                            if (Config.enable_check_tdw_pri
+                                    && org.apache.commons.lang3.StringUtils.isNotEmpty(Config.tdw_pri_username)) {
+                                client.set_ugi(Config.tdw_pri_username, new ArrayList<>());
+                            } else {
+                                UserGroupInformation ugi = SecurityUtils.getUGI();
+                                client.set_ugi(ugi.getUserName(), Arrays.asList(ugi.getGroupNames()));
+                            }
                         } catch (LoginException e) {
                             LOG.warn("Failed to do login. set_ugi() is not successful, " +
                                     "Continuing without it.", e);

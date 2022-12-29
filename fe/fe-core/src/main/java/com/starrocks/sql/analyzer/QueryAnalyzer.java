@@ -747,7 +747,13 @@ public class QueryAnalyzer {
             Database database = metadataMgr.getDb(catalogName, dbName);
             MetaUtils.checkDbNullAndReport(database, dbName);
 
-            Table table = metadataMgr.getTable(catalogName, dbName, tbName);
+            Table table = null;
+            try {
+                table = metadataMgr.getTableWithUser(catalogName, dbName, tbName);
+            } catch (AnalysisException e) {
+                ErrorReport.reportAnalysisException(ErrorCode.ERR_TABLE_PRI_ERROR, e.getMessage());
+            }
+
             if (table == null) {
                 ErrorReport.reportAnalysisException(ErrorCode.ERR_BAD_TABLE_ERROR, dbName + "." + tbName);
             }

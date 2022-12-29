@@ -1350,6 +1350,10 @@ public class Config extends ConfigBase {
     public static long tdw_user_cache_count = 100L;
     @ConfField
     public static int tdw_check_priv_timeout = 3000;
+    @ConfField
+    public static boolean enable_check_tdw_pri = true;
+    @ConfField
+    public static String tdw_pri_username = "";
     /**
      * In some cases, some tablets may have all replicas damaged or lost.
      * At this time, the data has been lost, and the damaged tablets

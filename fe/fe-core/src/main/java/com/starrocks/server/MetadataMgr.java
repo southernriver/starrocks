@@ -9,6 +9,8 @@ import com.starrocks.analysis.TableName;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.Table;
+import com.starrocks.common.AnalysisException;
+import com.starrocks.common.Config;
 import com.starrocks.common.DdlException;
 import com.starrocks.connector.Connector;
 import com.starrocks.connector.ConnectorMetadata;
@@ -22,6 +24,7 @@ import com.starrocks.sql.ast.DropTableStmt;
 import com.starrocks.sql.optimizer.OptimizerContext;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
 import com.starrocks.sql.optimizer.statistics.Statistics;
+import com.starrocks.utils.TdwUtil;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -128,8 +131,27 @@ public class MetadataMgr {
         Optional<ConnectorMetadata> connectorMetadata = getOptionalMetadata(catalogName);
         return connectorMetadata.map(metadata -> metadata.getDb(dbName)).orElse(null);
     }
+    public Table getTableWithUser(String catalogName, String dbName, String tblName) throws AnalysisException {
+        if (Config.enable_check_tdw_pri) {
+            if (!CatalogMgr.isInternalCatalog(catalogName)) {
+                TdwUtil.hasQueryPrivilege(dbName, tblName);
+            }
+        }
+        Optional<ConnectorMetadata> connectorMetadata = getOptionalMetadata(catalogName);
+        return connectorMetadata.map(metadata -> metadata.getTable(dbName, tblName)).orElse(null);
+    }
 
     public Table getTable(String catalogName, String dbName, String tblName) {
+        if (Config.enable_check_tdw_pri) {
+            try {
+                if (!CatalogMgr.isInternalCatalog(catalogName)) {
+                    TdwUtil.hasQueryPrivilege(dbName, tblName);
+                }
+            } catch (AnalysisException e) {
+                LOG.error(e.getMessage());
+                return null;
+            }
+        }
         Optional<ConnectorMetadata> connectorMetadata = getOptionalMetadata(catalogName);
         Table connectorTable = connectorMetadata.map(metadata -> metadata.getTable(dbName, tblName)).orElse(null);
         if (connectorTable != null) {
