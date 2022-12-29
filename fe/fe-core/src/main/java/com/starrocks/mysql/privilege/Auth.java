@@ -613,7 +613,7 @@ public class Auth implements Writable {
      * 3. set password for specified user.
      * 4. grant privs of role to user, if role is specified.
      */
-    private void createUserInternal(UserIdentity userIdent, String roleName, Password password,
+    public void createUserInternal(UserIdentity userIdent, String roleName, Password password,
                                     boolean isReplay, boolean isSetIfNotExists) throws DdlException {
         writeLock();
         try {

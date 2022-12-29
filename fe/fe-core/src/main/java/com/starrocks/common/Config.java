@@ -1334,7 +1334,22 @@ public class Config extends ConfigBase {
      */
     @ConfField(mutable = true)
     public static String authentication_kerberos_service_key_tab = "";
-
+    /**
+     * If set to true, enable TDW Authentication
+     */
+    @ConfField
+    public static boolean enable_tdw_authentication = false;
+    /**
+     * TDW server for authentication and privilege
+     */
+    @ConfField
+    public static String tdw_privilege_api_url = "";
+    @ConfField
+    public static long tdw_user_cache_ttl_s = 60L * 5L;
+    @ConfField
+    public static long tdw_user_cache_count = 100L;
+    @ConfField
+    public static int tdw_check_priv_timeout = 3000;
     /**
      * In some cases, some tablets may have all replicas damaged or lost.
      * At this time, the data has been lost, and the damaged tablets

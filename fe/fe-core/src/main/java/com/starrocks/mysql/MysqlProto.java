@@ -28,8 +28,10 @@ import com.starrocks.common.Config;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.ErrorCode;
 import com.starrocks.common.ErrorReport;
+import com.starrocks.mysql.security.TdwAuthenticate;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.GlobalStateMgr;
+import com.starrocks.utils.TdwUtil;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -71,10 +73,18 @@ public class MysqlProto {
             return true;
         }
         List<UserIdentity> currentUserIdentity = Lists.newArrayList();
-        if (!GlobalStateMgr.getCurrentState().getAuth().checkPassword(user, remoteIp,
-                scramble, randomString, currentUserIdentity)) {
-            ErrorReport.report(ErrorCode.ERR_ACCESS_DENIED_ERROR, user, usePasswd);
-            return false;
+        if (TdwAuthenticate.useTdwAuthenticate(user)) {
+            user = TdwUtil.getUserName(user);
+            if (!TdwAuthenticate.authenticate(scramble, randomString, user, currentUserIdentity)) {
+                ErrorReport.report(ErrorCode.ERR_ACCESS_DENIED_ERROR, user, usePasswd);
+                return false;
+            }
+        } else {
+            if (!GlobalStateMgr.getCurrentState().getAuth().checkPassword(user, remoteIp,
+                    scramble, randomString, currentUserIdentity)) {
+                ErrorReport.report(ErrorCode.ERR_ACCESS_DENIED_ERROR, user, usePasswd);
+                return false;
+            }
         }
         context.setAuthDataSalt(randomString);
         if (Config.enable_auth_check) {
