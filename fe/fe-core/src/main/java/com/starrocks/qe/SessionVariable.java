@@ -734,7 +734,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     private boolean singleNodeExecPlan = false;
 
     @VariableMgr.VarAttr(name = ENABLE_HIVE_COLUMN_STATS)
-    private boolean enableHiveColumnStats = true;
+    private boolean enableHiveColumnStats = false;
 
     @VariableMgr.VarAttr(name = HIVE_PARTITION_STATS_SAMPLE_SIZE)
     private int hivePartitionStatsSampleSize = 3000;
