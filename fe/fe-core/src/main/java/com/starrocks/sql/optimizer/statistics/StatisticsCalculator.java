@@ -263,7 +263,7 @@ public class StatisticsCalculator extends OperatorVisitor<Void, ExpressionContex
             ScalarOperatorToIcebergExpr.IcebergContext icebergContext =
                     new ScalarOperatorToIcebergExpr.IcebergContext(schema);
             Expression icebergPredicate = new ScalarOperatorToIcebergExpr().convert(predicates, icebergContext);
-            Statistics stats = getTableStatistics(icebergPredicate, icebergTbl, colRefToColumnMetaMap);
+            Statistics stats = getTableStatistics(optimizerContext, icebergPredicate, icebergTbl, colRefToColumnMetaMap);
             context.setStatistics(stats);
         }
 

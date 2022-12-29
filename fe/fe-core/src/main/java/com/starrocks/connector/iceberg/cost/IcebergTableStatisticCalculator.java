@@ -2,9 +2,12 @@
 
 package com.starrocks.connector.iceberg.cost;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.starrocks.catalog.Column;
 import com.starrocks.connector.iceberg.IcebergUtil;
+import com.starrocks.qe.SessionVariable;
+import com.starrocks.sql.optimizer.OptimizerContext;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
 import com.starrocks.sql.optimizer.statistics.ColumnStatistic;
 import com.starrocks.sql.optimizer.statistics.Statistics;
@@ -43,74 +46,101 @@ public class IcebergTableStatisticCalculator {
         this.icebergTable = icebergTable;
     }
 
-    public static Statistics getTableStatistics(Expression icebergPredicate,
+    public static Statistics getTableStatistics(OptimizerContext session,
+                                                Expression icebergPredicate,
                                                 Table icebergTable,
                                                 Map<ColumnRefOperator, Column> colRefToColumnMetaMap) {
         return new IcebergTableStatisticCalculator(icebergTable)
-                .makeTableStatistics(icebergPredicate, colRefToColumnMetaMap);
+                .makeTableStatistics(session, icebergPredicate, colRefToColumnMetaMap);
     }
 
     public static List<ColumnStatistic> getColumnStatistics(Expression icebergPredicate,
                                                             Table icebergTable,
                                                             Map<ColumnRefOperator, Column> colRefToColumnMetaMap) {
-        return new IcebergTableStatisticCalculator(icebergTable)
-                .makeColumnStatistics(icebergPredicate, colRefToColumnMetaMap);
+        return getColumnStatistics(null, icebergPredicate, icebergTable, colRefToColumnMetaMap);
     }
 
-    private List<ColumnStatistic> makeColumnStatistics(Expression icebergPredicate,
+    public static List<ColumnStatistic> getColumnStatistics(OptimizerContext session,
+                                                            Expression icebergPredicate,
+                                                            Table icebergTable,
+                                                            Map<ColumnRefOperator, Column> colRefToColumnMetaMap) {
+        return new IcebergTableStatisticCalculator(icebergTable)
+            .makeColumnStatistics(session, icebergPredicate, colRefToColumnMetaMap);
+    }
+
+    private List<ColumnStatistic> makeColumnStatistics(OptimizerContext session, Expression icebergPredicate,
                                                        Map<ColumnRefOperator, Column> colRefToColumnMetaMap) {
         List<ColumnStatistic> columnStatistics = new ArrayList<>();
         List<Types.NestedField> columns = icebergTable.schema().columns();
-        IcebergFileStats icebergFileStats = new IcebergTableStatisticCalculator(icebergTable).
-                generateIcebergFileStats(icebergPredicate, columns);
-
-        Map<Integer, String> idToColumnNames = columns.stream().
-                filter(column -> !IcebergUtil.convertColumnType(column.type()).isUnknown())
+        Map<Integer, String> idToColumnNames = columns.stream()
+                .filter(column -> !IcebergUtil.convertColumnType(column.type()).isUnknown())
                 .collect(Collectors.toMap(Types.NestedField::fieldId, Types.NestedField::name));
-
-        double recordCount = Math.max(icebergFileStats == null ? 0 : icebergFileStats.getRecordCount(), 1);
-        for (Map.Entry<Integer, String> idColumn : idToColumnNames.entrySet()) {
-            List<ColumnRefOperator> columnList = colRefToColumnMetaMap.keySet().stream().filter(
-                    key -> key.getName().equalsIgnoreCase(idColumn.getValue())).collect(Collectors.toList());
-            if (columnList.size() != 1) {
-                LOG.debug("This column is not required column name " + idColumn.getValue() + " column list size "
-                        + columnList.size());
-                continue;
+        IcebergFileStats icebergFileStats = null;
+        try {
+            if (session == null || session.getSessionVariable().enableHiveColumnStats()) {
+                icebergFileStats = generateIcebergFileStats(icebergPredicate, columns);
+            } else {
+                LOG.warn("Session variable {} is false when getting table statistics on table {}",
+                        SessionVariable.ENABLE_HIVE_COLUMN_STATS, icebergTable);
             }
+            double recordCount = Math.max(icebergFileStats == null ? 0 : icebergFileStats.getRecordCount(), 1);
+            for (Map.Entry<Integer, String> idColumn : idToColumnNames.entrySet()) {
+                List<ColumnRefOperator> columnList = colRefToColumnMetaMap.keySet().stream().filter(
+                        key -> key.getName().equalsIgnoreCase(idColumn.getValue())).collect(Collectors.toList());
+                if (columnList.size() != 1) {
+                    LOG.debug("This column is not required column name " + idColumn.getValue() + " column list size "
+                            + columnList.size());
+                    continue;
+                }
 
-            int fieldId = idColumn.getKey();
-            columnStatistics.add(
-                    generateColumnStatistic(icebergFileStats, fieldId, recordCount, columnList.get(0)));
+                int fieldId = idColumn.getKey();
+                ColumnStatistic columnStatistic = icebergFileStats == null ? ColumnStatistic.unknown() :
+                        generateColumnStatistic(icebergFileStats, fieldId, recordCount, columnList.get(0));
+                columnStatistics.add(columnStatistic);
+            }
+        } catch (Exception e) {
+            LOG.warn("Failed to get table column statistics on [{}]. error : {}", icebergTable, e);
         }
         return columnStatistics;
     }
 
-    private Statistics makeTableStatistics(Expression icebergPredicate, Map<ColumnRefOperator, Column> colRefToColumnMetaMap) {
+    private Statistics makeTableStatistics(OptimizerContext session,
+            Expression icebergPredicate, Map<ColumnRefOperator, Column> colRefToColumnMetaMap) {
         LOG.debug("Begin to make iceberg table statistics!");
         List<Types.NestedField> columns = icebergTable.schema().columns();
-        IcebergFileStats icebergFileStats = generateIcebergFileStats(icebergPredicate, columns);
-
         Map<Integer, String> idToColumnNames = columns.stream()
                 .filter(column -> !IcebergUtil.convertColumnType(column.type()).isUnknown())
                 .collect(Collectors.toMap(Types.NestedField::fieldId, Types.NestedField::name));
-
         Statistics.Builder statisticsBuilder = Statistics.builder();
-        double recordCount = Math.max(icebergFileStats == null ? 0 : icebergFileStats.getRecordCount(), 1);
-        for (Map.Entry<Integer, String> idColumn : idToColumnNames.entrySet()) {
-            List<ColumnRefOperator> columnList = colRefToColumnMetaMap.keySet().stream().filter(
-                    key -> key.getName().equalsIgnoreCase(idColumn.getValue())).collect(Collectors.toList());
-            if (columnList.size() != 1) {
-                LOG.debug("This column is not required column name " + idColumn.getValue() + " column list size "
-                        + columnList.size());
-                continue;
+        IcebergFileStats icebergFileStats = null;
+        try {
+            if (session == null || session.getSessionVariable().enableHiveColumnStats()) {
+                icebergFileStats = generateIcebergFileStats(icebergPredicate, columns);
+            } else {
+                LOG.warn("Session variable {} is false when getting table statistics on table {}",
+                        SessionVariable.ENABLE_HIVE_COLUMN_STATS, icebergTable);
             }
+            double recordCount = Math.max(icebergFileStats == null ? 0 : icebergFileStats.getRecordCount(), 1);
+            for (Map.Entry<Integer, String> idColumn : idToColumnNames.entrySet()) {
+                List<ColumnRefOperator> columnList = colRefToColumnMetaMap.keySet().stream().filter(
+                        key -> key.getName().equalsIgnoreCase(idColumn.getValue())).collect(Collectors.toList());
+                if (columnList.size() != 1) {
+                    LOG.debug("This column is not required column name " + idColumn.getValue() + " column list size "
+                            + columnList.size());
+                    continue;
+                }
 
-            int fieldId = idColumn.getKey();
-            ColumnStatistic columnStatistic =
-                    generateColumnStatistic(icebergFileStats, fieldId, recordCount, columnList.get(0));
-            statisticsBuilder.addColumnStatistic(columnList.get(0), columnStatistic);
+                int fieldId = idColumn.getKey();
+                ColumnStatistic columnStatistic = icebergFileStats == null ? ColumnStatistic.unknown() :
+                        generateColumnStatistic(icebergFileStats, fieldId, recordCount, columnList.get(0));
+                statisticsBuilder.addColumnStatistic(columnList.get(0), columnStatistic);
+            }
+            statisticsBuilder.setOutputRowCount(recordCount);
+        } catch (Exception e) {
+            LOG.warn("Failed to get table column statistics on [{}]. error : {}", icebergTable, e);
         }
-        statisticsBuilder.setOutputRowCount(recordCount);
+
+        Preconditions.checkState(columns.size() == statisticsBuilder.build().getColumnStatistics().size());
         LOG.debug("Finish to make iceberg table statistics!");
         return statisticsBuilder.build();
     }

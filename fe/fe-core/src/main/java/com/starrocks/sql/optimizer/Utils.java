@@ -345,21 +345,24 @@ public class Utils {
                 }
                 return true;
             } else if (operator instanceof LogicalIcebergScanOperator) {
-                IcebergTable table = (IcebergTable) scanOperator.getTable();
-                try {
-                    List<ScalarOperator> predicates = Utils.extractConjuncts(operator.getPredicate());
-                    Types.StructType schema = table.getIcebergTable().schema().asStruct();
-                    ScalarOperatorToIcebergExpr.IcebergContext icebergContext =
-                            new ScalarOperatorToIcebergExpr.IcebergContext(schema);
-                    Expression icebergPredicate = new ScalarOperatorToIcebergExpr().convert(predicates, icebergContext);
-                    List<ColumnStatistic> columnStatisticList = IcebergTableStatisticCalculator.getColumnStatistics(
-                            icebergPredicate, table.getIcebergTable(),
-                            scanOperator.getColRefToColumnMetaMap());
-                    return columnStatisticList.stream().anyMatch(ColumnStatistic::isUnknown);
-                } catch (Exception e) {
-                    LOG.warn("Iceberg table {} get column failed. error : {}", table.getName(), e);
-                    return true;
+                if (ConnectContext.get().getSessionVariable().enableHiveColumnStats()) {
+                    IcebergTable table = (IcebergTable) scanOperator.getTable();
+                    try {
+                        List<ScalarOperator> predicates = Utils.extractConjuncts(operator.getPredicate());
+                        Types.StructType schema = table.getIcebergTable().schema().asStruct();
+                        ScalarOperatorToIcebergExpr.IcebergContext icebergContext =
+                                new ScalarOperatorToIcebergExpr.IcebergContext(schema);
+                        Expression icebergPredicate = new ScalarOperatorToIcebergExpr().convert(predicates, icebergContext);
+                        List<ColumnStatistic> columnStatisticList = IcebergTableStatisticCalculator.getColumnStatistics(
+                                icebergPredicate, table.getIcebergTable(),
+                                scanOperator.getColRefToColumnMetaMap());
+                        return columnStatisticList.stream().anyMatch(ColumnStatistic::isUnknown);
+                    } catch (Exception e) {
+                        LOG.warn("Iceberg table {} get column failed. error : {}", table.getName(), e);
+                        return true;
+                    }
                 }
+                return true;
             } else {
                 // For other scan operators, we do not know the column statistics.
                 return true;
