@@ -316,7 +316,7 @@ public class IcebergUtil {
                     }
             );
             return new IcebergTable(CONNECTOR_ID_GENERATOR.getNextId().asInt(), icebergTable,
-                    true, icebergTable.name(), fullSchema, properties);
+                    true, properties.get(IcebergTable.ICEBERG_TABLE), fullSchema, properties);
         } catch (Exception e) {
             throw new DdlException("iceberg table is not found.", e);
         }

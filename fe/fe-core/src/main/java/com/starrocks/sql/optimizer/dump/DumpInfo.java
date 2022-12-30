@@ -15,6 +15,8 @@ public interface DumpInfo {
 
     default void addException(String exception) {
     }
+    default void addCatalog(String catalog) {
+    }
 
     default void addTable(String dbName, Table table) {
     }

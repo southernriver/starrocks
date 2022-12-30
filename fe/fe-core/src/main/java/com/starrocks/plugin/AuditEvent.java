@@ -70,6 +70,8 @@ public class AuditEvent {
     public String catalog = "";
     @AuditField(value = "Db")
     public String db = "";
+    @AuditField(value = "Table")
+    public String table = "";
     @AuditField(value = "State")
     public String state = "";
     @AuditField(value = "ErrorCode")
@@ -104,7 +106,8 @@ public class AuditEvent {
     public double planMemCosts = -1;
     @AuditField(value = "PendingTimeMs")
     public long pendingTimeMs = -1;
-
+    @AuditField(value = "Exception")
+    public String exception = "";
     public static class AuditEventBuilder {
 
         private AuditEvent auditEvent = new AuditEvent();
@@ -153,6 +156,11 @@ public class AuditEvent {
 
         public AuditEventBuilder setDb(String db) {
             auditEvent.db = db;
+            return this;
+        }
+
+        public AuditEventBuilder setTable(String table) {
+            auditEvent.table = table;
             return this;
         }
 
@@ -241,6 +249,11 @@ public class AuditEvent {
 
         public AuditEventBuilder setPendingTimeMs(long pendingTimeMs) {
             auditEvent.pendingTimeMs = pendingTimeMs;
+            return this;
+        }
+
+        public AuditEventBuilder setException(String exception) {
+            auditEvent.exception = exception;
             return this;
         }
 

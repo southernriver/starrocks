@@ -11,6 +11,7 @@ import com.starrocks.common.Pair;
 import com.starrocks.qe.SessionVariable;
 import com.starrocks.qe.VariableMgr;
 import com.starrocks.sql.optimizer.statistics.ColumnStatistic;
+import org.apache.commons.lang3.StringUtils;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -19,10 +20,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 public class QueryDumpInfo implements DumpInfo {
     private String originStmt = "";
     private final Set<Resource> resourceSet = new HashSet<>();
+    private final Set<String> catalogSet = new HashSet<>();
     // tableId-><dbName, table>
     private final Map<Long, Pair<String, Table>> tableMap = new HashMap<>();
     // resourceName->dbName->tableName->externalTable
@@ -115,6 +118,7 @@ public class QueryDumpInfo implements DumpInfo {
     @Override
     public void reset() {
         this.originStmt = "";
+        this.catalogSet.clear();
         this.tableMap.clear();
         this.partitionRowCountMap.clear();
         this.tableStatisticsMap.clear();
@@ -178,6 +182,15 @@ public class QueryDumpInfo implements DumpInfo {
     public Map<Long, Pair<String, Table>> getTableMap() {
         return tableMap;
     }
+    public String getDbNames() {
+        return StringUtils.join(
+            tableMap.values().stream().map(p -> p.first).collect(Collectors.toList()), ",");
+    }
+
+    public String getTables() {
+        return StringUtils.join(
+            tableMap.values().stream().map(p -> p.second.getName()).collect(Collectors.toList()), ",");
+    }
 
     public Map<Long, Pair<String, View>> getViewMap() {
         return viewMap;
@@ -212,6 +225,15 @@ public class QueryDumpInfo implements DumpInfo {
 
     public List<String> getCreateResourceStmtList() {
         return createResourceStmtList;
+    }
+
+    @Override
+    public void addCatalog(String catalog) {
+        catalogSet.add(catalog);
+    }
+
+    public Set<String> getCatalog() {
+        return catalogSet;
     }
 
     @Override
