@@ -215,6 +215,7 @@ public class IcebergScanNode extends ScanNode {
     public void setupScanRangeLocations() throws UserException {
         Optional<Snapshot> snapshot = IcebergUtil.getCurrentTableSnapshot(
                 srIcebergTable.getIcebergTable());
+        long startPlanTaskTime = System.currentTimeMillis();
         if (!snapshot.isPresent()) {
             LOG.info(String.format("Table %s has no snapshot!", srIcebergTable.getTable()));
             return;
@@ -276,6 +277,8 @@ public class IcebergScanNode extends ScanNode {
         }
 
         scanNodePredicates.setSelectedPartitionIds(partitionMap.values());
+        long planTaskTime = System.currentTimeMillis() - startPlanTaskTime;
+        LOG.info("Total planning task duration for table {} is {}ms.", srIcebergTable.getTable(),  planTaskTime);
     }
 
     public HDFSScanNodePredicates getScanNodePredicates() {

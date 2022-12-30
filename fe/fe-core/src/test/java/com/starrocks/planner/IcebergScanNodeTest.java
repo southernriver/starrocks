@@ -139,7 +139,11 @@ public class IcebergScanNodeTest {
             public TableScan getTableScan(Table table,
                                           Snapshot snapshot,
                                           Expression icebergPredicate) {
-                return new DataTableScan(null, iTable);
+                TableScan tableScan = table.newScan().useSnapshot(snapshot.snapshotId()).includeColumnStats();
+                if (icebergPredicate != null) {
+                    tableScan = tableScan.filter(icebergPredicate);
+                }
+                return tableScan;
             }
         };
 

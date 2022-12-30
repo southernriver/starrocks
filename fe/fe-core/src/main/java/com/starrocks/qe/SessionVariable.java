@@ -237,6 +237,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     public static final String CBO_DEBUG_ALIVE_BACKEND_NUMBER = "cbo_debug_alive_backend_number";
     public static final String ENABLE_OPTIMIZER_REWRITE_GROUPINGSETS_TO_UNION_ALL =
             "enable_rewrite_groupingsets_to_union_all";
+    public static final String ENABLE_ICEBRG_METADATA_ALLUXIO_CACHE = "enable_iceberg_metadata_alluxio_cache";
 
     // --------  New planner session variables end --------
 
@@ -671,6 +672,9 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VariableMgr.VarAttr(name = ENABLE_OPTIMIZER_REWRITE_GROUPINGSETS_TO_UNION_ALL)
     private boolean enableRewriteGroupingSetsToUnionAll = false;
+
+    @VariableMgr.VarAttr(name = ENABLE_ICEBRG_METADATA_ALLUXIO_CACHE)
+    private boolean enableIcebergMetadataAlluxioCache = true;
 
     // value should be 0~4
     // 0 represents automatic selection, and 1, 2, 3, and 4 represent forced selection of AGG of
@@ -1402,10 +1406,17 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
         this.enableRewriteGroupingSetsToUnionAll = enableRewriteGroupingSetsToUnionAll;
     }
 
+    public boolean isEnableIcebergMetadataAlluxioCache() {
+        return enableIcebergMetadataAlluxioCache;
+    }
+
     public void setEnableLowCardinalityOptimize(boolean enableLowCardinalityOptimize) {
         this.enableLowCardinalityOptimize = enableLowCardinalityOptimize;
     }
 
+    public void setEnableIcebergMetadataAlluxioCache(boolean enableIcebergMetadataAlluxioCache) {
+        this.enableIcebergMetadataAlluxioCache = enableIcebergMetadataAlluxioCache;
+    }
     public boolean isEnableColumnExprPredicate() {
         return enableColumnExprPredicate;
     }

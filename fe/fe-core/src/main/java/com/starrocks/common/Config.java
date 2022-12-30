@@ -1659,10 +1659,16 @@ public class Config extends ConfigBase {
     public static boolean enable_iceberg_custom_worker_thread = false;
 
     /**
+     *  Controls whether to use local caching during manifest reads or not.
+     */
+    @ConfField(mutable = true)
+    public static boolean enable_iceberg_io_manifest_cache = true;
+
+    /**
      * size of iceberg worker pool
      */
     @ConfField(mutable = true)
-    public static long iceberg_worker_num_threads = 64;
+    public static int iceberg_worker_num_threads = 64;
 
     /**
      * size of iceberg table refresh pool

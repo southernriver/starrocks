@@ -19,6 +19,8 @@ import com.starrocks.common.DdlException;
 import com.starrocks.connector.HdfsEnvironment;
 import com.starrocks.connector.hive.RemoteFileInputFormat;
 import com.starrocks.connector.iceberg.glue.IcebergGlueCatalog;
+import com.starrocks.qe.ConnectContext;
+import com.starrocks.qe.SessionVariable;
 import org.apache.iceberg.BaseTable;
 import org.apache.iceberg.FileFormat;
 import org.apache.iceberg.FileScanTask;
@@ -27,6 +29,7 @@ import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.StructLike;
 import org.apache.iceberg.Table;
+import org.apache.iceberg.TableProperties;
 import org.apache.iceberg.TableScan;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.exceptions.NoSuchTableException;
@@ -35,6 +38,7 @@ import org.apache.iceberg.types.Types;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -42,6 +46,8 @@ import java.util.Map;
 import java.util.Optional;
 
 import static com.starrocks.connector.hive.HiveMetastoreApiConverter.CONNECTOR_ID_GENERATOR;
+import static org.apache.iceberg.TableProperties.READ_ALLUXIO_CACHE_URI;
+import static org.apache.iceberg.TableProperties.READ_ALLUXIO_CACHE_URI_DEFAULT;
 
 public class IcebergUtil {
     private static final Logger LOG = LogManager.getLogger(IcebergUtil.class);
@@ -156,7 +162,25 @@ public class IcebergUtil {
             tableScan = tableScan.filter(icebergPredicate);
         }
 
+        String alluxioUri = table.properties().getOrDefault(READ_ALLUXIO_CACHE_URI, READ_ALLUXIO_CACHE_URI_DEFAULT);
+        SessionVariable sessionVariable = ConnectContext.get().getSessionVariable();
+        if (sessionVariable.isEnableIcebergMetadataAlluxioCache() && isMountedHdfsToAlluxio(table, alluxioUri)) {
+            tableScan = tableScan.option(TableProperties.READ_METADATA_ALLUXIO_CACHE_ENABLED, "true");
+        }
         return tableScan;
+    }
+
+    public static boolean isMountedHdfsToAlluxio(Table table, String alluxioUri) {
+        URI pathUri = URI.create(table.location());
+        String mountedAlluxioUri = String.format("%s/%s", alluxioUri, pathUri.getHost());
+        boolean isMountedtoAlluxio = false;
+        try {
+            isMountedtoAlluxio = table.io().newInputFile(mountedAlluxioUri).exists();
+        } catch (Exception exception) {
+            LOG.error("Failed to check existence for file: {} of table: {}",
+                    mountedAlluxioUri, table.name());
+        }
+        return isMountedtoAlluxio;
     }
 
     public static void refreshTable(Table table) {

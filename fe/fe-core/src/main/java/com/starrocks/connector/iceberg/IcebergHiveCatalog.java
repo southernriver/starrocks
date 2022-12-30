@@ -6,6 +6,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.IcebergTable;
+import com.starrocks.common.Config;
 import com.starrocks.connector.HdfsEnvironment;
 import com.starrocks.connector.iceberg.hive.CachedClientPool;
 import com.starrocks.connector.iceberg.hive.HiveTableOperations;
@@ -114,9 +115,12 @@ public class IcebergHiveCatalog extends BaseMetastoreCatalog implements IcebergC
                 fileIOImpl == null ? new HadoopFileIO(conf) : CatalogUtil.loadFileIO(fileIOImpl, properties, conf);
 
         // warp cache fileIO
-        IcebergCachingFileIO cachingFileIO = new IcebergCachingFileIO(fileIO);
-        cachingFileIO.initialize(properties);
-        this.fileIO = cachingFileIO;
+        if (Config.enable_iceberg_io_manifest_cache) {
+            LOG.info("As enable_iceberg_io_manifest_cache is set to true, use FileIO-level cache on FE server.");
+            IcebergCachingFileIO cachingFileIO = new IcebergCachingFileIO(fileIO);
+            cachingFileIO.initialize(properties);
+            this.fileIO = cachingFileIO;
+        }
 
         this.clients = new CachedClientPool(conf, properties);
     }
