@@ -78,10 +78,11 @@ public class StreamLoadPlanner {
     // destination Db and table get from request
     // Data will load to this table
     private Database db;
-    private OlapTable destTable;
-    private StreamLoadInfo streamLoadInfo;
 
-    private Analyzer analyzer;
+    protected OlapTable destTable;
+    protected StreamLoadInfo streamLoadInfo;
+
+    protected Analyzer analyzer;
     private DescriptorTable descTable;
 
     public StreamLoadPlanner(Database db, OlapTable destTable, StreamLoadInfo streamLoadInfo) {
@@ -148,11 +149,7 @@ public class StreamLoadPlanner {
         }
 
         // create scan node
-        StreamLoadScanNode scanNode =
-                new StreamLoadScanNode(loadId, new PlanNodeId(0), tupleDesc, destTable, streamLoadInfo);
-        scanNode.setUseVectorizedLoad(true);
-        scanNode.init(analyzer);
-        scanNode.finalizeStats(analyzer);
+        ScanNode scanNode = createScanNode(loadId, tupleDesc);
 
         descTable.computeMemLayout();
 
@@ -229,7 +226,6 @@ public class StreamLoadPlanner {
         queryGlobals.setTime_zone(streamLoadInfo.getTimezone());
         params.setQuery_globals(queryGlobals);
 
-
         LOG.info("load job id: {} tx id {} parallel {} compress {} replicated {} quorum {}", DebugUtil.printId(loadId),
                 streamLoadInfo.getTxnId(),
                 queryOptions.getLoad_dop(),
@@ -262,5 +258,15 @@ public class StreamLoadPlanner {
         }
 
         return partitionIds;
+    }
+
+    protected ScanNode createScanNode(TUniqueId loadId, TupleDescriptor tupleDesc)
+            throws UserException {
+        StreamLoadScanNode scanNode =
+                new StreamLoadScanNode(loadId, new PlanNodeId(0), tupleDesc, destTable, streamLoadInfo);
+        scanNode.setUseVectorizedLoad(true);
+        scanNode.init(analyzer);
+        scanNode.finalizeStats(analyzer);
+        return scanNode;
     }
 }

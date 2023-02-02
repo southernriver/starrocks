@@ -169,12 +169,14 @@ public class RoutineLoadTaskScheduler extends LeaderDaemon {
         }
 
         try {
-            // for kafka/pulsar/tube routine load, readyToExecute means there is new data in kafka/pulsar stream
+            // for kafka/pulsar/tube/iceberg routine load, readyToExecute means there is new data in kafka/pulsar stream
             if (!routineLoadTaskInfo.readyToExecute()) {
                 String msg = "";
                 if (routineLoadTaskInfo instanceof KafkaTaskInfo || routineLoadTaskInfo instanceof PulsarTaskInfo
-                        || routineLoadTaskInfo instanceof TubeTaskInfo) {
-                    msg = String.format("there is no new data in kafka/pulsar/tube, wait for %d seconds to schedule again",
+                        || routineLoadTaskInfo instanceof TubeTaskInfo
+                        || routineLoadTaskInfo instanceof IcebergTaskInfo) {
+                    msg = String.format("there is no new data in kafka/pulsar/tube/iceberg, " +
+                                    "wait for %d seconds to schedule again",
                             routineLoadTaskInfo.getTaskScheduleIntervalMs() / 1000);
                 }
                 delayPutToQueue(routineLoadTaskInfo, msg);
@@ -258,10 +260,12 @@ public class RoutineLoadTaskScheduler extends LeaderDaemon {
                 LOG.debug("send pulsar routine load task {} with partitions: {}, job: {}",
                         tRoutineLoadTask.label, tRoutineLoadTask.pulsar_load_info.partitions,
                         tRoutineLoadTask.getJob_id());
-            }  else if (tRoutineLoadTask.isSetTube_load_info()) {
+            } else if (tRoutineLoadTask.isSetTube_load_info()) {
                 LOG.debug("send tube routine load task {} with topic: {}, job: {}",
                         tRoutineLoadTask.label, tRoutineLoadTask.tube_load_info.topic,
                         tRoutineLoadTask.getJob_id());
+            } else if (tRoutineLoadTask.isSetIceberg_load_info()) {
+                LOG.debug("send iceberg routine load task {}", tRoutineLoadTask.getJob_id());
             }
         } catch (LoadException e) {
             // submit task failed (such as TOO_MANY_TASKS error), but txn has already begun.

@@ -200,6 +200,9 @@ public class RoutineLoadManager implements Writable {
             case TUBE:
                 routineLoadJob = TubeRoutineLoadJob.fromCreateStmt(createRoutineLoadStmt);
                 break;
+            case ICEBERG:
+                routineLoadJob = IcebergRoutineLoadJob.fromCreateStmt(createRoutineLoadStmt);
+                break;
             default:
                 throw new UserException("Unknown data source type: " + type);
         }

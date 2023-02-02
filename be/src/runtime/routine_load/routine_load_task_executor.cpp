@@ -303,6 +303,9 @@ Status RoutineLoadTaskExecutor::submit_task(const TRoutineLoadTask& task) {
         }
         ctx->tube_info = std::make_unique<TubeLoadInfo>(task.tube_load_info);
         break;
+    case TLoadSourceType::ICEBERG:
+        ctx->iceberg_info = std::make_unique<IcebergLoadInfo>(task.iceberg_load_info);
+        break;
     default:
         LOG(WARNING) << "unknown load source type: " << task.type;
         delete ctx;
@@ -368,7 +371,11 @@ void RoutineLoadTaskExecutor::exec_task(StreamLoadContext* ctx, DataConsumerPool
 
     // create data consumer group
     std::shared_ptr<DataConsumerGroup> consumer_grp;
-    HANDLE_ERROR(consumer_pool->get_consumer_grp(ctx, &consumer_grp), "failed to get consumers");
+    if (ctx->load_src_type == TLoadSourceType::ICEBERG) {
+        // nothing to do
+    } else {
+        HANDLE_ERROR(consumer_pool->get_consumer_grp(ctx, &consumer_grp), "failed to get consumers");
+    }
 
     // create and set pipe
     std::shared_ptr<StreamLoadPipe> pipe;
@@ -398,6 +405,10 @@ void RoutineLoadTaskExecutor::exec_task(StreamLoadContext* ctx, DataConsumerPool
         pipe = std::make_shared<TubeConsumerPipe>();
         break;
     }
+    case TLoadSourceType::ICEBERG: {
+        // nothing to do
+        break;
+    }
     default: {
         std::stringstream ss;
         ss << "unknown routine load task type: " << ctx->load_type;
@@ -422,6 +433,8 @@ void RoutineLoadTaskExecutor::exec_task(StreamLoadContext* ctx, DataConsumerPool
     if (ctx->load_src_type == TLoadSourceType::TUBE) {
         // start to consume, this may block a while
         HANDLE_ERROR_AND_RETURN_CONSUMER(consumer_grp->start_all(ctx), consumer_pool, consumer_grp, "consuming failed");
+    } else if (ctx->load_src_type == TLoadSourceType::ICEBERG) {
+        // nothing to do
     } else {
         // start to consume, this may block a while
         HANDLE_ERROR(consumer_grp->start_all(ctx), "consuming failed");
@@ -432,9 +445,13 @@ void RoutineLoadTaskExecutor::exec_task(StreamLoadContext* ctx, DataConsumerPool
 
     ctx->load_cost_nanos = MonotonicNanos() - ctx->start_nanos;
 
-    // return the consumer back to pool
-    // call this before commit txn, in case the next task can come very fast
-    consumer_pool->return_consumers(consumer_grp.get());
+    if (ctx->load_src_type == TLoadSourceType::ICEBERG) {
+        // nothing to do
+    } else {
+        // return the consumer back to pool
+        // call this before commit txn, in case the next task can come very fast
+        consumer_pool->return_consumers(consumer_grp.get());
+    }
 
     // commit txn
     HANDLE_ERROR(_exec_env->stream_load_executor()->commit_txn(ctx), "commit failed");
@@ -508,6 +525,9 @@ void RoutineLoadTaskExecutor::exec_task(StreamLoadContext* ctx, DataConsumerPool
     case TLoadSourceType::TUBE: {
         // Cumulative confirm is not supported by tubemq, but we need to break here and
         // call cb(ctx) at last
+    } break;
+    case TLoadSourceType::ICEBERG: {
+        // nothing to do
     } break;
     default:
         return;

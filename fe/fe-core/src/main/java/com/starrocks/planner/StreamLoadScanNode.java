@@ -42,6 +42,7 @@ import com.starrocks.catalog.Type;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.UserException;
 import com.starrocks.common.Config;
+import com.starrocks.common.UserException;
 import com.starrocks.load.Load;
 import com.starrocks.load.streamload.StreamLoadInfo;
 import com.starrocks.server.GlobalStateMgr;
@@ -77,7 +78,7 @@ import static com.starrocks.catalog.DefaultExpr.SUPPORTED_DEFAULT_FNS;
 public class StreamLoadScanNode extends LoadScanNode {
     private static final Logger LOG = LogManager.getLogger(StreamLoadScanNode.class);
 
-    private TUniqueId loadId;
+    protected TUniqueId loadId;
     // TODO(zc): now we use scanRange
     // input parameter
     private Table dstTable;
@@ -129,7 +130,7 @@ public class StreamLoadScanNode extends LoadScanNode {
     }
 
     public StreamLoadScanNode(
-            TUniqueId loadId, PlanNodeId id, TupleDescriptor tupleDesc, Table dstTable, 
+            TUniqueId loadId, PlanNodeId id, TupleDescriptor tupleDesc, Table dstTable,
             StreamLoadInfo streamLoadInfo, String dbName, String label, int numInstances, long txnId) {
         super(id, tupleDesc, "StreamLoadScanNode");
         this.loadId = loadId;

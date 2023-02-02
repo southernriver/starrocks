@@ -27,6 +27,7 @@ import com.google.common.collect.Maps;
 import com.google.gson.annotations.SerializedName;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Pair;
+import com.starrocks.load.routineload.IcebergCreateRoutineLoadStmtConfig;
 import com.starrocks.load.routineload.LoadDataSourceType;
 import com.starrocks.sql.ast.CreateRoutineLoadStmt;
 import org.apache.logging.log4j.LogManager;
@@ -56,6 +57,9 @@ public class RoutineLoadDataSourceProperties {
             .add(CreateRoutineLoadStmt.TUBE_CONSUME_POSITION)
             .build();
 
+    private static final ImmutableSet<String> CONFIGURABLE_ICEBERG_PROPERTIES_SET = new ImmutableSet.Builder<String>()
+            .build();
+
     @SerializedName(value = "type")
     private String type = "KAFKA";
     // origin properties, no need to persist
@@ -70,6 +74,8 @@ public class RoutineLoadDataSourceProperties {
     private List<Pair<String, Long>> pulsarPartitionInitialPositions = Lists.newArrayList();
     @SerializedName(value = "customPulsarProperties")
     private Map<String, String> customPulsarProperties = Maps.newHashMap();
+    @SerializedName(value = "customIcebergProperties")
+    private Map<String, String> customIcebergProperties = Maps.newHashMap();
 
     @SerializedName(value = "tubeConsumePosition")
     private Integer tubeConsumePosition = null;
@@ -94,6 +100,8 @@ public class RoutineLoadDataSourceProperties {
             return !pulsarPartitionInitialPositions.isEmpty() || !customPulsarProperties.isEmpty();
         } else if (type.equals("TUBE")) {
             return tubeConsumePosition != null;
+        } else if (type.equals("ICEBERG")) {
+            return !customIcebergProperties.isEmpty();
         } else {
             return false;
         }
@@ -123,6 +131,10 @@ public class RoutineLoadDataSourceProperties {
         return tubeConsumePosition;
     }
 
+    public Map<String, String> getCustomIcebergProperties() {
+        return customIcebergProperties;
+    }
+
     private void checkDataSourceProperties() throws AnalysisException {
         LoadDataSourceType sourceType;
         try {
@@ -139,6 +151,9 @@ public class RoutineLoadDataSourceProperties {
                 break;
             case TUBE:
                 checkTubeProperties();
+                break;
+            case ICEBERG:
+                checkIcebergProperties();
                 break;
             default:
                 break;
@@ -227,6 +242,17 @@ public class RoutineLoadDataSourceProperties {
         }
     }
 
+    private void checkIcebergProperties() throws AnalysisException {
+        Optional<String> optional = properties.keySet().stream().filter(
+                entity -> !CONFIGURABLE_ICEBERG_PROPERTIES_SET.contains(entity)).filter(
+                entity -> !entity.startsWith("property.")).findFirst();
+        if (optional.isPresent()) {
+            throw new AnalysisException(optional.get() + " is invalid iceberg custom property");
+        }
+
+        IcebergCreateRoutineLoadStmtConfig.analyzeIcebergCustomProperties(properties, customIcebergProperties);
+    }
+
     @Override
     public String toString() {
         if (!hasAnalyzedProperties()) {
@@ -247,6 +273,8 @@ public class RoutineLoadDataSourceProperties {
             if (tubeConsumePosition != null) {
                 sb.append(", tube consume position: ").append(tubeConsumePosition);
             }
+        } else if (type.equals("ICEBERG")) {
+            sb.append(", custom properties: ").append(customIcebergProperties);
         }
         return sb.toString();
     }

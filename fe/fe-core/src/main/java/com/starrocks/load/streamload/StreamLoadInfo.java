@@ -364,6 +364,10 @@ public class StreamLoadInfo {
         return streamLoadInfo;
     }
 
+    public void setTimeout(int timeout) {
+        this.timeout = timeout;
+    }
+
     private void setOptionalFromRoutineLoadJob(RoutineLoadJob routineLoadJob) throws UserException {
         // copy the columnExprDescs, cause it may be changed when planning.
         // so we keep the columnExprDescs in routine load job as origin.

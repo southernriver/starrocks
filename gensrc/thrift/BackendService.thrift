@@ -68,6 +68,21 @@ struct TTubeLoadInfo {
     5: optional i32 consume_position;
 }
 
+struct TIcebergSplit {
+    1: required i64 start_snapshot_id;
+    2: required i64 end_snapshot_id;
+    3: required i64 end_snapshot_timestamp;
+    4: required i32 total_splits;
+    5: required i64 offset;
+    6: required i64 length;
+    7: required i64 fileSize;
+    8: required string path;
+}
+
+struct TIcebergLoadInfo {
+    1: required list<TIcebergSplit> splits;
+}
+
 struct TRoutineLoadTask {
     1: required Types.TLoadSourceType type
     2: required i64 job_id
@@ -85,6 +100,7 @@ struct TRoutineLoadTask {
     14: optional PlanNodes.TFileFormatType format
     15: optional TPulsarLoadInfo pulsar_load_info
     16: optional TTubeLoadInfo tube_load_info
+    17: optional TIcebergLoadInfo iceberg_load_info
 }
 
 struct TKafkaMetaProxyRequest {

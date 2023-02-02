@@ -626,6 +626,21 @@ struct TTubeRLTaskProgress {
     1: required map<string,i64> partitionCmtOffset
 }
 
+struct TIcebergRLTaskProgressSplit {
+    1: required i64 start_snapshot_id;
+    2: required i64 end_snapshot_id;
+    3: required i64 end_snapshot_timestamp;
+    4: required i32 total_splits;
+    5: required i64 offset;
+    6: required i64 length;
+    7: required i64 fileSize;
+    8: required string path;
+}
+
+struct TIcebergRLTaskProgress {
+    1: required list<TIcebergRLTaskProgressSplit> splits
+}
+
 struct TRLTaskStatistics {
     1: required i64 consumeTime
     2: required i64 blockingGetTime
@@ -648,7 +663,8 @@ struct TRLTaskTxnCommitAttachment {
     11: optional string errorLogUrl
     12: optional TPulsarRLTaskProgress pulsarRLTaskProgress
     13: optional TTubeRLTaskProgress tubeRLTaskProgress
-    14: optional TRLTaskStatistics statistics
+    14: optional TIcebergRLTaskProgress icebergRLTaskProgress
+    15: optional TRLTaskStatistics statistics
 }
 
 struct TMiniLoadTxnCommitAttachment {

@@ -69,6 +69,9 @@ public class RLTaskTxnCommitAttachment extends TxnCommitAttachment {
             case TUBE:
                 this.progress = new TubeProgress(rlTaskTxnCommitAttachment.getTubeRLTaskProgress());
                 break;
+            case ICEBERG:
+                this.progress = new IcebergProgress(rlTaskTxnCommitAttachment.getIcebergRLTaskProgress());
+                break;
             default:
                 break;
         }

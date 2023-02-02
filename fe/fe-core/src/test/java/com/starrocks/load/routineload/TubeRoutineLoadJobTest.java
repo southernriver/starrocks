@@ -152,7 +152,7 @@ public class TubeRoutineLoadJobTest {
 
         CreateRoutineLoadStmt createRoutineLoadStmt = new CreateRoutineLoadStmt(labelName, tableNameString,
                 loadPropertyList, properties,
-                typeName, customProperties);
+                typeName, customProperties, null);
         Deencapsulation.setField(createRoutineLoadStmt, "name", jobName);
         return createRoutineLoadStmt;
     }

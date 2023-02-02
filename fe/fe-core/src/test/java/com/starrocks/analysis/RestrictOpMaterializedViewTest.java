@@ -145,7 +145,7 @@ public class RestrictOpMaterializedViewTest {
         LabelName labelName = new LabelName("db1", "job1");
         CreateRoutineLoadStmt createRoutineLoadStmt = new CreateRoutineLoadStmt(labelName, "mv1",
                 new ArrayList<>(), Maps.newHashMap(),
-                LoadDataSourceType.KAFKA.name(), Maps.newHashMap());
+                LoadDataSourceType.KAFKA.name(), Maps.newHashMap(), null);
 
         Deencapsulation.setField(createRoutineLoadStmt, "dbName", "db1");
 

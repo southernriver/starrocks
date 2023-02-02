@@ -1211,6 +1211,12 @@ public class Config extends ConfigBase {
     public static long routine_load_pulsar_timeout_second = 12;
 
     /**
+     * iceberg routine load job check split interval
+     */
+    @ConfField(mutable = true)
+    public static long routine_load_iceberg_split_check_interval_second = 10;
+
+    /**
      * it can't auto-resume routine load job as long as one of the backends is down
      */
     @ConfField(mutable = true)

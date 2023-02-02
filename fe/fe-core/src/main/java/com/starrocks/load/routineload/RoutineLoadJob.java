@@ -95,7 +95,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * This function is suitable for streaming load job which loading data continuously
  * The properties include stream load properties and job properties.
  * The desireTaskConcurrentNum means that user expect the number of concurrent stream load
- * The routine load job support different streaming medium such as KAFKA, Pulsar and Tube
+ * The routine load job support different streaming medium such as KAFKA, Pulsar, Tube and iceberg
  */
 public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback implements Writable {
     private static final Logger LOG = LogManager.getLogger(RoutineLoadJob.class);
@@ -903,8 +903,8 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
             long timeToExecuteMs;
             RLTaskTxnCommitAttachment rlTaskTxnCommitAttachment =
                     (RLTaskTxnCommitAttachment) txnState.getTxnCommitAttachment();
-            // isProgressKeepUp returns false means there is too much data in kafka/pulsar/tube stream,
-            // we set timeToExecuteMs to now, so that data not accumulated in kafka/pulsar/tube
+            // isProgressKeepUp returns false means there is too much data in kafka/pulsar/tube/iceberg stream,
+            // we set timeToExecuteMs to now, so that data not accumulated in kafka/pulsar/tube/iceberg
             if (!routineLoadTaskInfo.isProgressKeepUp(rlTaskTxnCommitAttachment.getProgress())) {
                 timeToExecuteMs = System.currentTimeMillis();
             } else {
@@ -1176,7 +1176,7 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
         endTimestamp = System.currentTimeMillis();
     }
 
-    private void clearTasks() {
+    protected void clearTasks() {
         for (RoutineLoadTaskInfo task : routineLoadTaskInfoList) {
             if (task.getBeId() != RoutineLoadTaskInfo.INVALID_BE_ID) {
                 GlobalStateMgr.getCurrentState().getRoutineLoadManager().releaseBeTaskSlot(task.getBeId());
@@ -1407,6 +1407,8 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
             job = new PulsarRoutineLoadJob();
         } else if (type == LoadDataSourceType.TUBE) {
             job = new TubeRoutineLoadJob();
+        } else if (type == LoadDataSourceType.ICEBERG) {
+            job = new IcebergRoutineLoadJob();
         } else {
             throw new IOException("Unknown load data source type: " + type.name());
         }
@@ -1496,6 +1498,11 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
             }
             case TUBE: {
                 progress = new TubeProgress();
+                progress.readFields(in);
+                break;
+            }
+            case ICEBERG: {
+                progress = new IcebergProgress();
                 progress.readFields(in);
                 break;
             }

@@ -20,5 +20,6 @@ package com.starrocks.load.routineload;
 public enum LoadDataSourceType {
     KAFKA,
     PULSAR,
-    TUBE
+    TUBE,
+    ICEBERG
 }

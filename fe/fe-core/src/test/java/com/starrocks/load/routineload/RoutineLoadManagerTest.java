@@ -99,7 +99,7 @@ public class RoutineLoadManagerTest {
         customProperties.put(CreateRoutineLoadStmt.KAFKA_BROKER_LIST_PROPERTY, serverAddress);
         CreateRoutineLoadStmt createRoutineLoadStmt = new CreateRoutineLoadStmt(labelName, tableNameString,
                 loadPropertyList, properties,
-                typeName, customProperties);
+                typeName, customProperties, null);
         createRoutineLoadStmt.setOrigStmt(new OriginStatement("dummy", 0));
 
         KafkaRoutineLoadJob kafkaRoutineLoadJob = new KafkaRoutineLoadJob(1L, jobName, 1L, 1L,
@@ -168,7 +168,7 @@ public class RoutineLoadManagerTest {
         customProperties.put(CreateRoutineLoadStmt.KAFKA_BROKER_LIST_PROPERTY, serverAddress);
         CreateRoutineLoadStmt createRoutineLoadStmt = new CreateRoutineLoadStmt(labelName, tableNameString,
                 loadPropertyList, properties,
-                typeName, customProperties);
+                typeName, customProperties, null);
         createRoutineLoadStmt.setOrigStmt(new OriginStatement("dummy", 0));
 
         new Expectations() {

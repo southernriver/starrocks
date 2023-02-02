@@ -407,6 +407,31 @@ bool StreamLoadExecutor::collect_load_stat(StreamLoadContext* ctx, TTxnCommitAtt
         }
         return true;
     }
+    case TLoadSourceType::ICEBERG: {
+        TRLTaskTxnCommitAttachment& rl_attach = attach->rlTaskTxnCommitAttachment;
+        rl_attach.loadSourceType = TLoadSourceType::ICEBERG;
+
+        TIcebergRLTaskProgress iceberg_progress;
+        for (TIcebergSplit& split : ctx->iceberg_info->splits) {
+            TIcebergRLTaskProgressSplit progress_split;
+            progress_split.start_snapshot_id = split.start_snapshot_id;
+            progress_split.end_snapshot_id = split.end_snapshot_id;
+            progress_split.end_snapshot_timestamp = split.end_snapshot_timestamp;
+            progress_split.total_splits = split.total_splits;
+            progress_split.path = split.path;
+            progress_split.offset = split.offset;
+            progress_split.length = split.length;
+            progress_split.fileSize = split.fileSize;
+            iceberg_progress.splits.push_back(progress_split);
+        }
+
+        rl_attach.icebergRLTaskProgress = iceberg_progress;
+        rl_attach.__isset.icebergRLTaskProgress = true;
+        if (!ctx->error_url.empty()) {
+            rl_attach.__set_errorLogUrl(ctx->error_url);
+        }
+        return true;
+    }
     default:
         return true;
     }

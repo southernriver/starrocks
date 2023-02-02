@@ -146,6 +146,17 @@ public:
     std::map<std::string, int64_t> cmt_offset;
 };
 
+// iceberg related info
+class IcebergLoadInfo {
+public:
+    explicit IcebergLoadInfo(const TIcebergLoadInfo& t_info)
+            : splits(t_info.splits) {
+    }
+
+public:
+    std::vector<TIcebergSplit> splits;
+};
+
 class RoutineLoadTaskStatistics {
 public:
     explicit RoutineLoadTaskStatistics() {}
@@ -299,6 +310,7 @@ public:
     std::unique_ptr<PulsarLoadInfo> pulsar_info;
     std::unique_ptr<TubeLoadInfo> tube_info;
     RoutineLoadTaskStatistics rltask_statistics;
+    std::unique_ptr<IcebergLoadInfo> iceberg_info;
 
     std::vector<TTabletCommitInfo> commit_infos;
     std::vector<TTabletFailInfo> fail_infos;
