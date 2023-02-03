@@ -257,11 +257,8 @@ public class IcebergSplitDiscover {
         }
     }
 
-    public void start() {
+    private void recover() {
         Snapshot snapshot = iceTbl.currentSnapshot();
-        stopped.set(false);
-        // use new id, so that the old scheduled check can aborted automatically to avoid duplicate check
-        long nextId = scheduleSeqId.incrementAndGet();
         lock.writeLock().lock();
         try {
             List<IcebergSplitMeta> splitMetas = icebergProgress.recoverLastSnapshots();
@@ -270,7 +267,18 @@ public class IcebergSplitDiscover {
         } finally {
             lock.writeLock().unlock();
         }
-        scheduleCheckAndAddSplits(nextId);
+    }
+
+    public void start() {
+        stopped.set(false);
+        // use new id, so that the old scheduled check can aborted automatically to avoid duplicate check
+        long nextId = scheduleSeqId.incrementAndGet();
+
+        // planTasks() may cost a lot of time because it will visit hdfs.
+        // run addSplitsFromRecovery() is another thread to avoid block current thread
+        scheduledExecutorService.schedule(this::recover, 0, TimeUnit.MILLISECONDS);
+        scheduledExecutorService.schedule(() -> scheduleCheckAndAddSplits(nextId),
+                Config.routine_load_iceberg_split_check_interval_second, TimeUnit.SECONDS);
     }
 
     public void stop() {
