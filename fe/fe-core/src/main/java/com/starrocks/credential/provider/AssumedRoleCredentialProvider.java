@@ -33,7 +33,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.s3a.AWSCredentialProviderList;
 import org.apache.hadoop.fs.s3a.Constants;
-import org.apache.hadoop.fs.s3a.CredentialInitializationException;
 import org.apache.hadoop.fs.s3a.Invoker;
 import org.apache.hadoop.fs.s3a.Retries;
 import org.apache.hadoop.fs.s3a.S3ARetryPolicy;
@@ -175,23 +174,7 @@ public class AssumedRoleCredentialProvider implements AWSCredentialsProvider,
     @Override
     @Retries.RetryRaw
     public AWSCredentials getCredentials() {
-        try {
-            return invoker.retryUntranslated("getCredentials",
-                    true,
-                    stsProvider::getCredentials);
-        } catch (IOException e) {
-            // this is in the signature of retryUntranslated;
-            // its hard to see how this could be raised, but for
-            // completeness, it is wrapped as an Amazon Client Exception
-            // and rethrown.
-            throw new CredentialInitializationException(
-                    "getCredentials failed: " + e,
-                    e);
-        } catch (AWSSecurityTokenServiceException e) {
-            LOG.error("Failed to get credentials for role {}",
-                    arn, e);
-            throw e;
-        }
+        return null;
     }
 
     @Override

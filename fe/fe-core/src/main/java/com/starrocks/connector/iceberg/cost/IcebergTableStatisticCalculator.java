@@ -2,7 +2,6 @@
 
 package com.starrocks.connector.iceberg.cost;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.starrocks.catalog.Column;
 import com.starrocks.connector.iceberg.IcebergUtil;
@@ -139,8 +138,6 @@ public class IcebergTableStatisticCalculator {
         } catch (Exception e) {
             LOG.warn("Failed to get table column statistics on [{}]. error : {}", icebergTable, e);
         }
-
-        Preconditions.checkState(columns.size() == statisticsBuilder.build().getColumnStatistics().size());
         LOG.debug("Finish to make iceberg table statistics!");
         return statisticsBuilder.build();
     }
