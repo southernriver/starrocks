@@ -42,7 +42,8 @@ export STARROCKS_HOME=${ROOT}
 
 . ${STARROCKS_HOME}/env.sh
 
-if [[ ! -f ${STARROCKS_THIRDPARTY}/installed/include/fast_float/fast_float.h ]]; then
+#build thirdparty libraries if necessary
+if [[ ! -f ${STARROCKS_THIRDPARTY}/installed/include/datasketches/hll.hpp ]]; then
     echo "Thirdparty libraries need to be build ..."
     ${STARROCKS_THIRDPARTY}/build-thirdparty.sh
 fi

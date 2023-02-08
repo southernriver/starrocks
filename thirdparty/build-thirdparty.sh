@@ -507,8 +507,8 @@ build_rocksdb() {
     EXTRA_LDFLAGS="-static-libstdc++ -static-libgcc" \
     PORTABLE=1 make USE_RTTI=1 -j$PARALLEL static_lib
 
-    cp librocksdb.a $TP_LIB_DIR/librocksdb.a
-    cp -r include/rocksdb $TP_INCLUDE_DIR
+    cp librocksdb.a ../../installed/lib/librocksdb.a
+    cp -r include/rocksdb ../../installed/include/
 
     export CFLAGS=$OLD_FLAGS
 }
@@ -1006,6 +1006,22 @@ export CPPFLAGS="-I ${TP_INCLUDE_DIR}"
 # https://stackoverflow.com/questions/42597685/storage-size-of-timespec-isnt-known
 export CFLAGS="-O3 -fno-omit-frame-pointer -std=c99 -fPIC -g -D_POSIX_C_SOURCE=199309L"
 
+# datasketches
+build_datasketches() {
+    check_if_source_exist $DATASKETCHES_SOURCE
+    mkdir -p $TP_INSTALL_DIR/include/datasketches
+    cp -r $TP_SOURCE_DIR/$DATASKETCHES_SOURCE/common/include/* $TP_INSTALL_DIR/include/datasketches/
+    cp -r $TP_SOURCE_DIR/$DATASKETCHES_SOURCE/cpc/include/* $TP_INSTALL_DIR/include/datasketches/
+    cp -r $TP_SOURCE_DIR/$DATASKETCHES_SOURCE/fi/include/* $TP_INSTALL_DIR/include/datasketches/
+    cp -r $TP_SOURCE_DIR/$DATASKETCHES_SOURCE/hll/include/* $TP_INSTALL_DIR/include/datasketches/
+    cp -r $TP_SOURCE_DIR/$DATASKETCHES_SOURCE/kll/include/* $TP_INSTALL_DIR/include/datasketches/
+    cp -r $TP_SOURCE_DIR/$DATASKETCHES_SOURCE/quantiles/include/* $TP_INSTALL_DIR/include/datasketches/
+    cp -r $TP_SOURCE_DIR/$DATASKETCHES_SOURCE/req/include/* $TP_INSTALL_DIR/include/datasketches/
+    cp -r $TP_SOURCE_DIR/$DATASKETCHES_SOURCE/sampling/include/* $TP_INSTALL_DIR/include/datasketches/
+    cp -r $TP_SOURCE_DIR/$DATASKETCHES_SOURCE/theta/include/* $TP_INSTALL_DIR/include/datasketches/
+    cp -r $TP_SOURCE_DIR/$DATASKETCHES_SOURCE/tuple/include/* $TP_INSTALL_DIR/include/datasketches/
+}
+
 build_libevent
 build_zlib
 build_lz4
@@ -1053,6 +1069,7 @@ build_benchmark
 build_fast_float
 build_cachelib
 build_streamvbyte
+build_datasketches
 
 if [[ "${MACHINE_TYPE}" != "aarch64" ]]; then
     build_breakpad

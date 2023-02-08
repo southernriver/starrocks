@@ -501,4 +501,151 @@ void HyperLogLog::_merge_registers(uint8_t* other_registers) {
 #endif
 }
 
+DataSketchesHll::DataSketchesHll(const Slice& src) {
+    if (!deserialize(src)) {
+        LOG(WARNING) << "Failed to init DataSketchHll from slice, will be reset to 0.";
+    }
+}
+
+bool DataSketchesHll::is_valid(const Slice& slice) {
+    if (slice.size < 1) {
+        return false;
+    }
+
+    const uint8_t preInts = static_cast<const uint8_t*>((uint8_t*)slice.data)[0];
+    if (preInts == datasketches::hll_constants::HLL_PREINTS ||
+        preInts == datasketches::hll_constants::HASH_SET_PREINTS ||
+        preInts == datasketches::hll_constants::LIST_PREINTS) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+void DataSketchesHll::update(uint64_t hash_value) {
+    _sketch.update(hash_value);
+}
+
+void DataSketchesHll::merge(const DataSketchesHll& other) {
+    datasketches::hll_union u(MAX_HLL_LOG_K);
+    u.update(_sketch);
+    u.update(other._sketch);
+    _sketch = u.get_result(HLL_TGT_TYPE);
+}
+
+size_t DataSketchesHll::max_serialized_size() const {
+    return _sketch.get_max_updatable_serialization_bytes(HLL_LOG_K, HLL_TGT_TYPE);
+}
+
+size_t DataSketchesHll::serialize_size() const {
+    return _sketch.get_compact_serialization_bytes();
+}
+
+size_t DataSketchesHll::serialize(uint8_t* dst) const {
+    auto serialize_compact = _sketch.serialize_compact();
+    std::copy(serialize_compact.begin(), serialize_compact.end(), dst);
+    return _sketch.get_compact_serialization_bytes();
+}
+
+bool DataSketchesHll::deserialize(const Slice& slice) {
+    // can be called only when _sketch is empty
+    DCHECK(_sketch.is_empty());
+
+    // check if input length is valid
+    if (!is_valid(slice)) {
+        return false;
+    }
+
+    try {
+        _sketch = datasketches::hll_sketch::deserialize((uint8_t*)slice.data, slice.size);
+    } catch (std::logic_error& e) {
+        LOG(WARNING) << "DataSketchesHll deserialize error: " << e.what();
+        return false;
+    }
+
+    return true;
+}
+
+int64_t DataSketchesHll::estimate_cardinality() const {
+    return _sketch.get_estimate();
+}
+
+std::string DataSketchesHll::to_string() const {
+    return _sketch.to_string();
+}
+
+void HllSetResolver::parse() {
+    // skip LengthValueType
+    char* pdata = _buf_ref;
+    _set_type = (HllDataType)pdata[0];
+    char* sparse_data = nullptr;
+    switch (_set_type) {
+    case HLL_DATA_EXPLICIT:
+        // first byte : type
+        // second~five byte : hash values's number
+        // five byte later : hash value
+        _explicit_num = (ExpliclitLengthValueType)(pdata[sizeof(SetTypeValueType)]);
+        _explicit_value = (uint64_t*)(pdata + sizeof(SetTypeValueType) + sizeof(ExpliclitLengthValueType));
+        break;
+    case HLL_DATA_SPARSE:
+        // first byte : type
+        // second ~(2^HLL_COLUMN_PRECISION)/8 byte : bitmap mark which is not zero
+        // > 2^HLL_COLUMN_PRECISION)/8 + 1: value
+        _sparse_count = (SparseLengthValueType*)(pdata + sizeof(SetTypeValueType));
+        sparse_data = pdata + sizeof(SetTypeValueType) + sizeof(SparseLengthValueType);
+        for (int i = 0; i < *_sparse_count; i++) {
+            SparseIndexType* index = (SparseIndexType*)sparse_data;
+            sparse_data += sizeof(SparseIndexType);
+            SparseValueType* value = (SparseValueType*)sparse_data;
+            _sparse_map[*index] = *value;
+            sparse_data += sizeof(SetTypeValueType);
+        }
+        break;
+    case HLL_DATA_FULL:
+        // first byte : type
+        // second byte later : hll register value
+        _full_value_position = pdata + sizeof(SetTypeValueType);
+        break;
+    default:
+        // HLL_DATA_EMPTY
+        break;
+    }
+}
+
+void HllSetHelper::set_sparse(char* result, const std::map<int, uint8_t>& index_to_value, int* len) {
+    result[0] = HLL_DATA_SPARSE;
+    *len = sizeof(HllSetResolver::SetTypeValueType) + sizeof(HllSetResolver::SparseLengthValueType);
+    char* write_value_pos = result + *len;
+    for (auto iter : index_to_value) {
+        write_value_pos[0] = (char)(iter.first & 0xff);
+        write_value_pos[1] = (char)(iter.first >> 8 & 0xff);
+        write_value_pos[2] = iter.second;
+        write_value_pos += 3;
+    }
+    int registers_count = index_to_value.size();
+    *len += implicit_cast<int>(registers_count *
+                               (sizeof(HllSetResolver::SparseIndexType) + sizeof(HllSetResolver::SparseValueType)));
+    *(int*)(result + 1) = registers_count;
+}
+
+void HllSetHelper::set_explicit(char* result, const std::set<uint64_t>& hash_value_set, int* len) {
+    result[0] = HLL_DATA_EXPLICIT;
+    result[1] = (HllSetResolver::ExpliclitLengthValueType)(hash_value_set.size());
+    *len = sizeof(HllSetResolver::SetTypeValueType) + sizeof(HllSetResolver::ExpliclitLengthValueType);
+    char* write_pos = result + *len;
+    for (unsigned long hash_value : hash_value_set) {
+        *(uint64_t*)write_pos = hash_value;
+        write_pos += 8;
+    }
+    *len += implicit_cast<int>(sizeof(uint64_t) * hash_value_set.size());
+}
+
+void HllSetHelper::set_full(char* result, const std::map<int, uint8_t>& index_to_value, int registers_len, int* len) {
+    result[0] = HLL_DATA_FULL;
+    for (auto [idx, val] : index_to_value) {
+        result[1 + idx] = val;
+    }
+    *len = implicit_cast<int>(registers_len + sizeof(HllSetResolver::SetTypeValueType));
+}
+
 } // namespace starrocks

@@ -260,6 +260,7 @@ public class FunctionAnalyzer {
                 || fnName.getFunction().equals(FunctionSet.MAX)
                 || fnName.getFunction().equals(FunctionSet.NDV)
                 || fnName.getFunction().equals(FunctionSet.APPROX_COUNT_DISTINCT))
+                || fnName.getFunction().equals(FunctionSet.UNIQ_COMBINED))
                 && !arg.getType().canApplyToNumeric()) {
             throw new SemanticException(Type.ONLY_METRIC_TYPE_ERROR_MSG);
         }
