@@ -31,6 +31,7 @@
 #include "runtime/small_file_mgr.h"
 #include "service/backend_options.h"
 #include "util/defer_op.h"
+#include "util/monotime.h"
 #include "util/stopwatch.hpp"
 #include "util/uid_util.h"
 #include "tubemq/tubemq_errcode.h"
@@ -294,9 +295,41 @@ Status KafkaDataConsumer::get_partition_offset(std::vector<int32_t>* partition_i
             LOG(WARNING) << "failed to query watermark offset of topic: " << _topic << " partition: " << p_id
                          << ", err: " << RdKafka::err2str(err);
             return Status::InternalError("failed to query watermark offset, err: " + RdKafka::err2str(err));
+
+        // query_watermark_offsets() get offsets from local cache by default,
+        // but the cache might be expired when new partitions added, which will return ERR__UNKNOWN_PARTITION,
+        // add retry mechanism here to avoid the glitch.
+        int i = 0;
+        MonotonicStopWatch watch;
+        watch.start();
+        while (true) {
+            int64_t beginning_offset;
+            int64_t latest_offset;
+            // update timeout
+            timeout -= watch.elapsed_time() / 1000 / 1000;
+            RdKafka::ErrorCode err =
+                    _k_consumer->query_watermark_offsets(_topic, p_id, &beginning_offset, &latest_offset, timeout);
+            if (err != RdKafka::ERR_NO_ERROR) {
+                // add 200ms per iteration(200ms, 400ms, 600ms, 800ms)
+                // the interval between 1st and 4th retry will be longer than 2s. Enough for retry mechanism.
+                int sleep_time_ms = (i + 1) * 200;
+                if (err == RdKafka::ERR__UNKNOWN_PARTITION && sleep_time_ms <= 800) {
+                    LOG(WARNING) << "failed to query watermark offset of topic: " << _topic << " partition: " << p_id
+                                 << ", err: " << RdKafka::err2str(err) << ". will sleep " << sleep_time_ms
+                                 << "(ms) and retry.";
+                    SleepFor(MonoDelta::FromMilliseconds(sleep_time_ms));
+                    i++;
+                } else {
+                    LOG(WARNING) << "failed to query watermark offset of topic: " << _topic << " partition: " << p_id
+                                 << ", err: " << RdKafka::err2str(err);
+                    return Status::InternalError("failed to query watermark offset, err: " + RdKafka::err2str(err));
+                }
+            } else {
+                beginning_offsets->push_back(beginning_offset);
+                latest_offsets->push_back(latest_offset);
+                break;
+            }
         }
-        beginning_offsets->push_back(beginning_offset);
-        latest_offsets->push_back(latest_offset);
     }
 
     return Status::OK();
