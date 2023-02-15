@@ -72,7 +72,7 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
     private static final Logger LOG = LogManager.getLogger(IcebergRoutineLoadJob.class);
 
     public static final String ICEBERG_FILE_CATALOG = "iceberg";
-    private static final long DEFAULT_SPLIT_SIZE = 256 * 1024 * 1024; // 256 MB
+    private static final long DEFAULT_SPLIT_SIZE = 2L * 1024 * 1024 * 1024; // 2 GB
 
     private String icebergCatalogType;
     private String icebergCatalogHiveMetastoreUris;
@@ -267,9 +267,11 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
         }
 
         LOG.debug("current concurrent task number is min"
-                        + "(desire task concurrent num: {}, alive be num: {}, config: {})",
-                desireTaskConcurrentNum, aliveBeNum, Config.max_routine_load_task_concurrent_num);
-        currentTaskConcurrentNum = Math.min(Math.min(desireTaskConcurrentNum, aliveBeNum),
+                        + "(desire task concurrent num: {}, alive be num * per job per be: {}, config: {})",
+                desireTaskConcurrentNum, aliveBeNum * Config.max_iceberg_routine_load_task_num_per_be_per_job,
+                Config.max_routine_load_task_concurrent_num);
+        currentTaskConcurrentNum = Math.min(
+                Math.min(desireTaskConcurrentNum, aliveBeNum * Config.max_iceberg_routine_load_task_num_per_be_per_job),
                 Config.max_routine_load_task_concurrent_num);
         return currentTaskConcurrentNum;
     }
