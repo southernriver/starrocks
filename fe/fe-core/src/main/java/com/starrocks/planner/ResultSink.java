@@ -23,7 +23,9 @@ package com.starrocks.planner;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
+import com.starrocks.analysis.Expr;
 import com.starrocks.analysis.OutFileClause;
+import com.starrocks.sql.ast.QueryStatement;
 import com.starrocks.thrift.TDataSink;
 import com.starrocks.thrift.TDataSinkType;
 import com.starrocks.thrift.TExplainLevel;
@@ -31,6 +33,8 @@ import com.starrocks.thrift.TNetworkAddress;
 import com.starrocks.thrift.TResultFileSinkOptions;
 import com.starrocks.thrift.TResultSink;
 import com.starrocks.thrift.TResultSinkType;
+
+import java.util.List;
 
 /**
  * Result sink that forwards data to
@@ -97,9 +101,9 @@ public class ResultSink extends DataSink {
         return brokerName;
     }
 
-    public void setOutfileInfo(OutFileClause outFileClause) {
+    public void setOutfileInfo(OutFileClause outFileClause, List<String> columnOutputNames) {
         sinkType = TResultSinkType.FILE;
-        fileSinkOptions = outFileClause.toSinkOptions();
+        fileSinkOptions = outFileClause.toSinkOptions(columnOutputNames);
         brokerName = outFileClause.getBrokerDesc() == null ? null : outFileClause.getBrokerDesc().getName();
     }
 

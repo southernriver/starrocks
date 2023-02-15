@@ -33,7 +33,10 @@ import com.starrocks.thrift.THdfsProperties;
 import com.starrocks.thrift.TExportSink;
 import com.starrocks.thrift.TFileType;
 import com.starrocks.thrift.TNetworkAddress;
+import com.starrocks.thrift.TParquetOptions;
 import org.apache.commons.lang.StringEscapeUtils;
+
+import java.util.List;
 
 public class ExportSink extends DataSink {
     private final String exportPath;
@@ -42,21 +45,27 @@ public class ExportSink extends DataSink {
     private final String rowDelimiter;
     private final BrokerDesc brokerDesc;
     private final THdfsProperties hdfsProperties;
-
-    public ExportSink(String exportPath, String fileNamePrefix, String columnSeparator,
-                      String rowDelimiter, BrokerDesc brokerDesc, THdfsProperties hdfsProperties) {
+    private final String fileFormat;
+    private final TParquetOptions parquetOptions;
+    private final List<String> exportColumnNames;
+    public ExportSink(String exportPath, String fileNamePrefix, String columnSeparator, String rowDelimiter,
+            BrokerDesc brokerDesc, THdfsProperties hdfsProperties, String fileFormat, TParquetOptions parquetOptions,
+            List<String> exportColumnNames) {
         this.exportPath = exportPath;
         this.fileNamePrefix = fileNamePrefix;
         this.columnSeparator = columnSeparator;
         this.rowDelimiter = rowDelimiter;
         this.brokerDesc = brokerDesc;
         this.hdfsProperties = hdfsProperties;
+        this.fileFormat = fileFormat;
+        this.parquetOptions = parquetOptions;
+        this.exportColumnNames = exportColumnNames;
     }
 
     // for insert broker table
     public ExportSink(String exportPath, String columnSeparator,
                       String rowDelimiter, BrokerDesc brokerDesc) {
-        this(exportPath, null, columnSeparator, rowDelimiter, brokerDesc, null);
+        this(exportPath, null, columnSeparator, rowDelimiter, brokerDesc, null, null, null, null);
     }
 
     public String getFileNamePrefix() {
@@ -80,6 +89,12 @@ public class ExportSink extends DataSink {
                 + new PrintableMap<String, String>(
                 brokerDesc.getProperties(), "=", true, false)
                 + ")");
+        sb.append(prefix + "  fileFormat="
+            + StringEscapeUtils.escapeJava(fileFormat) + "\n");
+        sb.append(prefix + "  parquetOptions="
+            + StringEscapeUtils.escapeJava(parquetOptions.toString()) + "\n");
+        sb.append(prefix + "  exportColumnNames="
+            + StringEscapeUtils.escapeJava(String.join(", ", exportColumnNames)) + "\n");
         sb.append("\n");
         return sb.toString();
     }
@@ -102,6 +117,11 @@ public class ExportSink extends DataSink {
 
         if (fileNamePrefix != null) {
             tExportSink.setFile_name_prefix(fileNamePrefix);
+        }
+        tExportSink.setFile_format(fileFormat);
+        if (fileFormat.equals("parquet")) {
+            tExportSink.setParquet_options(parquetOptions);
+            tExportSink.setFile_column_names(exportColumnNames);
         }
 
         result.setExport_sink(tExportSink);

@@ -31,6 +31,7 @@ import com.starrocks.analysis.BaseTableRef;
 import com.starrocks.analysis.BrokerDesc;
 import com.starrocks.analysis.DescriptorTable;
 import com.starrocks.analysis.Expr;
+import com.starrocks.analysis.OutFileClause;
 import com.starrocks.analysis.SlotDescriptor;
 import com.starrocks.analysis.SlotRef;
 import com.starrocks.analysis.TableName;
@@ -44,6 +45,7 @@ import com.starrocks.catalog.Replica;
 import com.starrocks.catalog.Table;
 import com.starrocks.catalog.TabletInvertedIndex;
 import com.starrocks.catalog.Type;
+import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Config;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.FeMetaVersion;
@@ -75,9 +77,11 @@ import com.starrocks.sql.ast.PartitionNames;
 import com.starrocks.system.Backend;
 import com.starrocks.task.AgentClient;
 import com.starrocks.thrift.TAgentResult;
+import com.starrocks.thrift.TCompressionType;
 import com.starrocks.thrift.THdfsProperties;
 import com.starrocks.thrift.TInternalScanRange;
 import com.starrocks.thrift.TNetworkAddress;
+import com.starrocks.thrift.TParquetOptions;
 import com.starrocks.thrift.TResultSinkType;
 import com.starrocks.thrift.TScanRange;
 import com.starrocks.thrift.TScanRangeLocation;
@@ -98,6 +102,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 // NOTE: we must be carefully if we send next request
 //       as soon as receiving one instance's report from one BE,
@@ -136,6 +141,7 @@ public class ExportJob implements Writable {
     private List<String> partitions;
     private TableName tableName;
     private List<String> columnNames;
+    private List<String> exportColumnNames;
     private String sql = "";
     private JobState state;
     private long createTimeMs;
@@ -149,6 +155,7 @@ public class ExportJob implements Writable {
     private boolean isReplayed = false;
     private Thread doExportingThread;
     private List<TScanRangeLocations> tabletLocations = Lists.newArrayList();
+    private String fileFormat;
 
     public ExportJob() {
         this.id = -1;
@@ -169,6 +176,7 @@ public class ExportJob implements Writable {
         this.columnSeparator = "\t";
         this.rowDelimiter = "\n";
         this.includeQueryId = true;
+        this.fileFormat = "csv";
     }
 
     public ExportJob(long jobId, UUID queryId) {
@@ -203,6 +211,7 @@ public class ExportJob implements Writable {
 
         this.partitions = stmt.getPartitions();
         this.columnNames = stmt.getColumnNames();
+        this.fileFormat = stmt.getFileFormat();
 
         db.readLock();
         try {
@@ -249,7 +258,7 @@ public class ExportJob implements Writable {
                 exportColumns.add(nameToColumn.get(columnName));
             }
         }
-
+        exportColumnNames = exportColumns.stream().map(Column::getName).collect(Collectors.toList());
         for (Column col : exportColumns) {
             SlotDescriptor slot = desc.addSlotDescriptor(exportTupleDesc);
             slot.setIsMaterialized(true);
@@ -366,8 +375,29 @@ public class ExportJob implements Writable {
         if (!brokerDesc.hasBroker()) {
             HdfsUtil.getTProperties(exportTempPath, brokerDesc, hdfsProperties);
         }
+        TParquetOptions parquetOptions = new TParquetOptions();
+        if (fileFormat.equals("parquet")) {
+            TCompressionType compressionType = TCompressionType.SNAPPY;
+            if (properties.containsKey(OutFileClause.PARQUET_COMPRESSION_TYPE)) {
+                compressionType = OutFileClause.PARQUET_COMPRESSION_TYPE_MAP.get(
+                        properties.get(OutFileClause.PARQUET_COMPRESSION_TYPE));
+                if (compressionType == null) {
+                    throw new AnalysisException("compression type is invalid, type: " + type);
+                }
+            }
+            parquetOptions.setCompression_type(compressionType);
+
+            if (properties.containsKey(OutFileClause.PARQUET_USE_DICT)) {
+                parquetOptions.setUse_dict(Boolean.getBoolean(properties.get(OutFileClause.PARQUET_USE_DICT)));
+            }
+
+            if (properties.containsKey(OutFileClause.PARQUET_MAX_ROW_GROUP_SIZE)) {
+                parquetOptions.setParquet_max_group_bytes(
+                        Long.getLong(properties.get(OutFileClause.PARQUET_MAX_ROW_GROUP_SIZE)));
+            }
+        }
         fragment.setSink(new ExportSink(exportTempPath, fileNamePrefix + taskIdx + "_", columnSeparator,
-                rowDelimiter, brokerDesc, hdfsProperties));
+                rowDelimiter, brokerDesc, hdfsProperties, fileFormat, parquetOptions, exportColumnNames));
         try {
             fragment.createDataSink(TResultSinkType.MYSQL_PROTOCAL);
         } catch (Exception e) {
@@ -447,6 +477,10 @@ public class ExportJob implements Writable {
 
     public String getExportPath() {
         return exportPath;
+    }
+
+    public String getFileFormat() {
+        return fileFormat;
     }
 
     public String getColumnSeparator() {
@@ -746,6 +780,7 @@ public class ExportJob implements Writable {
                 + ", tableId=" + tableId
                 + ", state=" + state
                 + ", path=" + exportPath
+                + ", format=" + fileFormat
                 + ", partitions=(" + StringUtils.join(partitions, ",") + ")"
                 + ", progress=" + progress
                 + ", createTimeMs=" + TimeUtils.longToTimeString(createTimeMs)
@@ -766,6 +801,7 @@ public class ExportJob implements Writable {
         Text.writeString(out, exportPath);
         Text.writeString(out, columnSeparator);
         Text.writeString(out, rowDelimiter);
+        Text.writeString(out, fileFormat);
         out.writeInt(properties.size());
         for (Map.Entry<String, String> property : properties.entrySet()) {
             Text.writeString(out, property.getKey());
@@ -811,6 +847,7 @@ public class ExportJob implements Writable {
         exportPath = Text.readString(in);
         columnSeparator = Text.readString(in);
         rowDelimiter = Text.readString(in);
+        fileFormat = Text.readString(in);
 
         if (GlobalStateMgr.getCurrentStateJournalVersion() >= FeMetaVersion.VERSION_53) {
             int count = in.readInt();

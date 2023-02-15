@@ -4,6 +4,7 @@
 
 #include "exec/data_sink.h"
 #include "exec/file_builder.h"
+#include "exec/parquet_builder.h"
 #include "exec/pipeline/fragment_context.h"
 #include "exec/pipeline/sink/sink_io_buffer.h"
 #include "exec/plain_text_builder.h"
@@ -21,7 +22,17 @@ public:
             : SinkIOBuffer(num_sinkers),
               _t_export_sink(t_export_sink),
               _output_expr_ctxs(output_expr_ctxs),
-              _fragment_ctx(fragment_ctx) {}
+              _fragment_ctx(fragment_ctx) {
+        if (_t_export_sink.__isset.parquet_options && _t_export_sink.parquet_options.__isset.parquet_max_group_bytes) {
+            _parquet_options.row_group_max_size = _t_export_sink.parquet_options.parquet_max_group_bytes;
+        }
+        if (_t_export_sink.__isset.parquet_options && _t_export_sink.parquet_options.__isset.use_dict) {
+            _parquet_options.use_dict = _t_export_sink.parquet_options.use_dict;
+        }
+        if (_t_export_sink.__isset.parquet_options && _t_export_sink.parquet_options.__isset.compression_type) {
+            _parquet_options.compression_type = _t_export_sink.parquet_options.compression_type;
+        }
+    }
 
     ~ExportSinkIOBuffer() override = default;
 
@@ -40,6 +51,7 @@ private:
     const std::vector<ExprContext*> _output_expr_ctxs;
     std::unique_ptr<FileBuilder> _file_builder;
     FragmentContext* _fragment_ctx;
+    ParquetBuilderOptions _parquet_options;
 };
 
 Status ExportSinkIOBuffer::prepare(RuntimeState* state, RuntimeProfile* parent_profile) {
@@ -110,7 +122,6 @@ Status ExportSinkIOBuffer::_open_file_writer() {
     RETURN_IF_ERROR(_gen_file_name(&file_name));
     std::string file_path = _t_export_sink.export_path + "/" + file_name;
     WritableFileOptions options{.sync_on_close = false, .mode = FileSystem::MUST_CREATE};
-
     const auto& file_type = _t_export_sink.file_type;
     switch (file_type) {
     case TFileType::FILE_LOCAL: {
@@ -135,13 +146,24 @@ Status ExportSinkIOBuffer::_open_file_writer() {
     case TFileType::FILE_STREAM:
         return Status::NotSupported(strings::Substitute("Unsupported file type $0", file_type));
     }
-
-    _file_builder = std::make_unique<PlainTextBuilder>(
-            PlainTextBuilderOptions{.column_terminated_by = _t_export_sink.column_separator,
-                                    .line_terminated_by = _t_export_sink.row_delimiter},
-            std::move(output_file), _output_expr_ctxs);
+    const auto& file_format = string(_t_export_sink.file_format);
+    if (file_format == "csv") {
+        _file_builder = std::make_unique<PlainTextBuilder>(
+                PlainTextBuilderOptions{.column_terminated_by = _t_export_sink.column_separator,
+                                        .line_terminated_by = _t_export_sink.row_delimiter},
+                std::move(output_file), _output_expr_ctxs);
+    } else if (file_format == "parquet") {
+        _file_builder = std::make_unique<ParquetBuilder>(
+                std::move(output_file), _output_expr_ctxs,
+                _parquet_options, _t_export_sink.file_column_names);
+    } else {
+        return Status::NotSupported("unsupported file format " + file_format);
+    }
 
     _state->add_export_output_file(file_path);
+
+    LOG(INFO) << "create file for exporting query result. file name: " << file_name
+              << ". query id: " << print_id(_state->query_id());
     return Status::OK();
 }
 
@@ -152,10 +174,11 @@ Status ExportSinkIOBuffer::_gen_file_name(std::string* file_name) {
     std::stringstream file_name_ss;
     // now file-number is 0.
     // <file-name-prefix>_<file-number>.csv.<timestamp>
-    file_name_ss << _t_export_sink.file_name_prefix << "0.csv." << UnixMillis();
+    file_name_ss << _t_export_sink.file_name_prefix << "0" << "." << _t_export_sink.file_format;
     *file_name = file_name_ss.str();
     return Status::OK();
 }
+
 
 Status ExportSinkOperator::prepare(RuntimeState* state) {
     RETURN_IF_ERROR(Operator::prepare(state));
