@@ -278,6 +278,7 @@ private:
     void update_hdfs_counter(HdfsScanProfile* profile);
 
 protected:
+    ObjectPool _pool;
     std::atomic_bool _pending_token = false;
 
     HdfsScannerContext _scanner_ctx;
