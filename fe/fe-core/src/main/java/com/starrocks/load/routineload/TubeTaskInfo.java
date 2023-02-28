@@ -22,13 +22,13 @@
 package com.starrocks.load.routineload;
 
 import com.google.common.base.Joiner;
-import com.starrocks.catalog.Catalog;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.Table;
 import com.starrocks.common.Config;
 import com.starrocks.common.MetaNotFoundException;
 import com.starrocks.common.UserException;
 import com.starrocks.common.util.DebugUtil;
+import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.thrift.TExecPlanFragmentParams;
 import com.starrocks.thrift.TFileFormatType;
 import com.starrocks.thrift.TLoadSourceType;
@@ -40,22 +40,21 @@ import com.starrocks.thrift.TUniqueId;
 import java.util.UUID;
 
 public class TubeTaskInfo extends RoutineLoadTaskInfo {
-    private RoutineLoadManager routineLoadManager = Catalog.getCurrentCatalog().getRoutineLoadManager();
+    private RoutineLoadManager routineLoadManager = GlobalStateMgr.getCurrentState().getRoutineLoadManager();
 
     private String filters = null;
     private Integer consumePosition = null;
 
-    public TubeTaskInfo(UUID id, long jobId, String clusterName, long taskScheduleIntervalMs, long timeToExecuteMs,
-                        String filters, Integer consumePosition) {
-        super(id, jobId, clusterName, taskScheduleIntervalMs, timeToExecuteMs);
+    public TubeTaskInfo(UUID id, long jobId, long taskScheduleIntervalMs, long timeToExecuteMs, String filters,
+                        Integer consumePosition) {
+        super(id, jobId, taskScheduleIntervalMs, timeToExecuteMs);
         this.filters = filters;
         this.consumePosition = consumePosition;
     }
 
     public TubeTaskInfo(long timeToExecuteMs, TubeTaskInfo tubeTaskInfo) {
-        super(UUID.randomUUID(), tubeTaskInfo.getJobId(), tubeTaskInfo.getClusterName(),
-                tubeTaskInfo.getTaskScheduleIntervalMs(), timeToExecuteMs, tubeTaskInfo.getBeId(),
-                tubeTaskInfo.getStatistics());
+        super(UUID.randomUUID(), tubeTaskInfo.getJobId(), tubeTaskInfo.getTaskScheduleIntervalMs(), timeToExecuteMs,
+                tubeTaskInfo.getBeId(), tubeTaskInfo.getStatistics());
         this.filters = tubeTaskInfo.getFilters();
     }
 
@@ -88,7 +87,7 @@ public class TubeTaskInfo extends RoutineLoadTaskInfo {
         tRoutineLoadTask.setId(queryId);
         tRoutineLoadTask.setJob_id(jobId);
         tRoutineLoadTask.setTxn_id(txnId);
-        Database database = Catalog.getCurrentCatalog().getDb(routineLoadJob.getDbId());
+        Database database = GlobalStateMgr.getCurrentState().getDb(routineLoadJob.getDbId());
         if (database == null) {
             throw new MetaNotFoundException("database " + routineLoadJob.getDbId() + " does not exist");
         }

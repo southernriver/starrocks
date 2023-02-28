@@ -167,7 +167,7 @@ public class CreateRoutineLoadStmt extends DdlStmt {
             .add(TUBE_CONSUME_POSITION)
             .build();
 
-    private final LabelName labelName;
+    private LabelName labelName;
     private final String tableName;
     private final List<ParseNode> loadPropertyList;
     private final Map<String, String> jobProperties;
@@ -680,7 +680,8 @@ public class CreateRoutineLoadStmt extends DdlStmt {
     }
 
     public static void analyzeKafkaCustomProperties(Map<String, String> dataSourceProperties,
-                                                    Map<String, String> customKafkaProperties) throws AnalysisException {
+                                                    Map<String, String> customKafkaProperties)
+            throws AnalysisException {
         for (Map.Entry<String, String> dataSourceProperty : dataSourceProperties.entrySet()) {
             if (dataSourceProperty.getKey().startsWith("property.")) {
                 String propertyKey = dataSourceProperty.getKey();
@@ -709,7 +710,8 @@ public class CreateRoutineLoadStmt extends DdlStmt {
         }
 
         // check service url
-        pulsarServiceUrl = Strings.nullToEmpty(dataSourceProperties.get(PULSAR_SERVICE_URL_PROPERTY)).replaceAll(" ", "");
+        pulsarServiceUrl =
+                Strings.nullToEmpty(dataSourceProperties.get(PULSAR_SERVICE_URL_PROPERTY)).replaceAll(" ", "");
         if (Strings.isNullOrEmpty(pulsarServiceUrl)) {
             throw new AnalysisException(PULSAR_SERVICE_URL_PROPERTY + " is a required property");
         }
@@ -729,7 +731,8 @@ public class CreateRoutineLoadStmt extends DdlStmt {
         }
 
         // check subscription
-        pulsarSubscription = Strings.nullToEmpty(dataSourceProperties.get(PULSAR_SUBSCRIPTION_PROPERTY)).replaceAll(" ", "");
+        pulsarSubscription =
+                Strings.nullToEmpty(dataSourceProperties.get(PULSAR_SUBSCRIPTION_PROPERTY)).replaceAll(" ", "");
         if (Strings.isNullOrEmpty(pulsarSubscription)) {
             throw new AnalysisException(PULSAR_SUBSCRIPTION_PROPERTY + " is a required property");
         }
@@ -769,7 +772,8 @@ public class CreateRoutineLoadStmt extends DdlStmt {
 
         // get default initial positions if set
         if (customPulsarProperties.containsKey(PULSAR_DEFAULT_INITIAL_POSITION)) {
-            Long pulsarDefaultInitialPosition = getPulsarPosition(customPulsarProperties.get(PULSAR_DEFAULT_INITIAL_POSITION));
+            Long pulsarDefaultInitialPosition =
+                    getPulsarPosition(customPulsarProperties.get(PULSAR_DEFAULT_INITIAL_POSITION));
             pulsarPartitions.stream().forEach(
                     entry -> pulsarPartitionInitialPositions.add(Pair.create(entry, pulsarDefaultInitialPosition)));
         }
@@ -817,7 +821,8 @@ public class CreateRoutineLoadStmt extends DdlStmt {
     }
 
     public static void analyzePulsarCustomProperties(Map<String, String> dataSourceProperties,
-                                                     Map<String, String> customPulsarProperties) throws AnalysisException {
+                                                     Map<String, String> customPulsarProperties)
+            throws AnalysisException {
         for (Map.Entry<String, String> dataSourceProperty : dataSourceProperties.entrySet()) {
             if (dataSourceProperty.getKey().startsWith("property.")) {
                 String propertyKey = dataSourceProperty.getKey();

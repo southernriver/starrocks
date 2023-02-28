@@ -21,8 +21,6 @@ package com.starrocks.load.routineload;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.starrocks.analysis.ColumnSeparator;
-import com.starrocks.analysis.CreateRoutineLoadStmt;
 import com.starrocks.analysis.LabelName;
 import com.starrocks.analysis.ParseNode;
 import com.starrocks.catalog.Catalog;
@@ -34,6 +32,9 @@ import com.starrocks.common.UserException;
 import com.starrocks.common.jmockit.Deencapsulation;
 import com.starrocks.load.RoutineLoadDesc;
 import com.starrocks.qe.ConnectContext;
+import com.starrocks.sql.ast.ColumnSeparator;
+import com.starrocks.sql.ast.CreateRoutineLoadStmt;
+import com.starrocks.sql.ast.PartitionNames;
 import com.starrocks.thrift.TResourceInfo;
 import mockit.Expectations;
 import mockit.Injectable;
@@ -58,6 +59,7 @@ public class TubeRoutineLoadJobTest {
     private String topicName = "topic1";
     private String masterAddr = "http://127.0.0.1:8080";
     private String groupName = "test_tube";
+    private PartitionNames partitionNames;
 
     private ColumnSeparator columnSeparator = new ColumnSeparator(",");
 
@@ -70,14 +72,14 @@ public class TubeRoutineLoadJobTest {
     public void init() {
         List<String> partitionNameList = Lists.newArrayList();
         partitionNameList.add("p1");
-        // partitionNames = new PartitionNames(false, partitionNameList);
+        partitionNames = new PartitionNames(false, partitionNameList);
     }
 
     @Test
     public void testFromCreateStmtWithErrorTable(@Mocked Catalog catalog,
                                                  @Injectable Database database) throws LoadException {
         CreateRoutineLoadStmt createRoutineLoadStmt = initCreateRoutineLoadStmt();
-        RoutineLoadDesc routineLoadDesc = new RoutineLoadDesc(columnSeparator, null, null, null, null);
+        RoutineLoadDesc routineLoadDesc = new RoutineLoadDesc(columnSeparator, null, null, null, partitionNames);
         Deencapsulation.setField(createRoutineLoadStmt, "routineLoadDesc", routineLoadDesc);
 
         new Expectations() {

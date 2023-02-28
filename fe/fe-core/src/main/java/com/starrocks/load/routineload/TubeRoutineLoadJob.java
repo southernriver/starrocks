@@ -25,9 +25,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.starrocks.analysis.CreateRoutineLoadStmt;
 import com.starrocks.analysis.RoutineLoadDataSourceProperties;
-import com.starrocks.catalog.Catalog;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.Table;
 import com.starrocks.common.Config;
@@ -38,6 +36,8 @@ import com.starrocks.common.MetaNotFoundException;
 import com.starrocks.common.UserException;
 import com.starrocks.common.io.Text;
 import com.starrocks.common.util.DebugUtil;
+import com.starrocks.server.GlobalStateMgr;
+import com.starrocks.sql.ast.CreateRoutineLoadStmt;
 import com.starrocks.system.SystemInfoService;
 import com.starrocks.transaction.TransactionState;
 import com.starrocks.transaction.TransactionStatus;
@@ -73,9 +73,9 @@ public class TubeRoutineLoadJob extends RoutineLoadJob {
         super(-1, LoadDataSourceType.TUBE);
     }
 
-    public TubeRoutineLoadJob(Long id, String name, String clusterName,
-                              long dbId, long tableId, String masterAddr, String topic, String groupName) {
-        super(id, name, clusterName, dbId, tableId, LoadDataSourceType.TUBE);
+    public TubeRoutineLoadJob(Long id, String name, long dbId, long tableId, String masterAddr, String topic,
+                              String groupName) {
+        super(id, name, dbId, tableId, LoadDataSourceType.TUBE);
         this.masterAddr = masterAddr;
         this.topic = topic;
         this.groupName = groupName;
@@ -102,8 +102,9 @@ public class TubeRoutineLoadJob extends RoutineLoadJob {
             if (state == JobState.NEED_SCHEDULE) {
                 for (int i = 0; i < currentConcurrentTaskNum; i++) {
                     long timeToExecuteMs = System.currentTimeMillis() + taskSchedIntervalS * 1000;
-                    TubeTaskInfo tubeTaskInfo = new TubeTaskInfo(UUID.randomUUID(), id, clusterName,
-                            taskSchedIntervalS * 1000, timeToExecuteMs, filters, consumePosition);
+                    TubeTaskInfo tubeTaskInfo =
+                            new TubeTaskInfo(UUID.randomUUID(), id, taskSchedIntervalS * 1000, timeToExecuteMs, filters,
+                                    consumePosition);
                     LOG.debug("tube routine load task created: " + tubeTaskInfo);
                     routineLoadTaskInfoList.add(tubeTaskInfo);
                     result.add(tubeTaskInfo);
@@ -118,7 +119,7 @@ public class TubeRoutineLoadJob extends RoutineLoadJob {
                 LOG.debug("Ignore to divide routine load job while job state {}", state);
             }
             // save task into queue of needScheduleTasks
-            Catalog.getCurrentCatalog().getRoutineLoadTaskScheduler().addTasksInQueue(result);
+            GlobalStateMgr.getCurrentState().getRoutineLoadTaskScheduler().addTasksInQueue(result);
         } finally {
             writeUnlock();
         }
@@ -126,24 +127,23 @@ public class TubeRoutineLoadJob extends RoutineLoadJob {
 
     @Override
     public int calculateCurrentConcurrentTaskNum() throws MetaNotFoundException {
-        SystemInfoService systemInfoService = Catalog.getCurrentSystemInfo();
-        int aliveBeNum = systemInfoService.getClusterBackendIds(clusterName, true).size();
+        SystemInfoService systemInfoService = GlobalStateMgr.getCurrentSystemInfo();
+        int aliveBeNum = systemInfoService.getAliveBackendNumber();
         if (desireTaskConcurrentNum == 0) {
             desireTaskConcurrentNum = Config.max_routine_load_task_concurrent_num;
         }
 
-        LOG.debug("current concurrent task number is min"
-                        + "(desire task concurrent num: {}, alive be num: {}, config: {})",
-                desireTaskConcurrentNum, aliveBeNum, Config.max_routine_load_task_concurrent_num);
-        currentTaskConcurrentNum = Math.min(Math.min(desireTaskConcurrentNum, aliveBeNum),
+        LOG.debug("current concurrent task number is min" +
+                        "(desire task concurrent num: {}, alive be num: {}, config: {})", desireTaskConcurrentNum, aliveBeNum,
                 Config.max_routine_load_task_concurrent_num);
+        currentTaskConcurrentNum =
+                Math.min(Math.min(desireTaskConcurrentNum, aliveBeNum), Config.max_routine_load_task_concurrent_num);
         return currentTaskConcurrentNum;
     }
 
     // Through the transaction status and attachment information, to determine whether the progress needs to be updated.
     @Override
-    protected boolean checkCommitInfo(RLTaskTxnCommitAttachment rlTaskTxnCommitAttachment,
-                                      TransactionState txnState,
+    protected boolean checkCommitInfo(RLTaskTxnCommitAttachment rlTaskTxnCommitAttachment, TransactionState txnState,
                                       TransactionState.TxnStatusChangeReason txnStatusChangeReason) {
         if (txnState.getTransactionStatus() == TransactionStatus.COMMITTED) {
             // For committed txn, update the progress.
@@ -167,8 +167,7 @@ public class TubeRoutineLoadJob extends RoutineLoadJob {
         // Running here, the status of the transaction should be ABORTED,
         // and it is caused by other errors. In this case, we should not update the position.
         LOG.debug("no need to update the progress of tube routine load. txn status: {}, " +
-                        "txnStatusChangeReason: {}, task: {}, job: {}",
-                txnState.getTransactionStatus(), txnStatusChangeReason,
+                        "txnStatusChangeReason: {}, task: {}, job: {}", txnState.getTransactionStatus(), txnStatusChangeReason,
                 DebugUtil.printId(rlTaskTxnCommitAttachment.getTaskId()), id);
         return false;
     }
@@ -220,7 +219,7 @@ public class TubeRoutineLoadJob extends RoutineLoadJob {
 
     public static TubeRoutineLoadJob fromCreateStmt(CreateRoutineLoadStmt stmt) throws UserException {
         // check db and table
-        Database db = Catalog.getCurrentCatalog().getDb(stmt.getDBName());
+        Database db = GlobalStateMgr.getCurrentState().getDb(stmt.getDBName());
         if (db == null) {
             ErrorReport.reportDdlException(ErrorCode.ERR_BAD_DB_ERROR, stmt.getDBName());
         }
@@ -236,11 +235,10 @@ public class TubeRoutineLoadJob extends RoutineLoadJob {
         }
 
         // init tube routine load job
-        long id = Catalog.getCurrentCatalog().getNextId();
-        TubeRoutineLoadJob tubeRoutineLoadJob = new TubeRoutineLoadJob(id, stmt.getName(),
-                db.getClusterName(), db.getId(), tableId,
-                stmt.getTubeMasterAddr(), stmt.getTubeTopic(),
-                stmt.getTubeGroupName());
+        long id = GlobalStateMgr.getCurrentState().getNextId();
+        TubeRoutineLoadJob tubeRoutineLoadJob =
+                new TubeRoutineLoadJob(id, stmt.getName(), db.getId(), tableId, stmt.getTubeMasterAddr(),
+                        stmt.getTubeTopic(), stmt.getTubeGroupName());
         tubeRoutineLoadJob.setOptional(stmt);
         return tubeRoutineLoadJob;
     }
@@ -323,7 +321,7 @@ public class TubeRoutineLoadJob extends RoutineLoadJob {
             this.consumePosition = consumePosition;
         }
 
-        LOG.info("modify the data source properties of tube routine load job: {}, datasource properties: {}",
-                this.id, dataSourceProperties);
+        LOG.info("modify the data source properties of tube routine load job: {}, datasource properties: {}", this.id,
+                dataSourceProperties);
     }
 }
