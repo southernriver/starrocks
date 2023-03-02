@@ -8,19 +8,25 @@ import com.google.common.collect.Lists;
 import com.starrocks.catalog.ArrayType;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
+import com.starrocks.catalog.IcebergResource;
 import com.starrocks.catalog.IcebergTable;
 import com.starrocks.catalog.MapType;
 import com.starrocks.catalog.PrimitiveType;
+import com.starrocks.catalog.Resource;
+import com.starrocks.catalog.ResourceMgr;
 import com.starrocks.catalog.ScalarType;
 import com.starrocks.catalog.StructField;
 import com.starrocks.catalog.StructType;
 import com.starrocks.catalog.Type;
+import com.starrocks.common.AnalysisException;
 import com.starrocks.common.DdlException;
 import com.starrocks.connector.HdfsEnvironment;
 import com.starrocks.connector.hive.RemoteFileInputFormat;
 import com.starrocks.connector.iceberg.glue.IcebergGlueCatalog;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.SessionVariable;
+import com.starrocks.server.GlobalStateMgr;
+import com.starrocks.server.MetadataMgr;
 import org.apache.iceberg.BaseTable;
 import org.apache.iceberg.FileFormat;
 import org.apache.iceberg.FileScanTask;
@@ -67,6 +73,41 @@ public class IcebergUtil {
     }
 
     /**
+     * Returns the corresponding catalog implementation.
+     */
+    public static IcebergCatalog getIcebergCatalog(String resourceName)
+            throws StarRocksIcebergException, AnalysisException {
+        ResourceMgr resourceMgr = GlobalStateMgr.getCurrentState().getResourceMgr();
+        Resource resource = resourceMgr.getResource(resourceName);
+        if (resource == null) {
+            throw new AnalysisException("Resource " + resourceName + " not exists");
+        }
+        if (!(resource instanceof IcebergResource)) {
+            throw new AnalysisException("Resource " + resourceName + " is not iceberg resource");
+        }
+        return getIcebergCatalog((IcebergResource) resource);
+    }
+
+    /**
+     * Returns the corresponding catalog implementation.
+     */
+    public static IcebergCatalog getIcebergCatalog(IcebergResource resource)
+            throws StarRocksIcebergException {
+        IcebergCatalogType catalogType = resource.getCatalogType();
+        HdfsEnvironment hdfsEnvironment = new HdfsEnvironment(resource.getProperties(), null);
+        switch (catalogType) {
+            case HIVE_CATALOG:
+                return getIcebergHiveCatalog(resource.getHiveMetastoreURIs(), resource.getProperties(),
+                        hdfsEnvironment);
+            case CUSTOM_CATALOG:
+                return getIcebergCustomCatalog(resource.getIcebergImpl(), resource.getProperties(), hdfsEnvironment);
+            default:
+                throw new StarRocksIcebergException(
+                        "Unexpected catalog type: " + catalogType.toString());
+        }
+    }
+
+    /**
      * Get IcebergCatalog from IcebergTable
      * Returns the corresponding catalog implementation.
      */
@@ -78,7 +119,8 @@ public class IcebergUtil {
 
         switch (catalogType) {
             case HIVE_CATALOG:
-                return getIcebergHiveCatalog(table.getIcebergHiveMetastoreUris(), table.getIcebergProperties(), hdfsEnvironment);
+                return getIcebergHiveCatalog(table.getIcebergHiveMetastoreUris(), table.getIcebergProperties(),
+                        hdfsEnvironment);
             case CUSTOM_CATALOG:
                 return getIcebergCustomCatalog(table.getCatalogImpl(), table.getIcebergProperties(), hdfsEnvironment);
             default:
@@ -413,5 +455,27 @@ public class IcebergUtil {
             return Type.UNKNOWN_TYPE;
         }
         return new MapType(keyType, valueType);
+    }
+
+    /**
+     * Returns iceberg table
+     */
+    public static Table getTableFromResource(String resourceName, String dbName, String tblName)
+            throws AnalysisException {
+        return getIcebergCatalog(resourceName).loadTable(getIcebergTableIdentifier(dbName, tblName));
+    }
+
+    /**
+     * Returns iceberg table
+     */
+    public static Table getTableFromCatalog(String catalogName, String dbName, String tblName)
+            throws AnalysisException {
+        MetadataMgr metadataMgr = GlobalStateMgr.getCurrentState().getMetadataMgr();
+        Table resTable = (Table) metadataMgr.getTable(catalogName, dbName, tblName);
+        if (resTable == null) {
+            throw new AnalysisException(catalogName + "." + dbName + "." + tblName + " not exists");
+        } else {
+            return resTable;
+        }
     }
 }

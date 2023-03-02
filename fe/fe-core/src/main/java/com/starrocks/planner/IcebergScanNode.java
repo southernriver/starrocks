@@ -21,6 +21,7 @@ import com.starrocks.catalog.Type;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.UserException;
 import com.starrocks.connector.PredicateUtils;
+import com.starrocks.connector.iceberg.ExpressionConverter;
 import com.starrocks.connector.iceberg.IcebergConnector;
 import com.starrocks.connector.iceberg.IcebergUtil;
 import com.starrocks.connector.iceberg.ScalarOperatorToIcebergExpr;
@@ -51,6 +52,8 @@ import org.apache.iceberg.DataFile;
 import org.apache.iceberg.FileContent;
 import org.apache.iceberg.FileScanTask;
 import org.apache.iceberg.Snapshot;
+import org.apache.iceberg.exceptions.ValidationException;
+import org.apache.iceberg.expressions.Binder;
 import org.apache.iceberg.StructLike;
 import org.apache.iceberg.expressions.Expression;
 import org.apache.iceberg.types.Types;
@@ -142,8 +145,27 @@ public class IcebergScanNode extends ScanNode {
      */
     public void preProcessIcebergPredicate(List<ScalarOperator> operators) {
         Types.StructType schema = srIcebergTable.getIcebergTable().schema().asStruct();
-        ScalarOperatorToIcebergExpr.IcebergContext icebergContext = new ScalarOperatorToIcebergExpr.IcebergContext(schema);
+        ScalarOperatorToIcebergExpr.IcebergContext icebergContext =
+                new ScalarOperatorToIcebergExpr.IcebergContext(schema);
         icebergPredicate = new ScalarOperatorToIcebergExpr().convert(operators, icebergContext);
+    }
+
+    public static List<Expression> preProcessConjuncts(org.apache.iceberg.Table table, List<Expr> conjuncts) {
+        List<Expression> expressions = new ArrayList<>(conjuncts.size());
+        ExpressionConverter convertor = new ExpressionConverter();
+        for (Expr expr : conjuncts) {
+            Expression filterExpr = convertor.convert(expr);
+            if (filterExpr != null) {
+                try {
+                    Binder.bind(table.schema().asStruct(), filterExpr, false);
+                    expressions.add(filterExpr);
+                } catch (ValidationException e) {
+                    LOG.debug("binding to the table schema failed, cannot be pushed down expression: {}",
+                            expr.toSql());
+                }
+            }
+        }
+        return expressions;
     }
 
     /**
@@ -173,7 +195,8 @@ public class IcebergScanNode extends ScanNode {
                 }
                 ColumnRefOperator columnRef = columnRefFactory.create(field.getName(),
                         field.getType(), column.isAllowNull());
-                SlotDescriptor slotDescriptor = context.getDescTbl().addSlotDescriptor(desc, new SlotId(columnRef.getId()));
+                SlotDescriptor slotDescriptor =
+                        context.getDescTbl().addSlotDescriptor(desc, new SlotId(columnRef.getId()));
                 slotDescriptor.setColumn(column);
                 slotDescriptor.setIsNullable(column.isAllowNull());
                 slotDescriptor.setIsMaterialized(true);
@@ -253,12 +276,14 @@ public class IcebergScanNode extends ScanNode {
                     TIcebergDeleteFile target = new TIcebergDeleteFile();
                     target.setFull_path(source.path().toString());
                     target.setFile_content(
-                            source.content() == FileContent.EQUALITY_DELETES ? TIcebergFileContent.EQUALITY_DELETES : TIcebergFileContent.POSITION_DELETES);
+                            source.content() == FileContent.EQUALITY_DELETES ? TIcebergFileContent.EQUALITY_DELETES :
+                                    TIcebergFileContent.POSITION_DELETES);
                     target.setLength(source.fileSizeInBytes());
 
                     if (source.content() == FileContent.EQUALITY_DELETES) {
                         source.equalityFieldIds().forEach(fieldId -> {
-                            equalityDeleteColumns.add(srIcebergTable.getIcebergTable().schema().findColumnName(fieldId));
+                            equalityDeleteColumns.add(
+                                    srIcebergTable.getIcebergTable().schema().findColumnName(fieldId));
                         });
                     }
 
@@ -278,7 +303,7 @@ public class IcebergScanNode extends ScanNode {
 
         scanNodePredicates.setSelectedPartitionIds(partitionMap.values());
         long planTaskTime = System.currentTimeMillis() - startPlanTaskTime;
-        LOG.info("Total planning task duration for table {} is {}ms.", srIcebergTable.getTable(),  planTaskTime);
+        LOG.info("Total planning task duration for table {} is {}ms.", srIcebergTable.getTable(), planTaskTime);
     }
 
     public HDFSScanNodePredicates getScanNodePredicates() {
@@ -324,7 +349,8 @@ public class IcebergScanNode extends ScanNode {
             for (SlotDescriptor slotDescriptor : desc.getSlots()) {
                 Type type = slotDescriptor.getOriginType();
                 if (type.isComplexType()) {
-                    output.append(prefix).append(String.format("Pruned type: %d <-> [%s]\n", slotDescriptor.getId().asInt(), type));
+                    output.append(prefix)
+                            .append(String.format("Pruned type: %d <-> [%s]\n", slotDescriptor.getId().asInt(), type));
                 }
             }
         }

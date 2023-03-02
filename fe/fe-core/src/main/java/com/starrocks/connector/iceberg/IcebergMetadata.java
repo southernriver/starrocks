@@ -8,7 +8,6 @@ import com.starrocks.common.DdlException;
 import com.starrocks.common.util.Util;
 import com.starrocks.connector.ConnectorMetadata;
 import com.starrocks.connector.HdfsEnvironment;
-import com.starrocks.server.GlobalStateMgr;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.logging.log4j.LogManager;
@@ -53,7 +52,8 @@ public class IcebergMetadata implements ConnectorMetadata {
             properties.remove(ICEBERG_CATALOG_TYPE);
             properties.remove(ICEBERG_IMPL);
             customProperties = properties;
-        } else if (IcebergCatalogType.GLUE_CATALOG == IcebergCatalogType.fromString(properties.get(ICEBERG_CATALOG_TYPE))) {
+        } else if (IcebergCatalogType.GLUE_CATALOG ==
+                IcebergCatalogType.fromString(properties.get(ICEBERG_CATALOG_TYPE))) {
             catalogType = properties.get(ICEBERG_CATALOG_TYPE);
             icebergCatalog = getIcebergGlueCatalog(catalogName, properties, hdfsEnvironment);
         } else {
@@ -86,17 +86,15 @@ public class IcebergMetadata implements ConnectorMetadata {
     @Override
     public Table getTable(String dbName, String tblName) {
         try {
-            org.apache.iceberg.Table icebergTable
-                    = icebergCatalog.loadTable(IcebergUtil.getIcebergTableIdentifier(dbName, tblName));
-            // Submit a future task for refreshing
-            GlobalStateMgr.getCurrentState().getIcebergRepository().refreshTable(icebergTable);
+            org.apache.iceberg.Table icebergTable = getIcebergTable(dbName, tblName);
             if (IcebergCatalogType.fromString(catalogType).equals(IcebergCatalogType.CUSTOM_CATALOG)) {
                 return IcebergUtil.convertCustomCatalogToSRTable(icebergTable, catalogImpl, catalogName, dbName,
                         tblName, customProperties);
             } else if (IcebergCatalogType.fromString(catalogType).equals(IcebergCatalogType.GLUE_CATALOG)) {
                 return IcebergUtil.convertGlueCatalogToSRTable(icebergTable, catalogName, dbName, tblName);
             } else {
-                return IcebergUtil.convertHiveCatalogToSRTable(icebergTable, metastoreURI, catalogName, dbName, tblName);
+                return IcebergUtil.convertHiveCatalogToSRTable(icebergTable, metastoreURI, catalogName, dbName,
+                        tblName);
             }
         } catch (DdlException e) {
             LOG.error("Failed to get iceberg table " + IcebergUtil.getIcebergTableIdentifier(dbName, tblName), e);
@@ -120,5 +118,9 @@ public class IcebergMetadata implements ConnectorMetadata {
         }
 
         return IcebergUtil.getIdentityPartitionNames(icebergTable);
+    }
+
+    public org.apache.iceberg.Table getIcebergTable(String dbName, String tblName) {
+        return icebergCatalog.loadTable(IcebergUtil.getIcebergTableIdentifier(dbName, tblName));
     }
 }
