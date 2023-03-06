@@ -23,6 +23,7 @@
 #include "exprs/agg/hll_ndv.h"
 #include "exprs/agg/hll_union.h"
 #include "exprs/agg/hll_union_count.h"
+#include "exprs/agg/hll_uniq_combined.h"
 #include "exprs/agg/intersect_count.h"
 #include "exprs/agg/maxmin.h"
 #include "exprs/agg/maxmin_by.h"
@@ -139,6 +140,9 @@ public:
 
     template <PrimitiveType T>
     static AggregateFunctionPtr MakeHllNdvAggregateFunction();
+
+    template <PrimitiveType T>
+    static AggregateFunctionPtr MakeHllUniqCombinedAggregateFunction();
 
     template <PrimitiveType T>
     static AggregateFunctionPtr MakeHllRawAggregateFunction();
@@ -294,6 +298,11 @@ auto AggregateFactory::MakeDecimalSumDistinctAggregateFunction() {
 template <PrimitiveType PT>
 AggregateFunctionPtr AggregateFactory::MakeHllNdvAggregateFunction() {
     return std::make_shared<HllNdvAggregateFunction<PT, false>>();
+}
+
+template <PrimitiveType PT>
+AggregateFunctionPtr AggregateFactory::MakeHllUniqCombinedAggregateFunction() {
+    return std::make_shared<HllUniqCombinedAggregateFunction<PT>>();
 }
 
 template <PrimitiveType PT>

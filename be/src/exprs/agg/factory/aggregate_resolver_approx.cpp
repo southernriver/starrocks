@@ -25,6 +25,9 @@ struct HLLUnionBuilder {
 
             resolver->add_aggregate_mapping<pt, TYPE_BIGINT, HyperLogLog>(
                     "approx_count_distinct", false, AggregateFactory::MakeHllNdvAggregateFunction<pt>());
+
+            resolver->add_aggregate_mapping<pt, TYPE_BIGINT, DataSketchesHll>(
+                    "uniq_combined", false, AggregateFactory::MakeHllUniqCombinedAggregateFunction<pt>());
         }
     }
 };

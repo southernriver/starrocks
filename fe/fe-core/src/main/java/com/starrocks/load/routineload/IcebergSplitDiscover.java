@@ -276,8 +276,8 @@ public class IcebergSplitDiscover {
 
         // planTasks() may cost a lot of time because it will visit hdfs.
         // run addSplitsFromRecovery() is another thread to avoid block current thread
-        scheduledExecutorService.schedule(this::recover, 0, TimeUnit.MILLISECONDS);
-        scheduledExecutorService.schedule(() -> scheduleCheckAndAddSplits(nextId),
+        SCHEDULED_EXECUTOR_SERVICE.schedule(this::recover, 0, TimeUnit.MILLISECONDS);
+        SCHEDULED_EXECUTOR_SERVICE.schedule(() -> scheduleCheckAndAddSplits(nextId),
                 Config.routine_load_iceberg_split_check_interval_second, TimeUnit.SECONDS);
     }
 

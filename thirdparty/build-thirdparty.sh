@@ -1001,11 +1001,6 @@ build_streamvbyte() {
     make install
 }
 
-export CXXFLAGS="-O3 -fno-omit-frame-pointer -Wno-class-memaccess -fPIC -g"
-export CPPFLAGS="-I ${TP_INCLUDE_DIR}"
-# https://stackoverflow.com/questions/42597685/storage-size-of-timespec-isnt-known
-export CFLAGS="-O3 -fno-omit-frame-pointer -std=c99 -fPIC -g -D_POSIX_C_SOURCE=199309L"
-
 # datasketches
 build_datasketches() {
     check_if_source_exist $DATASKETCHES_SOURCE
@@ -1021,6 +1016,11 @@ build_datasketches() {
     cp -r $TP_SOURCE_DIR/$DATASKETCHES_SOURCE/theta/include/* $TP_INSTALL_DIR/include/datasketches/
     cp -r $TP_SOURCE_DIR/$DATASKETCHES_SOURCE/tuple/include/* $TP_INSTALL_DIR/include/datasketches/
 }
+
+export CXXFLAGS="-O3 -fno-omit-frame-pointer -Wno-class-memaccess -fPIC -g"
+export CPPFLAGS="-I ${TP_INCLUDE_DIR}"
+# https://stackoverflow.com/questions/42597685/storage-size-of-timespec-isnt-known
+export CFLAGS="-O3 -fno-omit-frame-pointer -std=c99 -fPIC -g -D_POSIX_C_SOURCE=199309L"
 
 build_libevent
 build_zlib
