@@ -54,6 +54,9 @@ public class TdwUtil {
 
     public static boolean hasQueryPrivilege(String dbName, String tableName) throws AnalysisException {
         String userName = getTdwUserName(ConnectContext.get().getQualifiedUser());
+        if (userName == null) {
+            userName = "root";
+        }
         return TdwRestClient.getInstance().queryPrivilegeForTable(userName, dbName, tableName);
     }
 
