@@ -269,10 +269,10 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
         LOG.debug("current concurrent task number is min"
                         + "(desire task concurrent num: {}, alive be num * per job per be: {}, config: {})",
                 desireTaskConcurrentNum, aliveBeNum * Config.max_iceberg_routine_load_task_num_per_be_per_job,
-                Config.max_routine_load_task_concurrent_num);
+                Config.max_iceberg_routine_load_task_concurrent_num);
         currentTaskConcurrentNum = Math.min(
                 Math.min(desireTaskConcurrentNum, aliveBeNum * Config.max_iceberg_routine_load_task_num_per_be_per_job),
-                Config.max_routine_load_task_concurrent_num);
+                Config.max_iceberg_routine_load_task_concurrent_num);
         return currentTaskConcurrentNum;
     }
 

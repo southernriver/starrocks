@@ -1223,6 +1223,12 @@ public class Config extends ConfigBase {
     public static int max_iceberg_routine_load_task_num_per_be_per_job = 4;
 
     /**
+     * the max concurrent routine load task num of a single iceberg routine load job
+     */
+    @ConfField(mutable = true)
+    public static int max_iceberg_routine_load_task_concurrent_num = 20;
+
+    /**
      * it can't auto-resume routine load job as long as one of the backends is down
      */
     @ConfField(mutable = true)
