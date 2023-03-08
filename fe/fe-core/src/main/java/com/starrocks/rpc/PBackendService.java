@@ -39,10 +39,12 @@ public interface PBackendService {
             attachmentHandler = ThriftClientAttachmentHandler.class, onceTalkTimeout = 10000)
     Future<PTriggerProfileReportResult> triggerProfileReport(PTriggerProfileReportRequest request);
 
-    @ProtobufRPC(serviceName = "PBackendService", methodName = "get_info", onceTalkTimeout = 10000)
+    // set RPC timeout to 120s,
+    // and use routine_load_kafka_timeout_second/routine_load_pulsar_timeout_second to control timeout of MQ meta API
+    @ProtobufRPC(serviceName = "PBackendService", methodName = "get_info", onceTalkTimeout = 120000)
     Future<PProxyResult> getInfo(PProxyRequest request);
 
-    @ProtobufRPC(serviceName = "PBackendService", methodName = "get_pulsar_info", onceTalkTimeout = 10000)
+    @ProtobufRPC(serviceName = "PBackendService", methodName = "get_pulsar_info", onceTalkTimeout = 120000)
     Future<PPulsarProxyResult> getPulsarInfo(PPulsarProxyRequest request);
 
     @ProtobufRPC(serviceName = "PBackendService", methodName = "execute_command", onceTalkTimeout = 60000)
