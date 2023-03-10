@@ -27,13 +27,16 @@ import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.starrocks.analysis.Analyzer;
+import com.starrocks.analysis.DescriptorTable;
 import com.starrocks.analysis.Expr;
 import com.starrocks.analysis.RedirectStatus;
 import com.starrocks.analysis.StringLiteral;
+import com.starrocks.analysis.TableName;
 import com.starrocks.analysis.VariableExpr;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.ExternalOlapTable;
+import com.starrocks.catalog.HiveTable;
 import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.ResourceGroup;
 import com.starrocks.catalog.ResourceGroupClassifier;
@@ -449,7 +452,7 @@ public class StmtExecutor {
                             writeProfile(beginTimeInNanoSecond);
                         }
                         break;
-                    } catch (RpcException e) {
+                    } catch (RpcException | UserException e) {
                         if (i == retryTime - 1) {
                             throw e;
                         }
@@ -461,6 +464,22 @@ public class StmtExecutor {
                                 originStmt = this.originStmt.originStmt;
                             }
                             LOG.warn("retry {} times. stmt: {}", (i + 1), originStmt);
+                            if (e instanceof UserException) {
+                                if (e.getMessage().contains("hdfsOpenFile failed, path=") && execPlan != null) {
+                                    try {
+                                        refreshExternalTable(execPlan);
+                                        context.setQueryId(UUIDUtil.genUUID());
+                                        context.getDumpInfo().reset();
+                                        context.getDumpInfo().setOriginStmt(parsedStmt.getOrigStmt().originStmt);
+                                        execPlan = StatementPlanner.plan(parsedStmt, context);
+                                    } catch (Throwable t) {
+                                        LOG.info("Failed to refresh External Table", t);
+                                        throw e;
+                                    }
+                                } else {
+                                    throw e;
+                                }
+                            }
                         } else {
                             throw e;
                         }
@@ -568,6 +587,41 @@ public class StmtExecutor {
             context.setSessionVariable(sessionVariableBackup);
         }
     }
+
+    private void refreshExternalTable(ExecPlan execPlan) {
+        for (Map.Entry<Table, List<DescriptorTable.ReferencedPartitionInfo>> entry
+                : execPlan.getDescTbl().getReferencedPartitionsPerTable().entrySet()) {
+            try {
+                if (entry.getKey() instanceof HiveTable) {
+                    HiveTable table = (HiveTable) entry.getKey();
+                    List<String> partitions = toPartitionName(table.getPartitionColumnNames(), entry.getValue());
+                    LOG.info("refresh external table, db: " + table.getDbName() + ", table: " + table.getTableName()
+                            + ", partition: " + partitions);
+                    GlobalStateMgr.getCurrentState().refreshExternalTable(
+                            new TableName(table.getCatalogName(), table.getDbName(), table.getTableName()), partitions);
+                }
+            } catch (Throwable throwable) {
+                LOG.warn("Failed to refresh external table ["
+                        + entry.getKey().getName() + "]", throwable);
+            }
+        }
+    }
+
+    private List<String> toPartitionName(List<String> partColNames, List<DescriptorTable.ReferencedPartitionInfo> infos) {
+        List<String> partNames = new ArrayList<>();
+        for (DescriptorTable.ReferencedPartitionInfo info : infos) {
+            StringBuilder builder = new StringBuilder();
+            for (int i = 0; i < partColNames.size(); i++) {
+                builder.append(partColNames.get(i)).append("=").append(info.getKey().getKeys().get(i).getStringValue());
+                if (i < partColNames.size() - 1) {
+                    builder.append("/");
+                }
+            }
+            partNames.add(builder.toString());
+        }
+        return partNames;
+    }
+
     private boolean isNotVariableSelect() {
         if (parsedStmt instanceof QueryStatement) {
             List<Expr> output = ((QueryStatement) parsedStmt).getQueryRelation().getOutputExpression();

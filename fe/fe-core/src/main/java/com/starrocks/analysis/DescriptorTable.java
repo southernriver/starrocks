@@ -192,6 +192,10 @@ public class DescriptorTable {
         return out.toString();
     }
 
+    public Map<Table, List<ReferencedPartitionInfo>> getReferencedPartitionsPerTable() {
+        return referencedPartitionsPerTable;
+    }
+
     public static class ReferencedPartitionInfo {
         private long id;
         private PartitionKey key;
