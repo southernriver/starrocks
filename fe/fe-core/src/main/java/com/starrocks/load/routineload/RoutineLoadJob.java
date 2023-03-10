@@ -320,6 +320,10 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
         } else {
             throw new UserException("Invalid format type.");
         }
+        if (stmt.getJobProperties().containsKey(SessionVariable.EXEC_MEM_LIMIT)) {
+            jobProperties.put(SessionVariable.EXEC_MEM_LIMIT,
+                    stmt.getJobProperties().get(SessionVariable.EXEC_MEM_LIMIT));
+        }
     }
 
     private void setRoutineLoadDesc(RoutineLoadDesc routineLoadDesc) {
@@ -1355,6 +1359,10 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
 
     public Map<String, String> getSessionVariables() {
         return sessionVariables;
+    }
+
+    public Map<String, String> getJobProperties() {
+        return jobProperties;
     }
 
     private String jobPropertiesToJsonString() {

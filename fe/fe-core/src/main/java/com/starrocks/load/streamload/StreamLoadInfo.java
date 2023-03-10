@@ -392,7 +392,9 @@ public class StreamLoadInfo {
         }
         stripOuterArray = routineLoadJob.isStripOuterArray();
         partialUpdate = routineLoadJob.isPartialUpdate();
-        if (routineLoadJob.getSessionVariables().containsKey(SessionVariable.EXEC_MEM_LIMIT)) {
+        if (routineLoadJob.getJobProperties().containsKey(SessionVariable.EXEC_MEM_LIMIT)) {
+            execMemLimit = Long.parseLong(routineLoadJob.getJobProperties().get(SessionVariable.EXEC_MEM_LIMIT));
+        } else if (routineLoadJob.getSessionVariables().containsKey(SessionVariable.EXEC_MEM_LIMIT)) {
             execMemLimit = Long.parseLong(routineLoadJob.getSessionVariables().get(SessionVariable.EXEC_MEM_LIMIT));
         } else {
             execMemLimit = SessionVariable.DEFAULT_EXEC_MEM_LIMIT;
