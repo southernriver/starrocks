@@ -281,7 +281,8 @@ public class ExportStmt extends StatementBase {
         if (properties.containsKey(FILE_FORMAT)) {
             String fileFormatStr = properties.get(FILE_FORMAT);
             if (!fileFormatStr.equalsIgnoreCase("csv")
-                    && !fileFormatStr.equalsIgnoreCase("parquet")) {
+                    && !fileFormatStr.equalsIgnoreCase("parquet")
+                    && !fileFormatStr.equalsIgnoreCase("orc")) {
                 throw new AnalysisException("Invalid file format: " + fileFormatStr);
             }
             this.fileFormat = fileFormatStr.toLowerCase();

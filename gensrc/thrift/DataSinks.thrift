@@ -47,11 +47,13 @@ enum TResultSinkType {
     VARIABLE
 }
 
-struct TParquetOptions {
+struct TFileOptions {
     // parquet row group max size in bytes
-    1: optional i64 parquet_max_group_bytes
-    2: optional Types.TCompressionType compression_type
-    3: optional bool use_dict
+    1: optional i64 parquet_max_group_bytes //only for parquet
+    2: optional Types.TCompressionType compression_type //only for parquet
+    3: optional bool use_dict //only for parquet
+    4: optional i64 max_file_size_bytes
+    5: optional i64 max_file_size_rows
 }
 
 struct TResultFileSinkOptions {
@@ -69,7 +71,7 @@ struct TResultFileSinkOptions {
     9: optional i32 hdfs_write_buffer_size_kb = 0
     // properties from hdfs-site.xml, core-site.xml and load_properties
     10: optional PlanNodes.THdfsProperties hdfs_properties
-    11: optional TParquetOptions parquet_options
+    11: optional TFileOptions file_options
     12: optional list<string> file_column_names
 }
 
@@ -156,7 +158,7 @@ struct TExportSink {
 
     // export file name prefix
     20: optional string file_format
-    21: optional TParquetOptions parquet_options
+    21: optional TFileOptions file_options
     22: optional list<string> file_column_names
 
     // export file name prefix

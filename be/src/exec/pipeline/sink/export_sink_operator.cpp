@@ -4,6 +4,7 @@
 
 #include "exec/data_sink.h"
 #include "exec/file_builder.h"
+#include "exec/orc_builder.h"
 #include "exec/parquet_builder.h"
 #include "exec/pipeline/fragment_context.h"
 #include "exec/pipeline/sink/sink_io_buffer.h"
@@ -12,6 +13,7 @@
 #include "formats/csv/output_stream.h"
 #include "fs/fs_broker.h"
 #include "runtime/runtime_state.h"
+#include "util/time.h"
 
 namespace starrocks::pipeline {
 
@@ -22,16 +24,24 @@ public:
             : SinkIOBuffer(num_sinkers),
               _t_export_sink(t_export_sink),
               _output_expr_ctxs(output_expr_ctxs),
-              _fragment_ctx(fragment_ctx) {
-        if (_t_export_sink.__isset.parquet_options && _t_export_sink.parquet_options.__isset.parquet_max_group_bytes) {
-            _parquet_options.row_group_max_size = _t_export_sink.parquet_options.parquet_max_group_bytes;
+              _fragment_ctx(fragment_ctx),
+              _num_rows(0) {
+        if (_t_export_sink.__isset.file_options && _t_export_sink.file_options.__isset.parquet_max_group_bytes) {
+            _parquet_options.row_group_max_size = _t_export_sink.file_options.parquet_max_group_bytes;
         }
-        if (_t_export_sink.__isset.parquet_options && _t_export_sink.parquet_options.__isset.use_dict) {
-            _parquet_options.use_dict = _t_export_sink.parquet_options.use_dict;
+        if (_t_export_sink.__isset.file_options && _t_export_sink.file_options.__isset.use_dict) {
+            _parquet_options.use_dict = _t_export_sink.file_options.use_dict;
         }
-        if (_t_export_sink.__isset.parquet_options && _t_export_sink.parquet_options.__isset.compression_type) {
-            _parquet_options.compression_type = _t_export_sink.parquet_options.compression_type;
+        if (_t_export_sink.__isset.file_options && _t_export_sink.file_options.__isset.compression_type) {
+            _parquet_options.compression_type = _t_export_sink.file_options.compression_type;
         }
+        if (_t_export_sink.__isset.file_options && _t_export_sink.file_options.__isset.max_file_size_bytes) {
+            _orc_options.max_file_size_bytes = _t_export_sink.file_options.max_file_size_bytes;
+        }
+        if (_t_export_sink.__isset.file_options && _t_export_sink.file_options.__isset.max_file_size_rows) {
+            _orc_options.max_file_size_rows = _t_export_sink.file_options.max_file_size_rows;
+        }
+        
     }
 
     ~ExportSinkIOBuffer() override = default;
@@ -52,6 +62,8 @@ private:
     std::unique_ptr<FileBuilder> _file_builder;
     FragmentContext* _fragment_ctx;
     ParquetBuilderOptions _parquet_options;
+    ORCBuilderOptions _orc_options;
+    size_t _num_rows;
 };
 
 Status ExportSinkIOBuffer::prepare(RuntimeState* state, RuntimeProfile* parent_profile) {
@@ -109,11 +121,26 @@ void ExportSinkIOBuffer::_process_chunk(bthread::TaskIterator<ChunkPtr>& iter) {
         close(_state);
         return;
     }
+    size_t chunkNumRows = chunk->num_rows();
     if (Status status = _file_builder->add_chunk(chunk.get()); !status.ok()) {
         LOG(WARNING) << "add chunk to file builder failed, error: " << status.to_string();
         _fragment_ctx->cancel(status);
         return;
     }
+
+    if ((_orc_options.max_file_size_rows > 0 && _num_rows >= _orc_options.max_file_size_rows) ||
+        (_orc_options.max_file_size_rows > 0 && _file_builder->file_size() >= _orc_options.max_file_size_rows)) {
+        if (Status status = _file_builder->finish(); !status.ok()) {
+            LOG(WARNING) << "finish file build failed, error: " << status.to_string();
+            return;
+        }
+        if (Status status = _open_file_writer(); !status.ok()) {
+            LOG(WARNING) << "open file write failed, error: " << status.to_string();
+            return;
+        }
+        _num_rows = 0;
+    }
+    _num_rows += chunkNumRows;
 }
 
 Status ExportSinkIOBuffer::_open_file_writer() {
@@ -156,6 +183,10 @@ Status ExportSinkIOBuffer::_open_file_writer() {
         _file_builder = std::make_unique<ParquetBuilder>(
                 std::move(output_file), _output_expr_ctxs,
                 _parquet_options, _t_export_sink.file_column_names);
+    } else if (file_format == "orc") {
+        LOG(INFO) << "open file writer with path: " << file_path;
+        _file_builder = std::make_unique<ORCBuilder>(_orc_options, std::move(output_file),
+                                                     _output_expr_ctxs, nullptr, _t_export_sink.file_column_names);
     } else {
         return Status::NotSupported("unsupported file format " + file_format);
     }
@@ -174,7 +205,7 @@ Status ExportSinkIOBuffer::_gen_file_name(std::string* file_name) {
     std::stringstream file_name_ss;
     // now file-number is 0.
     // <file-name-prefix>_<file-number>.csv.<timestamp>
-    file_name_ss << _t_export_sink.file_name_prefix << "0" << "." << _t_export_sink.file_format;
+    file_name_ss << _t_export_sink.file_name_prefix << "0" << "." << _t_export_sink.file_format << "." << UnixMillis();
     *file_name = file_name_ss.str();
     return Status::OK();
 }

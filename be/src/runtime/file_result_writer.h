@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include "exec/orc_builder.h"
 #include "exec/parquet_builder.h"
 #include "fs/fs.h"
 #include "gen_cpp/DataSinks_types.h"
@@ -48,6 +49,7 @@ struct ResultFileOptions {
     bool use_broker;
     std::vector<std::string> file_column_names;
     ParquetBuilderOptions parquet_options;
+    ORCBuilderOptions orc_options;
 
     ResultFileOptions(const TResultFileSinkOptions& t_opt) {
         file_path = t_opt.file_path;
@@ -74,15 +76,16 @@ struct ResultFileOptions {
         if (t_opt.__isset.file_column_names) {
             file_column_names = t_opt.file_column_names;
         }
-        if (t_opt.__isset.parquet_options && t_opt.parquet_options.__isset.parquet_max_group_bytes) {
-            parquet_options.row_group_max_size = t_opt.parquet_options.parquet_max_group_bytes;
+        if (t_opt.__isset.file_options && t_opt.file_options.__isset.parquet_max_group_bytes) {
+            parquet_options.row_group_max_size = t_opt.file_options.parquet_max_group_bytes;
         }
-        if (t_opt.__isset.parquet_options && t_opt.parquet_options.__isset.use_dict) {
-            parquet_options.use_dict = t_opt.parquet_options.use_dict;
+        if (t_opt.__isset.file_options && t_opt.file_options.__isset.use_dict) {
+            parquet_options.use_dict = t_opt.file_options.use_dict;
         }
-        if (t_opt.__isset.parquet_options && t_opt.parquet_options.__isset.compression_type) {
-            parquet_options.compression_type = t_opt.parquet_options.compression_type;
+        if (t_opt.__isset.file_options && t_opt.file_options.__isset.compression_type) {
+            parquet_options.compression_type = t_opt.file_options.compression_type;
         }
+        orc_options.max_file_size_bytes = max_file_size_bytes;
     }
 
     ~ResultFileOptions() = default;

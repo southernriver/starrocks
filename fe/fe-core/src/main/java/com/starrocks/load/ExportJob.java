@@ -56,6 +56,7 @@ import com.starrocks.common.io.Text;
 import com.starrocks.common.io.Writable;
 import com.starrocks.common.util.BrokerUtil;
 import com.starrocks.common.util.DebugUtil;
+import com.starrocks.common.util.ParseUtil;
 import com.starrocks.common.util.TimeUtils;
 import com.starrocks.fs.HdfsUtil;
 import com.starrocks.planner.DataPartition;
@@ -78,10 +79,10 @@ import com.starrocks.system.Backend;
 import com.starrocks.task.AgentClient;
 import com.starrocks.thrift.TAgentResult;
 import com.starrocks.thrift.TCompressionType;
+import com.starrocks.thrift.TFileOptions;
 import com.starrocks.thrift.THdfsProperties;
 import com.starrocks.thrift.TInternalScanRange;
 import com.starrocks.thrift.TNetworkAddress;
-import com.starrocks.thrift.TParquetOptions;
 import com.starrocks.thrift.TResultSinkType;
 import com.starrocks.thrift.TScanRange;
 import com.starrocks.thrift.TScanRangeLocation;
@@ -375,7 +376,7 @@ public class ExportJob implements Writable {
         if (!brokerDesc.hasBroker()) {
             HdfsUtil.getTProperties(exportTempPath, brokerDesc, hdfsProperties);
         }
-        TParquetOptions parquetOptions = new TParquetOptions();
+        TFileOptions fileOptions = new TFileOptions();
         if (fileFormat.equals("parquet")) {
             TCompressionType compressionType = TCompressionType.SNAPPY;
             if (properties.containsKey(OutFileClause.PARQUET_COMPRESSION_TYPE)) {
@@ -385,19 +386,31 @@ public class ExportJob implements Writable {
                     throw new AnalysisException("compression type is invalid, type: " + type);
                 }
             }
-            parquetOptions.setCompression_type(compressionType);
+            fileOptions.setCompression_type(compressionType);
 
             if (properties.containsKey(OutFileClause.PARQUET_USE_DICT)) {
-                parquetOptions.setUse_dict(Boolean.getBoolean(properties.get(OutFileClause.PARQUET_USE_DICT)));
+                fileOptions.setUse_dict(Boolean.getBoolean(properties.get(OutFileClause.PARQUET_USE_DICT)));
             }
 
             if (properties.containsKey(OutFileClause.PARQUET_MAX_ROW_GROUP_SIZE)) {
-                parquetOptions.setParquet_max_group_bytes(
+                fileOptions.setParquet_max_group_bytes(
                         Long.getLong(properties.get(OutFileClause.PARQUET_MAX_ROW_GROUP_SIZE)));
             }
         }
+        if (properties.containsKey(OutFileClause.PROP_MAX_FILE_SIZE)) {
+            long maxFileSizeBytes = ParseUtil.analyzeDataVolumn(properties.get(OutFileClause.PROP_MAX_FILE_SIZE));
+            if (maxFileSizeBytes > OutFileClause.MAX_FILE_SIZE_BYTES
+                    || maxFileSizeBytes < OutFileClause.MIN_FILE_SIZE_BYTES) {
+                throw new AnalysisException("max file size should between 5MB and 2GB. Given: " + maxFileSizeBytes);
+            }
+            fileOptions.setMax_file_size_bytes(maxFileSizeBytes);
+        }
+
+        if (properties.containsKey(OutFileClause.PROP_MAX_FILE_ROW)) {
+            fileOptions.setMax_file_size_rows(Long.parseLong(properties.get(OutFileClause.PROP_MAX_FILE_ROW)));
+        }
         fragment.setSink(new ExportSink(exportTempPath, fileNamePrefix + taskIdx + "_", columnSeparator,
-                rowDelimiter, brokerDesc, hdfsProperties, fileFormat, parquetOptions, exportColumnNames));
+                rowDelimiter, brokerDesc, hdfsProperties, fileFormat, fileOptions, exportColumnNames));
         try {
             fragment.createDataSink(TResultSinkType.MYSQL_PROTOCAL);
         } catch (Exception e) {

@@ -33,7 +33,7 @@ import com.starrocks.sql.analyzer.SemanticException;
 import com.starrocks.thrift.TFileFormatType;
 import com.starrocks.thrift.THdfsProperties;
 import com.starrocks.thrift.TCompressionType;
-import com.starrocks.thrift.TParquetOptions;
+import com.starrocks.thrift.TFileOptions;
 import com.starrocks.thrift.TResultFileSinkOptions;
 
 import java.util.List;
@@ -60,14 +60,15 @@ public class OutFileClause implements ParseNode {
     private static final String PROP_BROKER_NAME = "broker.name";
     private static final String PROP_COLUMN_SEPARATOR = "column_separator";
     private static final String PROP_LINE_DELIMITER = "line_delimiter";
-    private static final String PROP_MAX_FILE_SIZE = "max_file_size";
+    public static final String PROP_MAX_FILE_SIZE = "max_file_size";
+    public static final String PROP_MAX_FILE_ROW = "max_file_row";
     public static final String PARQUET_COMPRESSION_TYPE = "compression_type";
     public static final String PARQUET_USE_DICT = "use_dictionary";
     public static final String PARQUET_MAX_ROW_GROUP_SIZE = "max_row_group_bytes";
 
-    private static final long DEFAULT_MAX_FILE_SIZE_BYTES = 1024 * 1024 * 1024L; // 1GB
-    private static final long MIN_FILE_SIZE_BYTES = 5 * 1024 * 1024L; // 5MB
-    private static final long MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024 * 1024L; // 2GB
+    public static final long DEFAULT_MAX_FILE_SIZE_BYTES = 1024 * 1024 * 1024L; // 1GB
+    public static final long MIN_FILE_SIZE_BYTES = 5 * 1024 * 1024L; // 5MB
+    public static final long MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024 * 1024L; // 2GB
     public static final long DEFAULT_MAX_PARQUET_ROW_GROUP_BYTES = 128 * 1024 * 1024; // 128MB
 
     private String filePath;
@@ -125,7 +126,9 @@ public class OutFileClause implements ParseNode {
             fileFormatType = TFileFormatType.FORMAT_CSV_PLAIN;
         } else if (format.equals("parquet")) {
             fileFormatType = TFileFormatType.FORMAT_PARQUET;
-        } else {
+        } else if (format.equals("orc")) {
+            fileFormatType = TFileFormatType.FORMAT_ORC;
+        }else {
             throw new AnalysisException("Only support CSV and PARQUET format");
         }
 
@@ -250,14 +253,13 @@ public class OutFileClause implements ParseNode {
             sinkOptions.setColumn_separator(columnSeparator);
             sinkOptions.setRow_delimiter(rowDelimiter);
         } else if (isParquetFormat()) {
-            TParquetOptions parquetOptions = new TParquetOptions();
-            parquetOptions.setCompression_type(compressionType);
-            parquetOptions.setParquet_max_group_bytes(maxParquetRowGroupBytes);
-            parquetOptions.setUse_dict(useDict);
-            sinkOptions.setParquet_options(parquetOptions);
-            sinkOptions.setFile_column_names(columnOutputNames);
+            TFileOptions fileOptions = new TFileOptions();
+            fileOptions.setCompression_type(compressionType);
+            fileOptions.setParquet_max_group_bytes(maxParquetRowGroupBytes);
+            fileOptions.setUse_dict(useDict);
+            sinkOptions.setFile_options(fileOptions);
         }
-
+        sinkOptions.setFile_column_names(columnOutputNames);
         sinkOptions.setMax_file_size_bytes(maxFileSizeBytes);
         if (brokerDesc != null) {
             if (!brokerDesc.hasBroker()) {

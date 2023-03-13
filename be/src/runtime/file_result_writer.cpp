@@ -94,6 +94,10 @@ Status FileResultWriter::_create_file_writer() {
                 std::move(writable_file), _output_expr_ctxs,
                 _file_opts->parquet_options, _file_opts->file_column_names);
         break;
+    case TFileFormatType::FORMAT_ORC:
+        _file_builder = std::make_unique<ORCBuilder>(_file_opts->orc_options, std::move(writable_file),
+                                                     _output_expr_ctxs, nullptr, _file_opts->file_column_names);
+        break;
     default:
         return Status::InternalError(strings::Substitute("unsupported file format: $0", _file_opts->file_format));
     }
@@ -123,6 +127,8 @@ std::string FileResultWriter::_file_format_to_name() {
         return "csv";
     case TFileFormatType::FORMAT_PARQUET:
         return "parquet";
+    case TFileFormatType::FORMAT_ORC:
+        return "orc";
     default:
         return "unknown";
     }

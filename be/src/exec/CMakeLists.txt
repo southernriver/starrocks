@@ -48,6 +48,7 @@ set(EXEC_FILES
     broker_writer.cpp
     plain_text_builder.cpp
     parquet_builder.cpp
+    orc_builder.cpp
     vectorized/aggregator.cpp
     vectorized/sorted_streaming_aggregator.cpp
     vectorized/aggregate/agg_hash_variant.cpp

@@ -33,7 +33,7 @@ import com.starrocks.thrift.THdfsProperties;
 import com.starrocks.thrift.TExportSink;
 import com.starrocks.thrift.TFileType;
 import com.starrocks.thrift.TNetworkAddress;
-import com.starrocks.thrift.TParquetOptions;
+import com.starrocks.thrift.TFileOptions;
 import org.apache.commons.lang.StringEscapeUtils;
 
 import java.util.List;
@@ -46,10 +46,10 @@ public class ExportSink extends DataSink {
     private final BrokerDesc brokerDesc;
     private final THdfsProperties hdfsProperties;
     private final String fileFormat;
-    private final TParquetOptions parquetOptions;
+    private final TFileOptions fileOptions;
     private final List<String> exportColumnNames;
     public ExportSink(String exportPath, String fileNamePrefix, String columnSeparator, String rowDelimiter,
-            BrokerDesc brokerDesc, THdfsProperties hdfsProperties, String fileFormat, TParquetOptions parquetOptions,
+            BrokerDesc brokerDesc, THdfsProperties hdfsProperties, String fileFormat, TFileOptions fileOptions,
             List<String> exportColumnNames) {
         this.exportPath = exportPath;
         this.fileNamePrefix = fileNamePrefix;
@@ -58,7 +58,7 @@ public class ExportSink extends DataSink {
         this.brokerDesc = brokerDesc;
         this.hdfsProperties = hdfsProperties;
         this.fileFormat = fileFormat;
-        this.parquetOptions = parquetOptions;
+        this.fileOptions = fileOptions;
         this.exportColumnNames = exportColumnNames;
     }
 
@@ -91,8 +91,8 @@ public class ExportSink extends DataSink {
                 + ")");
         sb.append(prefix + "  fileFormat="
             + StringEscapeUtils.escapeJava(fileFormat) + "\n");
-        sb.append(prefix + "  parquetOptions="
-            + StringEscapeUtils.escapeJava(parquetOptions.toString()) + "\n");
+        sb.append(prefix + "  fileOptions="
+            + StringEscapeUtils.escapeJava(fileOptions.toString()) + "\n");
         sb.append(prefix + "  exportColumnNames="
             + StringEscapeUtils.escapeJava(String.join(", ", exportColumnNames)) + "\n");
         sb.append("\n");
@@ -119,8 +119,8 @@ public class ExportSink extends DataSink {
             tExportSink.setFile_name_prefix(fileNamePrefix);
         }
         tExportSink.setFile_format(fileFormat);
-        if (fileFormat.equals("parquet")) {
-            tExportSink.setParquet_options(parquetOptions);
+        if (fileFormat.equals("parquet") || fileFormat.equals("orc")) {
+            tExportSink.setFile_options(fileOptions);
             tExportSink.setFile_column_names(exportColumnNames);
         }
 
