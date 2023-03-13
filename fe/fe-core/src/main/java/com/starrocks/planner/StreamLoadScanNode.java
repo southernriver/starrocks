@@ -110,12 +110,12 @@ public class StreamLoadScanNode extends LoadScanNode {
     private long txnId;
     private int curChannelId;
 
-    private static class ParamCreateContext {
+    protected static class ParamCreateContext {
         public TBrokerScanRangeParams params;
         public TupleDescriptor tupleDescriptor;
     }
 
-    private ParamCreateContext paramCreateContext;
+    protected ParamCreateContext paramCreateContext;
 
     // used to construct for streaming loading
     public StreamLoadScanNode(TUniqueId loadId, PlanNodeId id, TupleDescriptor tupleDesc, Table dstTable, StreamLoadInfo streamLoadInfo) {
@@ -316,45 +316,49 @@ public class StreamLoadScanNode extends LoadScanNode {
         createScanRange();
     }
 
+    protected void addToBrokerScanRange(TBrokerScanRange brokerScanRange) throws UserException {
+        TBrokerRangeDesc rangeDesc = new TBrokerRangeDesc();
+        rangeDesc.setFile_type(streamLoadInfo.getFileType());
+        rangeDesc.setFormat_type(streamLoadInfo.getFormatType());
+        if (rangeDesc.format_type == TFileFormatType.FORMAT_JSON) {
+            if (!streamLoadInfo.getJsonPaths().isEmpty()) {
+                rangeDesc.setJsonpaths(streamLoadInfo.getJsonPaths());
+            }
+            if (!streamLoadInfo.getJsonRoot().isEmpty()) {
+                rangeDesc.setJson_root(streamLoadInfo.getJsonRoot());
+            }
+            rangeDesc.setStrip_outer_array(streamLoadInfo.isStripOuterArray());
+        }
+        rangeDesc.setSplittable(false);
+        switch (streamLoadInfo.getFileType()) {
+            case FILE_LOCAL:
+                rangeDesc.setPath(streamLoadInfo.getPath());
+                break;
+            case FILE_STREAM:
+                rangeDesc.setPath("Invalid Path");
+                if (needAssignBE) {
+                    UUID uuid = UUID.randomUUID();
+                    rangeDesc.setLoad_id(new TUniqueId(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits()));
+                } else {
+                    rangeDesc.setLoad_id(loadId);
+                }
+                break;
+            default:
+                throw new UserException("unsupported file type, type=" + streamLoadInfo.getFileType());
+        }
+        rangeDesc.setStart_offset(0);
+        rangeDesc.setSize(-1);
+        rangeDesc.setNum_of_columns_from_file(paramCreateContext.tupleDescriptor.getSlots().size());
+        brokerScanRange.addToRanges(rangeDesc);
+        brokerScanRange.setBroker_addresses(Lists.newArrayList());
+    }
+
     private void createScanRange() throws UserException {
         for (int i = 0; i < this.numInstances; i++) {
             TBrokerScanRange brokerScanRange = new TBrokerScanRange();
             brokerScanRange.setParams(paramCreateContext.params);
 
-            TBrokerRangeDesc rangeDesc = new TBrokerRangeDesc();
-            rangeDesc.setFile_type(streamLoadInfo.getFileType());
-            rangeDesc.setFormat_type(streamLoadInfo.getFormatType());
-            if (rangeDesc.format_type == TFileFormatType.FORMAT_JSON) {
-                if (!streamLoadInfo.getJsonPaths().isEmpty()) {
-                    rangeDesc.setJsonpaths(streamLoadInfo.getJsonPaths());
-                }
-                if (!streamLoadInfo.getJsonRoot().isEmpty()) {
-                    rangeDesc.setJson_root(streamLoadInfo.getJsonRoot());
-                }
-                rangeDesc.setStrip_outer_array(streamLoadInfo.isStripOuterArray());
-            }
-            rangeDesc.setSplittable(false);
-            switch (streamLoadInfo.getFileType()) {
-                case FILE_LOCAL:
-                    rangeDesc.setPath(streamLoadInfo.getPath());
-                    break;
-                case FILE_STREAM:
-                    rangeDesc.setPath("Invalid Path");
-                    if (needAssignBE) {
-                        UUID uuid = UUID.randomUUID();
-                        rangeDesc.setLoad_id(new TUniqueId(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits()));
-                    } else {
-                        rangeDesc.setLoad_id(loadId);
-                    }
-                    break;
-                default:
-                    throw new UserException("unsupported file type, type=" + streamLoadInfo.getFileType());
-            }
-            rangeDesc.setStart_offset(0);
-            rangeDesc.setSize(-1);
-            rangeDesc.setNum_of_columns_from_file(paramCreateContext.tupleDescriptor.getSlots().size());
-            brokerScanRange.addToRanges(rangeDesc);
-            brokerScanRange.setBroker_addresses(Lists.newArrayList());
+            addToBrokerScanRange(brokerScanRange);
             if (needAssignBE) {
                 brokerScanRange.setChannel_id(curChannelId++);
             }

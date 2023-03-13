@@ -33,7 +33,7 @@ import com.starrocks.load.streamload.StreamLoadInfo;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.system.Backend;
 import com.starrocks.thrift.TBrokerRangeDesc;
-import com.starrocks.thrift.TFileFormatType;
+import com.starrocks.thrift.TBrokerScanRange;
 import com.starrocks.thrift.TFileType;
 import com.starrocks.thrift.TNetworkAddress;
 import com.starrocks.thrift.TUniqueId;
@@ -57,17 +57,41 @@ public class IcebergStreamLoadScanNode extends StreamLoadScanNode {
         this.splits = splits;
     }
 
-    // private TBrokerRangeDesc createBrokerRangeDesc(IcebergSplit split) {
-    //     TBrokerRangeDesc rangeDesc = new TBrokerRangeDesc();
-    //     rangeDesc.setFile_type(TFileType.FILE_BROKER);
-    //     rangeDesc.setFormat_type(splits.get(0).getFormatType());
-    //     rangeDesc.setPath(split.getPath());
-    //     rangeDesc.setSplittable(false);
-    //     rangeDesc.setStart_offset(split.getOffset());
-    //     rangeDesc.setSize(split.getLength());
-    //     rangeDesc.setFile_size(split.getFileSize());
-    //     rangeDesc.setNum_of_columns_from_file(srcTupleDesc.getSlots().size());
-    //     rangeDesc.setLoad_id(loadId);
-    //     return rangeDesc;
-    // }
+    private TBrokerRangeDesc createBrokerRangeDesc(IcebergSplit split) {
+        TBrokerRangeDesc rangeDesc = new TBrokerRangeDesc();
+        rangeDesc.setFile_type(TFileType.FILE_BROKER);
+        rangeDesc.setFormat_type(splits.get(0).getFormatType());
+        rangeDesc.setPath(split.getPath());
+        rangeDesc.setSplittable(false);
+        rangeDesc.setStart_offset(split.getOffset());
+        rangeDesc.setSize(split.getLength());
+        rangeDesc.setFile_size(split.getFileSize());
+        rangeDesc.setNum_of_columns_from_file(paramCreateContext.tupleDescriptor.getSlots().size());
+        rangeDesc.setLoad_id(loadId);
+        return rangeDesc;
+    }
+
+    private void setBrokerAddresses(TBrokerScanRange brokerScanRange) throws UserException {
+        if (brokerDesc == null || !brokerDesc.hasBroker()) {
+            brokerScanRange.params.setUse_broker(false);
+            brokerScanRange.setBroker_addresses(Lists.newArrayList());
+            return;
+        }
+        Backend backend = GlobalStateMgr.getCurrentSystemInfo().getBackend(beId);
+        if (backend == null) {
+            throw new LoadException("backend " + beId + " not exist");
+        }
+        FsBroker broker =
+                GlobalStateMgr.getCurrentState().getBrokerMgr().getBroker(brokerDesc.getName(), backend.getHost());
+
+        brokerScanRange.setBroker_addresses(Lists.newArrayList(new TNetworkAddress(broker.ip, broker.port)));
+    }
+
+    @Override
+    protected void addToBrokerScanRange(TBrokerScanRange brokerScanRange) throws UserException {
+        for (IcebergSplit split : splits) {
+            brokerScanRange.addToRanges(createBrokerRangeDesc(split));
+        }
+        setBrokerAddresses(brokerScanRange);
+    }
 }

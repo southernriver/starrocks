@@ -8,6 +8,7 @@ import com.starrocks.common.DdlException;
 import com.starrocks.common.util.Util;
 import com.starrocks.connector.ConnectorMetadata;
 import com.starrocks.connector.HdfsEnvironment;
+import com.starrocks.server.GlobalStateMgr;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.logging.log4j.LogManager;
@@ -87,6 +88,8 @@ public class IcebergMetadata implements ConnectorMetadata {
     public Table getTable(String dbName, String tblName) {
         try {
             org.apache.iceberg.Table icebergTable = getIcebergTable(dbName, tblName);
+            // Submit a future task for refreshing
+            GlobalStateMgr.getCurrentState().getIcebergRepository().refreshTable(icebergTable);
             if (IcebergCatalogType.fromString(catalogType).equals(IcebergCatalogType.CUSTOM_CATALOG)) {
                 return IcebergUtil.convertCustomCatalogToSRTable(icebergTable, catalogImpl, catalogName, dbName,
                         tblName, customProperties);

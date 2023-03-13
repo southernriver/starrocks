@@ -1408,7 +1408,7 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
 
         return new CreateRoutineLoadStmt(new LabelName(dbName == null ? null : dbName.toString(), name),
                 tableName == null ? null : tableName.toString(), loadPropertyList, jobProperties, typeName,
-                dataSourceProperties, null);
+                dataSourceProperties, getBrokerDesc(context.broker));
     }
 
     @Override
