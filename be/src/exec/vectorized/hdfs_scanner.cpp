@@ -64,30 +64,6 @@ bool HdfsScannerParams::is_lazy_materialization_slot(SlotId slot_id) const {
 Status HdfsScanner::init(RuntimeState* runtime_state, const HdfsScannerParams& scanner_params) {
     _runtime_state = runtime_state;
     _scanner_params = scanner_params;
-
-    // which columsn do we need to scan.
-    for (const auto& slot : _scanner_params.materialize_slots) {
-        _scanner_columns.emplace_back(slot->col_name());
-    }
-
-    // general conjuncts.
-    RETURN_IF_ERROR(Expr::clone_if_not_exists(runtime_state, &_pool, _scanner_params.conjunct_ctxs, &_conjunct_ctxs));
-
-    // slot id conjuncts.
-    const auto& conjunct_ctxs_by_slot = _scanner_params.conjunct_ctxs_by_slot;
-    if (!conjunct_ctxs_by_slot.empty()) {
-        for (auto iter = conjunct_ctxs_by_slot.begin(); iter != conjunct_ctxs_by_slot.end(); ++iter) {
-            SlotId slot_id = iter->first;
-            _conjunct_ctxs_by_slot.insert({slot_id, std::vector<ExprContext*>()});
-            RETURN_IF_ERROR(
-                    Expr::clone_if_not_exists(runtime_state, &_pool, iter->second, &_conjunct_ctxs_by_slot[slot_id]));
-        }
-    }
-
-    // min/max conjuncts.
-    RETURN_IF_ERROR(Expr::clone_if_not_exists(runtime_state, &_pool, _scanner_params.min_max_conjunct_ctxs,
-                                              &_min_max_conjunct_ctxs));
-
     Status status = do_init(runtime_state, scanner_params);
     return status;
 }
