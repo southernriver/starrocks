@@ -90,25 +90,26 @@ public class IcebergSplitDiscover {
             }
             SCHEDULED_EXECUTOR_SERVICE.schedule(() -> scheduleCheckAndAddSplits(expectedScheduleSeqId),
                     Config.routine_load_iceberg_split_check_interval_second, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            LOG.error("job " + jobName + " failed to checkAndAddSplits", e);
         } finally {
             lock.writeLock().unlock();
         }
     }
 
     private CloseableIterable<CombinedScanTask> planTasks(TableScan scan) {
-        // the difference between this planTasks() and scan.planTasks() is the sorting of fileScanTasks,
-        // so that the result of the planTasks() is idempotent
-        CloseableIterable<FileScanTask> fileScanTasks = scan.planFiles();
+        // the difference between this planTasks() and scan.planTasks() is
+        // 1. the sorting of scanFiles, so that the result of the planTasks() is idempotent
+        // 2. file is not split, otherwise changing to splitSize may cause idempotent
+        CloseableIterable<FileScanTask> scanFiles = scan.planFiles();
 
-        List<FileScanTask> sortedFileScanTask = Lists.newArrayList(fileScanTasks);
-        sortedFileScanTask.sort(Comparator.comparing(o -> o.file().path().toString()));
+        List<FileScanTask> sortedScanFiles = Lists.newArrayList(scanFiles);
+        sortedScanFiles.sort(Comparator.comparing(o -> o.file().path().toString()));
         CloseableIterable<FileScanTask> sortedFileScanTasks =
-                CloseableIterable.combine(sortedFileScanTask, fileScanTasks);
+                CloseableIterable.combine(sortedScanFiles, scanFiles);
 
-        CloseableIterable<FileScanTask> splitFiles =
-                TableScanUtil.splitFiles(sortedFileScanTasks, scan.targetSplitSize());
         return TableScanUtil.planTasks(
-                splitFiles, scan.targetSplitSize(), scan.splitLookback(), scan.splitOpenFileCost());
+                sortedFileScanTasks, scan.targetSplitSize(), scan.splitLookback(), scan.splitOpenFileCost());
     }
 
     private IcebergSplitMeta addToQueue(TableScan scan, long startSnapshotId, long endSnapshotId,
@@ -251,9 +252,16 @@ public class IcebergSplitDiscover {
                 scan = scan.useSnapshot(splitMeta.getEndSnapshotId());
                 addToQueue(scan, splitMeta);
             } else {
-                scan = scan.appendsBetween(splitMeta.getStartSnapshotId(), splitMeta.getEndSnapshotId());
-                addToQueue(scan, splitMeta);
+                try {
+                    scan = scan.appendsBetween(splitMeta.getStartSnapshotId(), splitMeta.getEndSnapshotId());
+                    addToQueue(scan, splitMeta);
+                } catch (IllegalArgumentException e) {
+                    // range [splitMeta.getStartSnapshotId(), splitMeta.getEndSnapshotId()] is illegal
+                    LOG.warn("ignore this range " + splitMeta + ": " + e.getMessage(), e);
+                    icebergProgress.removeSplitMeta(splitMeta);
+                }
             }
+            LOG.info("job {} recover splitMeta end: {}", jobName, splitMeta);
         }
     }
 
@@ -264,6 +272,10 @@ public class IcebergSplitDiscover {
             List<IcebergSplitMeta> splitMetas = icebergProgress.recoverLastSnapshots();
             splitsQueue.clear();
             addSplitsFromRecovery(splitMetas, snapshot);
+            LOG.info("job {} recover end", jobName);
+        } catch (Exception e) {
+            LOG.error("job " + jobName + " recover failed: ", e);
+            throw e;
         } finally {
             lock.writeLock().unlock();
         }

@@ -461,7 +461,7 @@ public class IcebergUtil {
      * Returns iceberg table
      */
     public static Table getTableFromResource(String resourceName, String dbName, String tblName)
-            throws AnalysisException {
+            throws StarRocksIcebergException, AnalysisException {
         return getIcebergCatalog(resourceName).loadTable(getIcebergTableIdentifier(dbName, tblName));
     }
 

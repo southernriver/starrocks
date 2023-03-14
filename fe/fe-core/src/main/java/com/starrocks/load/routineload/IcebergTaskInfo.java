@@ -34,7 +34,7 @@ public class IcebergTaskInfo extends RoutineLoadTaskInfo {
     // Iceberg routine task's rangeDesc.file_type is FILE_BROKER,
     // so that the underline implement on be is file_connector, it can't just read some files and skip the left.
     // Thus, if there is a small timeout set, a task may be always timeout and can never succeed.
-    private static final int DEFAULT_TIMEOUT = 3600;
+    private static final int DEFAULT_TIMEOUT = 900;
     private RoutineLoadManager routineLoadManager = GlobalStateMgr.getCurrentState().getRoutineLoadManager();
 
     private final Queue<Pair<IcebergSplitMeta, CombinedScanTask>> splitsQueue;

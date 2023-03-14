@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -58,7 +59,7 @@ public class IcebergProgress extends RoutineLoadProgress {
                 .collect(Collectors.groupingBy(IcebergSplit::getSplitMeta));
         for (Map.Entry<IcebergSplitMeta, List<IcebergSplit>> entry : splitsGroupedByMeta.entrySet()) {
             IcebergSplitMeta splitMeta = entry.getKey();
-            if (splitMeta.isAllDone() || splitMeta.getTotalSplits() != entry.getValue().size()) {
+            if (splitMeta.isAllDone() || splitMeta.getTotalSplits() > entry.getValue().size()) {
                 continue;
             }
             boolean done = true;
@@ -82,6 +83,16 @@ public class IcebergProgress extends RoutineLoadProgress {
         List<IcebergSplitMeta> splitMetas = cleanExpiredSplitRecords();
         lastSplitMeta = splitMetas.get(splitMetas.size() - 1);
         return splitMetas;
+    }
+
+    public void removeSplitMeta(IcebergSplitMeta splitMeta) {
+        Iterator<IcebergSplit> it = splitDoneRecords.keySet().iterator();
+        while (it.hasNext()) {
+            IcebergSplit split = it.next();
+            if (split.getSplitMeta().equals(splitMeta)) {
+                splitDoneRecords.remove(split);
+            }
+        }
     }
 
     public boolean allDone() {

@@ -30,6 +30,7 @@ import com.starrocks.common.util.SmallFileMgr.SmallFile;
 import com.starrocks.connector.HdfsEnvironment;
 import com.starrocks.connector.iceberg.IcebergHiveCatalog;
 import com.starrocks.connector.iceberg.IcebergUtil;
+import com.starrocks.connector.iceberg.StarRocksIcebergException;
 import com.starrocks.load.RoutineLoadDesc;
 import com.starrocks.load.streamload.StreamLoadInfo;
 import com.starrocks.planner.IcebergScanNode;
@@ -143,20 +144,24 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
         }
     }
 
-    private void getIcbTbl() throws AnalysisException {
+    private void getIceTbl() throws UserException {
         if (iceTbl != null) {
             return;
         }
-        if (IcebergCreateRoutineLoadStmtConfig.isHiveCatalogType(icebergCatalogType)) {
-            iceTbl = getIcbTblFromHiveMetastore();
-        } else if (IcebergCreateRoutineLoadStmtConfig.isResourceCatalogType(icebergCatalogType)) {
-            iceTbl = IcebergUtil.getTableFromResource(icebergResourceName, icebergDatabase, icebergTable);
-        } else if (IcebergCreateRoutineLoadStmtConfig.isExternalCatalogType(icebergCatalogType)) {
-            iceTbl = IcebergUtil.getTableFromCatalog(icebergCatalogName, icebergDatabase, icebergTable);
+        try {
+            if (IcebergCreateRoutineLoadStmtConfig.isHiveCatalogType(icebergCatalogType)) {
+                iceTbl = getIcbTblFromHiveMetastore();
+            } else if (IcebergCreateRoutineLoadStmtConfig.isResourceCatalogType(icebergCatalogType)) {
+                iceTbl = IcebergUtil.getTableFromResource(icebergResourceName, icebergDatabase, icebergTable);
+            } else if (IcebergCreateRoutineLoadStmtConfig.isExternalCatalogType(icebergCatalogType)) {
+                iceTbl = IcebergUtil.getTableFromCatalog(icebergCatalogName, icebergDatabase, icebergTable);
+            }
+        } catch (StarRocksIcebergException | AnalysisException e) {
+            throw new UserException(e);
         }
     }
 
-    private org.apache.iceberg.Table getIcbTblFromHiveMetastore() {
+    private org.apache.iceberg.Table getIcbTblFromHiveMetastore() throws StarRocksIcebergException {
         IcebergHiveCatalog catalog =
                 (IcebergHiveCatalog) IcebergUtil.getIcebergHiveCatalog(icebergCatalogHiveMetastoreUris, new HashMap<>(),
                         new HdfsEnvironment());
@@ -212,7 +217,7 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
 
     @Override
     public void divideRoutineLoadJob(int currentConcurrentTaskNum) throws UserException {
-        getIcbTbl();
+        getIceTbl();
         IcebergProgress icebergProgress = (IcebergProgress) progress;
         Long readIcebergSnapshotsAfterTimestamp =
                 IcebergCreateRoutineLoadStmtConfig.getReadIcebergSnapshotsAfterTimestamp(customProperties);
@@ -561,20 +566,14 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
                           RoutineLoadDataSourceProperties dataSourceProperties, OriginStatement originStatement,
                           boolean isReplay) throws DdlException {
         if (!isReplay) {
-            // modification to whereExpr and plan_split_size is only allowed when all current splits are finished.
+            // modification to whereExpr is only allowed when all current splits are finished.
             // otherwise the discover.planTasks() return different result to that before pause,
             // which may cause incorrect progress when resume from recovery if any iceberg routine load job's task
             // is still running before resume, which cause duplicate data consumed
             boolean shouldCheckModify = routineLoadDesc != null && routineLoadDesc.getWherePredicate() != null;
-            boolean dataSourcePropertiesModified =
-                    dataSourceProperties != null && dataSourceProperties.hasAnalyzedProperties();
-            shouldCheckModify = shouldCheckModify ||
-                    // plan_split_size is modified
-                    (dataSourcePropertiesModified && IcebergCreateRoutineLoadStmtConfig.getIcebergPlanSplitSize(
-                            dataSourceProperties.getCustomIcebergProperties()) != null);
             if (shouldCheckModify && !((IcebergProgress) progress).allDone()) {
                 throw new DdlException(
-                        "Modification to whereExpr or plan_split_size when current tasks are unfinished" +
+                        "Modification to whereExpr when current tasks are unfinished" +
                                 " may cause duplicate data consumed, please resume and wait all tasks finished," +
                                 " then pause and do alter again." +
                                 " Execute 'SHOW ROUTINE LOAD FOR " + name + ";' before pause" +
