@@ -27,9 +27,9 @@
 
 #include "librdkafka/rdkafkacpp.h"
 #include "pulsar/Client.h"
+#include "runtime/stream_load/stream_load_context.h"
 #include "tubemq/tubemq_client.h"
 #include "tubemq/tubemq_tdmsg.h"
-#include "runtime/stream_load/stream_load_context.h"
 #include "util/blocking_queue.hpp"
 #include "util/uid_util.h"
 
@@ -66,6 +66,9 @@ public:
     virtual Status reset() = 0;
     // return true the if the consumer match the need
     virtual bool match(StreamLoadContext* ctx) = 0;
+
+    virtual void return_metric() = 0;
+    virtual void clean_metric() = 0;
 
     const UniqueId& id() { return _id; }
     time_t last_visit_time() const { return _last_visit_time; }
@@ -122,6 +125,7 @@ public:
             delete _k_consumer;
             _k_consumer = nullptr;
         }
+        StarRocksMetrics::instance()->destroy_kafka_consumer_num.increment(1);
     }
 
     Status init(StreamLoadContext* ctx) override;
@@ -130,6 +134,8 @@ public:
     Status cancel(StreamLoadContext* ctx) override;
     // reassign partition topics
     Status reset() override;
+    void return_metric() override;
+    void clean_metric() override;
     bool match(StreamLoadContext* ctx) override;
     // commit kafka offset
     Status commit(std::vector<RdKafka::TopicPartition*>& offset);
@@ -176,6 +182,7 @@ public:
             delete _p_client;
             _p_client = nullptr;
         }
+        StarRocksMetrics::instance()->destroy_pulsar_consumer_num.increment(1);
     }
 
     enum InitialPosition { LATEST, EARLIEST };
@@ -187,6 +194,8 @@ public:
     Status cancel(StreamLoadContext* ctx) override;
     // reassign partition topics
     Status reset() override;
+    void return_metric() override;
+    void clean_metric() override;
     bool match(StreamLoadContext* ctx) override;
     // acknowledge pulsar message
     Status acknowledge_cumulative(pulsar::MessageId& message_id);
@@ -226,6 +235,7 @@ public:
     ~TubeDataConsumer() override {
         VLOG(3) << "close tube consumer";
         _t_consumer.ShutDown();
+        StarRocksMetrics::instance()->destroy_tube_consumer_num.increment(1);
     }
 
     Status init(StreamLoadContext* ctx) override;
@@ -235,6 +245,8 @@ public:
     Status cancel(StreamLoadContext* ctx) override;
     // reassign partition topics
     Status reset() override;
+    void return_metric() override;
+    void clean_metric() override;
     bool match(StreamLoadContext* ctx) override;
 
     // start the consumer and put msgs to queue

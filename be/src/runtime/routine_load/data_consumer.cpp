@@ -142,6 +142,8 @@ Status KafkaDataConsumer::init(StreamLoadContext* ctx) {
     VLOG(3) << "finished to init kafka consumer. " << ctx->brief();
 
     _init = true;
+
+    StarRocksMetrics::instance()->create_kafka_consumer_num.increment(1);
     return Status::OK();
 }
 
@@ -465,6 +467,15 @@ Status KafkaDataConsumer::reset() {
     return Status::OK();
 }
 
+void KafkaDataConsumer::return_metric() {
+    StarRocksMetrics::instance()->idle_kafka_consumer_num.increment(1);
+}
+
+void KafkaDataConsumer::clean_metric() {
+    StarRocksMetrics::instance()->idle_kafka_consumer_num.decrement(1);
+    StarRocksMetrics::instance()->bg_clean_kafka_consumer_num.increment(1);
+}
+
 Status KafkaDataConsumer::commit(std::vector<RdKafka::TopicPartition*>& offset) {
     RdKafka::ErrorCode err = _k_consumer->commitSync(offset);
     if (err != RdKafka::ERR_NO_ERROR) {
@@ -494,6 +505,8 @@ bool KafkaDataConsumer::match(StreamLoadContext* ctx) {
             return false;
         }
     }
+
+    StarRocksMetrics::instance()->idle_kafka_consumer_num.decrement(1);
     return true;
 }
 
@@ -522,6 +535,8 @@ Status PulsarDataConsumer::init(StreamLoadContext* ctx) {
 
     _init = true;
     _init_time = time(nullptr);
+
+    StarRocksMetrics::instance()->create_pulsar_consumer_num.increment(1);
     return Status::OK();
 }
 
@@ -677,6 +692,15 @@ Status PulsarDataConsumer::reset() {
     return Status::OK();
 }
 
+void PulsarDataConsumer::return_metric() {
+    StarRocksMetrics::instance()->idle_pulsar_consumer_num.increment(1);
+}
+
+void PulsarDataConsumer::clean_metric() {
+    StarRocksMetrics::instance()->idle_pulsar_consumer_num.decrement(1);
+    StarRocksMetrics::instance()->bg_clean_pulsar_consumer_num.increment(1);
+}
+
 Status PulsarDataConsumer::acknowledge_cumulative(pulsar::MessageId& message_id) {
     pulsar::Result res = _p_consumer.acknowledgeCumulative(message_id);
     if (res != pulsar::ResultOk) {
@@ -713,6 +737,7 @@ bool PulsarDataConsumer::match(StreamLoadContext* ctx) {
         }
     }
 
+    StarRocksMetrics::instance()->idle_pulsar_consumer_num.decrement(1);
     return true;
 }
 
@@ -742,6 +767,8 @@ Status TubeDataConsumer::init(StreamLoadContext* ctx) {
     VLOG(3) << "finished to init tube consumer. " << ctx->brief();
 
     _init = true;
+
+    StarRocksMetrics::instance()->create_tube_consumer_num.increment(1);
     return Status::OK();
 }
 
@@ -903,6 +930,15 @@ Status TubeDataConsumer::reset() {
     return Status::OK();
 }
 
+void TubeDataConsumer::return_metric() {
+    StarRocksMetrics::instance()->idle_tube_consumer_num.increment(1);
+}
+
+void TubeDataConsumer::clean_metric() {
+    StarRocksMetrics::instance()->idle_tube_consumer_num.decrement(1);
+    StarRocksMetrics::instance()->bg_clean_tube_consumer_num.increment(1);
+}
+
 bool TubeDataConsumer::match(StreamLoadContext* ctx) {
     if (ctx->load_src_type != TLoadSourceType::TUBE) {
         return false;
@@ -911,6 +947,8 @@ bool TubeDataConsumer::match(StreamLoadContext* ctx) {
         _group_name != ctx->tube_info->group_name) {
         return false;
     }
+
+    StarRocksMetrics::instance()->idle_tube_consumer_num.decrement(1);
     return true;
 }
 

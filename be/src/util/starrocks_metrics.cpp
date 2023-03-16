@@ -147,6 +147,22 @@ StarRocksMetrics::StarRocksMetrics() : _metrics(_s_registry_name) {
     _metrics.register_metric("load_rows", &load_rows_total);
     _metrics.register_metric("load_bytes", &load_bytes_total);
 
+#define REGISTER_ROUTINE_LOAD_CONSUMER_METRIC(type, status, metric)                                                 \
+    _metrics.register_metric("routine_load_consumer_num", MetricLabels().add("type", #type).add("status", #status), \
+                             &metric)
+    REGISTER_ROUTINE_LOAD_CONSUMER_METRIC(kafka, create, create_kafka_consumer_num);
+    REGISTER_ROUTINE_LOAD_CONSUMER_METRIC(kafka, destroy, destroy_kafka_consumer_num);
+    REGISTER_ROUTINE_LOAD_CONSUMER_METRIC(kafka, idle, idle_kafka_consumer_num);
+    REGISTER_ROUTINE_LOAD_CONSUMER_METRIC(kafka, clean, bg_clean_kafka_consumer_num);
+    REGISTER_ROUTINE_LOAD_CONSUMER_METRIC(pulsar, create, create_pulsar_consumer_num);
+    REGISTER_ROUTINE_LOAD_CONSUMER_METRIC(pulsar, destroy, destroy_pulsar_consumer_num);
+    REGISTER_ROUTINE_LOAD_CONSUMER_METRIC(pulsar, idle, idle_pulsar_consumer_num);
+    REGISTER_ROUTINE_LOAD_CONSUMER_METRIC(pulsar, clean, bg_clean_pulsar_consumer_num);
+    REGISTER_ROUTINE_LOAD_CONSUMER_METRIC(tube, create, create_tube_consumer_num);
+    REGISTER_ROUTINE_LOAD_CONSUMER_METRIC(tube, destroy, destroy_tube_consumer_num);
+    REGISTER_ROUTINE_LOAD_CONSUMER_METRIC(tube, idle, idle_tube_consumer_num);
+    REGISTER_ROUTINE_LOAD_CONSUMER_METRIC(tube, clean, bg_clean_tube_consumer_num);
+
     // Gauge
     REGISTER_STARROCKS_METRIC(memory_pool_bytes_total);
     REGISTER_STARROCKS_METRIC(process_thread_num);

@@ -162,6 +162,7 @@ public:
     METRIC_DEFINE_UINT_COUNTER(update_del_vector_deletes_total, MetricUnit::NOUNIT);
     METRIC_DEFINE_UINT_COUNTER(update_del_vector_deletes_new, MetricUnit::NOUNIT);
     METRIC_DEFINE_INT_ATOMIC_COUNTER(routine_load_consumer_pool_size, MetricUnit::NOUNIT);
+    METRIC_DEFINE_INT_ATOMIC_COUNTER(routine_load_thread_pool_size, MetricUnit::NOUNIT);
 
     // Gauges
     METRIC_DEFINE_INT_GAUGE(memory_pool_bytes_total, MetricUnit::BYTES);
@@ -169,6 +170,21 @@ public:
     METRIC_DEFINE_INT_GAUGE(process_fd_num_used, MetricUnit::NOUNIT);
     METRIC_DEFINE_INT_GAUGE(process_fd_num_limit_soft, MetricUnit::NOUNIT);
     METRIC_DEFINE_INT_GAUGE(process_fd_num_limit_hard, MetricUnit::NOUNIT);
+
+    // Consumer mertics
+    METRIC_DEFINE_INT_GAUGE(create_kafka_consumer_num, MetricUnit::NOUNIT);
+    METRIC_DEFINE_INT_GAUGE(create_pulsar_consumer_num, MetricUnit::NOUNIT);
+    METRIC_DEFINE_INT_GAUGE(create_tube_consumer_num, MetricUnit::NOUNIT);
+    METRIC_DEFINE_INT_GAUGE(destroy_kafka_consumer_num, MetricUnit::NOUNIT);
+    METRIC_DEFINE_INT_GAUGE(destroy_pulsar_consumer_num, MetricUnit::NOUNIT);
+    METRIC_DEFINE_INT_GAUGE(destroy_tube_consumer_num, MetricUnit::NOUNIT);
+    METRIC_DEFINE_INT_GAUGE(idle_kafka_consumer_num, MetricUnit::NOUNIT);
+    METRIC_DEFINE_INT_GAUGE(idle_pulsar_consumer_num, MetricUnit::NOUNIT);
+    METRIC_DEFINE_INT_GAUGE(idle_tube_consumer_num, MetricUnit::NOUNIT);
+    METRIC_DEFINE_INT_GAUGE(bg_clean_kafka_consumer_num, MetricUnit::NOUNIT);
+    METRIC_DEFINE_INT_GAUGE(bg_clean_pulsar_consumer_num, MetricUnit::NOUNIT);
+    METRIC_DEFINE_INT_GAUGE(bg_clean_tube_consumer_num, MetricUnit::NOUNIT);
+
     IntGaugeMetricsMap disks_total_capacity;
     IntGaugeMetricsMap disks_avail_capacity;
     IntGaugeMetricsMap disks_data_used_capacity;

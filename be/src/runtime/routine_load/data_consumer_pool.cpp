@@ -80,6 +80,7 @@ Status DataConsumerPool::get_consumer_grp(StreamLoadContext* ctx, std::shared_pt
 
     if (ctx->load_src_type == TLoadSourceType::KAFKA) {
         DCHECK(ctx->kafka_info);
+
         // one data consumer group contains at least one data consumers.
         int max_consumer_num = config::max_consumer_num_per_group;
         size_t consumer_num = std::min((size_t)max_consumer_num, ctx->kafka_info->begin_offset.size());
@@ -151,6 +152,7 @@ void DataConsumerPool::return_consumer(const std::shared_ptr<DataConsumer>& cons
         return;
     }
 
+    consumer->return_metric();
     _pool.push_back(consumer);
     VLOG(3) << "return the data consumer: " << consumer->id() << ", current pool size: " << _pool.size();
 }
@@ -199,6 +201,7 @@ void DataConsumerPool::_clean_idle_consumer_bg() {
         if (difftime(now, (*iter)->last_visit_time()) >= max_idle_time_second) {
             LOG(INFO) << "remove data consumer " << (*iter)->id()
                       << ", since it last visit: " << (*iter)->last_visit_time() << ", now: " << now;
+            (*iter)->clean_metric();
             iter = _pool.erase(iter);
         } else {
             ++iter;

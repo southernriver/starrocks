@@ -191,6 +191,8 @@ class AtomicGauge : public AtomicMetric<T> {
 public:
     AtomicGauge(MetricUnit unit) : AtomicMetric<T>(MetricType::GAUGE, unit) {}
     ~AtomicGauge() override = default;
+
+    void decrement(const T& delta) { this->_value.fetch_sub(delta); }
 };
 
 template <typename T>
