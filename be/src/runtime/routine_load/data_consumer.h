@@ -138,7 +138,8 @@ public:
                                    StreamLoadContext* ctx);
 
     // start the consumer and put msgs to queue
-    Status group_consume(TimedBlockingQueue<RdKafka::Message*>* queue, int64_t max_running_time_ms);
+    Status group_consume(StreamLoadContext* ctx, TimedBlockingQueue<RdKafka::Message*>* queue,
+                         int64_t max_running_time_ms);
 
     // get the partitions ids of the topic
     Status get_partition_meta(std::vector<int32_t>* partition_ids, int timeout);
@@ -148,6 +149,8 @@ public:
                                 std::vector<int64_t>* latest_offsets, int timeout);
 
 private:
+    Status auto_offset_reset(StreamLoadContext* ctx, int32_t err_partition, int64_t err_offset);
+
     std::string _brokers;
     std::string _topic;
     std::unordered_map<std::string, std::string> _custom_properties;
@@ -155,6 +158,7 @@ private:
     size_t _non_eof_partition_count = 0;
     KafkaEventCb _k_event_cb;
     RdKafka::KafkaConsumer* _k_consumer = nullptr;
+    std::map<int32_t, int64_t> _next_offsets;
 };
 
 class PulsarDataConsumer : public DataConsumer {

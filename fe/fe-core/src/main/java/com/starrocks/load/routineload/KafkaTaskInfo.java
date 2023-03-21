@@ -154,6 +154,9 @@ public class KafkaTaskInfo extends RoutineLoadTaskInfo {
         tKafkaLoadInfo.setBrokers((routineLoadJob).getBrokerList());
         tKafkaLoadInfo.setPartition_begin_offset(partitionIdToOffset);
         tKafkaLoadInfo.setProperties(routineLoadJob.getConvertedCustomProperties());
+        if ((routineLoadJob).getAutoOffsetReset()) {
+            tKafkaLoadInfo.setAuto_offset_reset(routineLoadJob.getAutoOffsetReset());
+        }
         tRoutineLoadTask.setKafka_load_info(tKafkaLoadInfo);
         tRoutineLoadTask.setType(TLoadSourceType.KAFKA);
         tRoutineLoadTask.setParams(plan(routineLoadJob));

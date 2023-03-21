@@ -148,6 +148,8 @@ Status KafkaDataConsumer::init(StreamLoadContext* ctx) {
 Status KafkaDataConsumer::assign_topic_partitions(const std::map<int32_t, int64_t>& begin_partition_offset,
                                                   const std::string& topic, StreamLoadContext* ctx) {
     DCHECK(_k_consumer);
+    _next_offsets = begin_partition_offset;
+
     // create TopicPartitions
     std::stringstream ss;
     std::vector<RdKafka::TopicPartition*> topic_partitions;
@@ -178,7 +180,44 @@ Status KafkaDataConsumer::assign_topic_partitions(const std::map<int32_t, int64_
     return Status::OK();
 }
 
-Status KafkaDataConsumer::group_consume(TimedBlockingQueue<RdKafka::Message*>* queue, int64_t max_running_time_ms) {
+Status KafkaDataConsumer::auto_offset_reset(StreamLoadContext* ctx, int32_t err_partition, int64_t err_offset) {
+    DCHECK(_k_consumer);
+    DCHECK(_next_offsets.find(err_partition) != _next_offsets.end());
+
+    // get beginning offset of the error partition
+    std::vector<int32_t> partition_ids{err_partition};
+    std::vector<int64_t> beginning_offsets;
+    std::vector<int64_t> latest_offsets;
+    Status st = get_partition_offset(&partition_ids, &beginning_offsets, &latest_offsets,
+                                     config::routine_load_kafka_timeout_second * 1000);
+    if (!st.ok()) {
+        return st;
+    }
+
+    // size of the vector should always be 1
+    DCHECK(beginning_offsets.size() == 1);
+    DCHECK(latest_offsets.size() == 1);
+
+    // update the new available offset
+    if (err_offset < beginning_offsets[0]) {
+        _next_offsets[err_partition] = beginning_offsets[0];
+    } else if (err_offset > latest_offsets[0]) {
+        _next_offsets[err_partition] = latest_offsets[0];
+    } else {
+        // It could be condition that the latest offset catch up with error offset during reset
+        LOG(WARNING) << "the latest offset: " << latest_offsets[0] << " caught up with err_offset, won't reset it";
+        return Status::OK();
+    }
+
+    LOG(WARNING) << "the offset of partition " << err_partition << " was reset to " << _next_offsets[err_partition];
+
+    // un-assign and reassign
+    _k_consumer->unassign();
+    return assign_topic_partitions(_next_offsets, _topic, ctx);
+}
+
+Status KafkaDataConsumer::group_consume(StreamLoadContext* ctx, TimedBlockingQueue<RdKafka::Message*>* queue,
+                                        int64_t max_running_time_ms) {
     _last_visit_time = time(nullptr);
     int64_t left_time = max_running_time_ms;
     LOG(INFO) << "start kafka consumer: " << _id << ", grp: " << _grp_id << ", max running time(ms): " << left_time;
@@ -213,25 +252,31 @@ Status KafkaDataConsumer::group_consume(TimedBlockingQueue<RdKafka::Message*>* q
                 // queue is shutdown
                 done = true;
             } else {
+                _next_offsets[msg->partition()] = msg->offset() + 1;
                 ++put_rows;
                 msg.release(); // release the ownership, msg will be deleted after being processed
             }
             ++received_rows;
             break;
         case RdKafka::ERR__TIMED_OUT: {
-            // leave the status as OK, because this may happened
+            // leave the status as OK, because this may happen
             // if there is no data in kafka.
             std::stringstream ss;
             ss << msg->errstr() << ", timeout " << consume_timeout;
             LOG(INFO) << "kafka consume timeout: " << _id << " msg " << ss.str();
             break;
         }
+        case RdKafka::ERR__AUTO_OFFSET_RESET:
         case RdKafka::ERR_OFFSET_OUT_OF_RANGE: {
-            done = true;
+            int32_t err_partition = msg->partition();
+            int64_t err_offset = msg->offset();
             std::stringstream ss;
-            ss << msg->errstr() << ", partition " << msg->partition() << " offset " << msg->offset() << " has no data";
+            ss << msg->errstr() << ", partition " << err_partition << " offset " << err_offset << " has no data";
             LOG(WARNING) << "kafka consume failed: " << _id << ", msg: " << ss.str();
-            st = Status::InternalError(ss.str());
+            if (!ctx->kafka_info->auto_offset_reset || !auto_offset_reset(ctx, err_partition, err_offset).ok()) {
+                done = true;
+                st = Status::InternalError(ss.str());
+            }
             break;
         }
         case RdKafka::ERR__PARTITION_EOF: {
@@ -254,7 +299,8 @@ Status KafkaDataConsumer::group_consume(TimedBlockingQueue<RdKafka::Message*>* q
             break;
         }
         default:
-            LOG(WARNING) << "kafka consume failed: " << _id << ", msg: " << msg->errstr();
+            LOG(WARNING) << "kafka consume failed: " << _id << ", errcode: " << msg->err()
+                         << ", msg: " << msg->errstr();
             done = true;
             st = Status::InternalError(msg->errstr());
             break;
@@ -412,6 +458,7 @@ Status KafkaDataConsumer::reset() {
     _cancelled = false;
     _k_consumer->unassign();
     _non_eof_partition_count = 0;
+    _next_offsets.clear();
     return Status::OK();
 }
 

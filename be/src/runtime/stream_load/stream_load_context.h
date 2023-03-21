@@ -52,6 +52,10 @@ public:
               topic(t_info.topic),
               begin_offset(t_info.partition_begin_offset),
               properties(t_info.properties) {
+        if (t_info.__isset.auto_offset_reset) {
+            auto_offset_reset = t_info.auto_offset_reset;
+        }
+
         // The offset(begin_offset) sent from FE is the starting offset,
         // and the offset(cmt_offset) reported by BE to FE is the consumed offset,
         // so we need to minus 1 here.
@@ -77,6 +81,8 @@ public:
     std::map<int32_t, int64_t> cmt_offset;
     //custom kafka property key -> value
     std::map<std::string, std::string> properties;
+    // auto reset offset when offset out of range
+    bool auto_offset_reset = false;
 };
 
 // pulsar related info
@@ -149,9 +155,7 @@ public:
 // iceberg related info
 class IcebergLoadInfo {
 public:
-    explicit IcebergLoadInfo(const TIcebergLoadInfo& t_info)
-            : splits(t_info.splits) {
-    }
+    explicit IcebergLoadInfo(const TIcebergLoadInfo& t_info) : splits(t_info.splits) {}
 
 public:
     std::vector<TIcebergSplit> splits;
@@ -161,32 +165,22 @@ class RoutineLoadTaskStatistics {
 public:
     explicit RoutineLoadTaskStatistics() {}
     explicit RoutineLoadTaskStatistics(int64_t consume_time, int64_t blocking_get_time, int64_t blocking_put_time,
-                                    int64_t received_rows, int64_t received_bytes)
+                                       int64_t received_rows, int64_t received_bytes)
             : _consume_time(consume_time),
               _blocking_get_time(blocking_get_time),
               _blocking_put_time(blocking_put_time),
               _received_rows(received_rows),
               _received_bytes(received_bytes) {}
 
-    int64_t get_consume_time() {
-        return _consume_time;
-    }
+    int64_t get_consume_time() { return _consume_time; }
 
-    int64_t get_blocking_get_time() {
-        return _blocking_get_time;
-    }
+    int64_t get_blocking_get_time() { return _blocking_get_time; }
 
-    int64_t get_blocking_put_time() {
-        return _blocking_put_time;
-    }
+    int64_t get_blocking_put_time() { return _blocking_put_time; }
 
-    int64_t get_received_rows() {
-        return _received_rows;
-    }
+    int64_t get_received_rows() { return _received_rows; }
 
-    int64_t get_received_bytes() {
-        return _received_bytes;
-    }
+    int64_t get_received_bytes() { return _received_bytes; }
 
 private:
     int64_t _consume_time;

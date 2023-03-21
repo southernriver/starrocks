@@ -77,8 +77,9 @@ public:
 
 private:
     // start a single consumer
-    void actual_consume(const std::shared_ptr<DataConsumer>& consumer, TimedBlockingQueue<RdKafka::Message*>* queue,
-                        int64_t max_running_time_ms, const ConsumeFinishCallback& cb);
+    void actual_consume(const std::shared_ptr<DataConsumer>& consumer, StreamLoadContext* ctx,
+                        TimedBlockingQueue<RdKafka::Message*>* queue, int64_t max_running_time_ms,
+                        const ConsumeFinishCallback& cb);
 
 private:
     // blocking queue to receive msgs from all consumers

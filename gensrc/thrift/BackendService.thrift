@@ -49,6 +49,7 @@ struct TKafkaLoadInfo {
     2: required string topic;
     3: required map<i32, i64> partition_begin_offset;
     4: optional map<string, string> properties;
+    5: optional bool auto_offset_reset;
 }
 
 struct TPulsarLoadInfo {
