@@ -92,6 +92,8 @@ public class IcebergSplitDiscover {
                     Config.routine_load_iceberg_split_check_interval_second, TimeUnit.SECONDS);
         } catch (Exception e) {
             LOG.error("job " + jobName + " failed to checkAndAddSplits", e);
+            SCHEDULED_EXECUTOR_SERVICE.schedule(() -> scheduleCheckAndAddSplits(expectedScheduleSeqId),
+                    Config.routine_load_iceberg_split_check_interval_second, TimeUnit.SECONDS);
         } finally {
             lock.writeLock().unlock();
         }

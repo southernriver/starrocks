@@ -210,6 +210,9 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
                 icebergWhereExpr = icebergPredicates.stream().reduce(Expressions.alwaysTrue(), Expressions::and);
             }
             return icebergWhereExpr;
+        } catch (Exception e) {
+            LOG.warn("job " + name + " failed to parse whereExpr to iceberg predicate.", e);
+            return null;
         } finally {
             db.readUnlock();
         }
