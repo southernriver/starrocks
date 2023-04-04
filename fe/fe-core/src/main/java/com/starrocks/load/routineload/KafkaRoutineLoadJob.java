@@ -50,6 +50,7 @@ import com.starrocks.common.util.LogBuilder;
 import com.starrocks.common.util.LogKey;
 import com.starrocks.common.util.SmallFileMgr;
 import com.starrocks.common.util.SmallFileMgr.SmallFile;
+import com.starrocks.common.util.Util;
 import com.starrocks.load.Load;
 import com.starrocks.load.RoutineLoadDesc;
 import com.starrocks.qe.OriginStatement;
@@ -559,8 +560,9 @@ public class KafkaRoutineLoadJob extends RoutineLoadJob {
             List<Pair<Integer, Long>> kafkaPartitionOffsets = dataSourceProperties.getKafkaPartitionOffsets();
             if (customKafkaPartitions != null && customKafkaPartitions.size() != 0) {
                 for (Pair<Integer, Long> pair : kafkaPartitionOffsets) {
-                    if (! customKafkaPartitions.contains(pair.first)) {
-                        throw new DdlException("The specified partition " + pair.first + " is not in the custom partitions");
+                    if (!customKafkaPartitions.contains(pair.first)) {
+                        throw new DdlException(
+                                "The specified partition " + pair.first + " is not in the custom partitions");
                     }
                 }
             } else {

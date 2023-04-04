@@ -247,17 +247,20 @@ Status KafkaDataConsumer::group_consume(StreamLoadContext* ctx, TimedBlockingQue
         std::unique_ptr<RdKafka::Message> msg(_k_consumer->consume(consume_timeout /* timeout, ms */));
         consumer_watch.stop();
         switch (msg->err()) {
-        case RdKafka::ERR_NO_ERROR:
+        case RdKafka::ERR_NO_ERROR: {
+            int32_t cur_partition = msg->partition();
+            int64_t cur_offset = msg->offset();
             if (!queue->blocking_put(msg.get())) {
                 // queue is shutdown
                 done = true;
             } else {
-                _next_offsets[msg->partition()] = msg->offset() + 1;
+                _next_offsets[cur_partition] = cur_offset + 1;
                 ++put_rows;
                 msg.release(); // release the ownership, msg will be deleted after being processed
             }
             ++received_rows;
             break;
+        }
         case RdKafka::ERR__TIMED_OUT: {
             // leave the status as OK, because this may happen
             // if there is no data in kafka.
