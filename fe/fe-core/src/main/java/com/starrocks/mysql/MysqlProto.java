@@ -73,7 +73,13 @@ public class MysqlProto {
             return true;
         }
         List<UserIdentity> currentUserIdentity = Lists.newArrayList();
-        if (TdwAuthenticate.useTdwAuthenticate(user)) {
+        if (TdwAuthenticate.useTAUTH(user)) {
+            if (!TdwAuthenticate.tauthAuthenticate(user, currentUserIdentity)) {
+                ErrorReport.report(ErrorCode.ERR_ACCESS_DENIED_ERROR, user, usePasswd);
+                return false;
+            }
+            user = currentUserIdentity.get(0).getQualifiedUser();
+        } else if (TdwAuthenticate.useTdwAuthenticate(user)) {
             user = TdwUtil.getUserName(user);
             if (!TdwAuthenticate.authenticate(scramble, randomString, user, currentUserIdentity)) {
                 ErrorReport.report(ErrorCode.ERR_ACCESS_DENIED_ERROR, user, usePasswd);

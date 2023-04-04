@@ -205,10 +205,6 @@ public class ConnectProcessor {
                     // ok query
                     MetricRepo.COUNTER_INSERT_SUCCESS.increase(1L);
                     MetricRepo.HISTO_INSERT_LATENCY.update(elapseMs);
-                    if (elapseMs > Config.qe_slow_log_ms || ctx.getSessionVariable().isEnableSQLDigest()) {
-                        MetricRepo.COUNTER_SLOW_INSERT.increase(1L);
-                        ctx.getAuditEventBuilder().setDigest(computeStatementDigest(parsedStmt));
-                    }
                 }
             }
             ctx.getAuditEventBuilder().setIsQuery(false);

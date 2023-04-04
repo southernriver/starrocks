@@ -1372,6 +1372,11 @@ public class Config extends ConfigBase {
     public static boolean enable_check_tdw_pri = true;
     @ConfField
     public static String tdw_pri_username = "";
+    @ConfField
+    public static String tauth_authentication_service_name = "";
+    @ConfField
+    public static String tauth_authentication_service_key = "";
+
     /**
      * In some cases, some tablets may have all replicas damaged or lost.
      * At this time, the data has been lost, and the damaged tablets
