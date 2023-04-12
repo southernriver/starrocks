@@ -129,7 +129,7 @@ public class PruneHDFSScanColumnRule extends TransformationRule {
     }
 
     private boolean notSupportedPartitionColumnType(Type type) {
-        return type.isFloat() || type.isDecimalOfAnyVersion() || type.isDatetime();
+        return type.isFloat() || type.isDecimalOfAnyVersion();
     }
 
     private boolean containsMaterializedColumn(LogicalScanOperator scanOperator, Set<ColumnRefOperator> scanColumns) {
