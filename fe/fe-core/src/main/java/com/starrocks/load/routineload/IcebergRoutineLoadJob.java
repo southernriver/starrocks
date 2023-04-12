@@ -107,7 +107,7 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
         this.icebergTable = config.getIcebergTable();
         this.icebergConsumePosition = config.getIcebergConsumePosition();
         this.brokerDesc = brokerDesc;
-        this.progress = new IcebergProgress();
+        this.progress = new IcebergProgress(this);
     }
 
     @Override
@@ -144,9 +144,9 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
         }
     }
 
-    private void getIceTbl() throws UserException {
+    org.apache.iceberg.Table getIceTbl() throws UserException {
         if (iceTbl != null) {
-            return;
+            return iceTbl;
         }
         try {
             if (IcebergCreateRoutineLoadStmtConfig.isHiveCatalogType(icebergCatalogType)) {
@@ -156,6 +156,7 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
             } else if (IcebergCreateRoutineLoadStmtConfig.isExternalCatalogType(icebergCatalogType)) {
                 iceTbl = IcebergUtil.getTableFromCatalog(icebergCatalogName, icebergDatabase, icebergTable);
             }
+            return iceTbl;
         } catch (StarRocksIcebergException | AnalysisException e) {
             throw new UserException(e);
         }

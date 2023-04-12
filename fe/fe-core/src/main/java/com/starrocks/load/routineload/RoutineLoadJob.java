@@ -1510,7 +1510,7 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
                 break;
             }
             case ICEBERG: {
-                progress = new IcebergProgress();
+                progress = new IcebergProgress(this);
                 progress.readFields(in);
                 break;
             }

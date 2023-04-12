@@ -199,7 +199,6 @@ public class IcebergSplitDiscover {
             return;
         }
         IcebergUtil.refreshTable(iceTbl);
-        icebergProgress.cleanExpiredSplitRecords();
         Snapshot snapshot = iceTbl.currentSnapshot();
         if (snapshot == null) {
             // no data
@@ -268,6 +267,7 @@ public class IcebergSplitDiscover {
     }
 
     private void recover() {
+        iceTbl.refresh();
         Snapshot snapshot = iceTbl.currentSnapshot();
         lock.writeLock().lock();
         try {
