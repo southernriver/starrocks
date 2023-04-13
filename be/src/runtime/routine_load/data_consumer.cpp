@@ -346,7 +346,7 @@ Status KafkaDataConsumer::get_partition_offset(std::vector<int32_t>* partition_i
             LOG(WARNING) << "failed to query watermark offset of topic: " << _topic << " partition: " << p_id
                          << ", err: " << RdKafka::err2str(err);
             return Status::InternalError("failed to query watermark offset, err: " + RdKafka::err2str(err));
-
+        }
         // query_watermark_offsets() get offsets from local cache by default,
         // but the cache might be expired when new partitions added, which will return ERR__UNKNOWN_PARTITION,
         // add retry mechanism here to avoid the glitch.
