@@ -165,7 +165,9 @@ public class HttpServer {
         ConnectionAction.registerAction(controller);
         ShowDataAction.registerAction(controller);
         QueryDumpAction.registerAction(controller);
-        ClusterLoadAction.registerAction(controller);
+        if (Config.enable_monitor_for_supersql) {
+            ClusterLoadAction.registerAction(controller);
+        }
 
         // meta service action
         File imageDir = MetaHelper.getLeaderImageDir();

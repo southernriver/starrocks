@@ -122,7 +122,12 @@ public class NodeMgr {
         this.leaderIp = "";
         this.systemInfo = new SystemInfoService();
         this.heartbeatMgr = new HeartbeatMgr(systemInfo, !isCheckpoint);
-        this.monitorMgr = new ClusterLoadAction.MonitorMgr();
+        if (Config.enable_monitor_for_supersql) {
+            this.monitorMgr = new ClusterLoadAction.MonitorMgr();
+        } else {
+            this.monitorMgr = null;
+        }
+
         this.brokerMgr = new BrokerMgr();
         this.stateMgr = globalStateMgr;
     }
@@ -138,7 +143,9 @@ public class NodeMgr {
     }
 
     public void startMonitor() {
-        monitorMgr.start();
+        if (monitorMgr != null) {
+            monitorMgr.start();
+        }
     }
 
     private boolean tryLock(boolean mustLock) {

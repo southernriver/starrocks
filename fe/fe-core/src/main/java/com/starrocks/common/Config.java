@@ -1377,6 +1377,9 @@ public class Config extends ConfigBase {
     @ConfField
     public static String tauth_authentication_service_key = "";
 
+    @ConfField
+    public static boolean enable_monitor_for_supersql = false;
+
     /**
      * In some cases, some tablets may have all replicas damaged or lost.
      * At this time, the data has been lost, and the damaged tablets
