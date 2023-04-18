@@ -27,10 +27,11 @@ import com.starrocks.mysql.privilege.Role;
 import com.starrocks.sql.analyzer.SemanticException;
 
 public class FeNameFormat {
-    private FeNameFormat() {}
+    private FeNameFormat() {
+    }
 
     private static final String LABEL_REGEX = "^[-\\w]{1,128}$";
-    public static final String COMMON_NAME_REGEX = "^[a-zA-Z]\\w{0,63}$|^_[a-zA-Z0-9]\\w{0,62}$";
+    public static final String COMMON_NAME_REGEX = "^[a-zA-Z]\\w{0,255}$|^_[a-zA-Z0-9]\\w{0,254}$";
 
     // The length length of db name is 256
     public static final String DB_NAME_REGEX = "^[a-zA-Z]\\w{0,255}$|^_[a-zA-Z0-9]\\w{0,254}$";
