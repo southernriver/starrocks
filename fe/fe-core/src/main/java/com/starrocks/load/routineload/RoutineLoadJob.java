@@ -1038,7 +1038,8 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
         if (state == JobState.RUNNING) {
             if (txnStatus == TransactionStatus.ABORTED) {
                 RoutineLoadTaskInfo newRoutineLoadTaskInfo = unprotectRenewTask(
-                        System.currentTimeMillis() + taskSchedIntervalS * 1000, routineLoadTaskInfo);
+                        getAbortedTaskNextScheduleTime(routineLoadTaskInfo, txnStatusChangeReasonStr),
+                        routineLoadTaskInfo);
                 newRoutineLoadTaskInfo.setMsg("previous task aborted because of " + txnStatusChangeReasonStr);
                 GlobalStateMgr.getCurrentState().getRoutineLoadManager()
                         .releaseBeTaskSlot(routineLoadTaskInfo.getBeId());
@@ -1051,6 +1052,10 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
                 // or if publish version task has some error, there will be lots of COMMITTED txns in GlobalTransactionMgr
             }
         }
+    }
+
+    protected long getAbortedTaskNextScheduleTime(RoutineLoadTaskInfo taskInfo, String txnStatusChangeReasonStr) {
+        return System.currentTimeMillis() + taskSchedIntervalS * 1000;
     }
 
     protected static void unprotectedCheckMeta(Database db, String tblName, RoutineLoadDesc routineLoadDesc)

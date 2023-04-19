@@ -21,6 +21,8 @@ import com.starrocks.thrift.TRoutineLoadTask;
 import com.starrocks.thrift.TUniqueId;
 import org.apache.iceberg.CombinedScanTask;
 import org.apache.iceberg.FileScanTask;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,6 +31,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 public class IcebergTaskInfo extends RoutineLoadTaskInfo {
+    private static final Logger LOG = LogManager.getLogger(IcebergTaskInfo.class);
     // Different to kafka routine load which can stop consuming when reaches the deadline and commit,
     // an iceberg routine task can only commit when all files are read or task is failed.
     // Iceberg routine task's rangeDesc.file_type is FILE_BROKER,
@@ -41,6 +44,7 @@ public class IcebergTaskInfo extends RoutineLoadTaskInfo {
     private final String consumePosition;
     private final IcebergProgress progress;
     private List<IcebergSplit> splits;
+    private int renewCount;
 
     public IcebergTaskInfo(UUID id, long jobId, long taskScheduleIntervalMs, long timeToExecuteMs,
                            String consumePosition, Queue<Pair<IcebergSplitMeta, CombinedScanTask>> splitsQueue,
@@ -63,11 +67,18 @@ public class IcebergTaskInfo extends RoutineLoadTaskInfo {
         this.splits = icebergTaskInfo.splits.stream()
                 .filter((Predicate<IcebergSplit>) split -> !progress.isDone(split))
                 .collect(Collectors.toList());
+        this.renewCount = icebergTaskInfo.renewCount + 1;
+    }
+
+    public int getRenewCount() {
+        return renewCount;
     }
 
     private static long resetTimeToExecuteMs(IcebergTaskInfo icebergTaskInfo, long timeToExecuteMs) {
         if (icebergTaskInfo.splits.stream()
                 .anyMatch((Predicate<IcebergSplit>) split -> !icebergTaskInfo.progress.isDone(split))) {
+            LOG.info("Job {} task delay {}ms to execute", icebergTaskInfo.jobId,
+                    (timeToExecuteMs - System.currentTimeMillis()));
             return timeToExecuteMs;
         }
         return icebergTaskInfo.splitsQueue.isEmpty()

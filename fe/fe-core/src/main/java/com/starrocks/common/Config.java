@@ -1229,6 +1229,12 @@ public class Config extends ConfigBase {
     public static int max_iceberg_routine_load_task_concurrent_num = 20;
 
     /**
+     * the max iceberg routine load renew task schedule delay round
+     */
+    @ConfField(mutable = true)
+    public static int max_iceberg_routine_load_renew_task_schedule_delay_round = 6;
+
+    /**
      * it can't auto-resume routine load job as long as one of the backends is down
      */
     @ConfField(mutable = true)

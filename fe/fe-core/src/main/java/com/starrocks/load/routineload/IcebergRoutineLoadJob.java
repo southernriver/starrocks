@@ -355,6 +355,13 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
     }
 
     @Override
+    protected long getAbortedTaskNextScheduleTime(RoutineLoadTaskInfo taskInfo, String txnStatusChangeReasonStr) {
+        return System.currentTimeMillis() + taskSchedIntervalS * 1000 *
+                Math.min(Config.max_iceberg_routine_load_renew_task_schedule_delay_round,
+                        ((IcebergTaskInfo) taskInfo).getRenewCount());
+    }
+
+    @Override
     protected RoutineLoadTaskInfo unprotectRenewTask(long timeToExecuteMs, RoutineLoadTaskInfo routineLoadTaskInfo) {
         IcebergTaskInfo oldIcebergTaskInfo = (IcebergTaskInfo) routineLoadTaskInfo;
         // add new task

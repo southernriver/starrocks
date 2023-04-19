@@ -6,8 +6,8 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.starrocks.common.Config;
-import com.starrocks.common.UserException;
 import com.starrocks.common.util.DebugUtil;
+import com.starrocks.connector.iceberg.IcebergUtil;
 import com.starrocks.thrift.TIcebergRLTaskProgress;
 import com.starrocks.thrift.TIcebergRLTaskProgressSplit;
 import org.apache.logging.log4j.LogManager;
@@ -154,11 +154,18 @@ public class IcebergProgress extends RoutineLoadProgress {
             if (splitMeta.isAllDone()) {
                 continue;
             }
+            // this is the first running splitMeta
+            // if verification result is success, then lastCheckpointSplitMeta = this splitMeta
+
+            // no need to do the following verification
+            if (splitMeta.getStartSnapshotId() == -1) {
+                break;
+            }
             org.apache.iceberg.Table table;
             try {
                 table = job.getIceTbl();
-                table.refresh();
-            } catch (UserException e) {
+                IcebergUtil.refreshTable(table);
+            } catch (Exception e) {
                 LOG.warn(e.getMessage(), e);
                 // this method will be called again later, so just break here
                 break;
