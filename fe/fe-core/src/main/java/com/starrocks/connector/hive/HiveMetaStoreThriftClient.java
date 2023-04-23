@@ -510,8 +510,7 @@ public class HiveMetaStoreThriftClient implements IMetaStoreClient, AutoCloseabl
                     if (isConnected && !useSasl && MetastoreConf.getBoolVar(conf, ConfVars.EXECUTE_SET_UGI)) {
                         // Call set_ugi, only in unsecure mode.
                         try {
-                            if (Config.enable_check_tdw_pri
-                                    && org.apache.commons.lang3.StringUtils.isNotEmpty(Config.tdw_pri_username)) {
+                            if (org.apache.commons.lang3.StringUtils.isNotBlank(Config.tdw_pri_username)) {
                                 client.set_ugi(Config.tdw_pri_username, new ArrayList<>());
                             } else {
                                 UserGroupInformation ugi = SecurityUtils.getUGI();

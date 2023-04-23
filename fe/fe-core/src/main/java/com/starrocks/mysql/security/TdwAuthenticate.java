@@ -43,12 +43,20 @@ import java.util.List;
 public class TdwAuthenticate {
     private static final Logger LOG = LogManager.getLogger(TdwAuthenticate.class);
     private static TauthService SERVICE;
+    private static final String SERVICE_NAME = "TAUTH_AUTHENTICATION_SERVICE_NAME";
+    private static final String SERVICE_KEY = "TAUTH_AUTHENTICATION_SERVICE_KEY";
     public static synchronized TauthService getTauthService() {
         if (SERVICE == null) {
-            String serviceName = Config.tauth_authentication_service_name;
-            String serviceKey = Config.tauth_authentication_service_key;
+            String serviceName = System.getenv().get(SERVICE_NAME);
+            if (serviceName == null) {
+                serviceName = System.getProperty(SERVICE_NAME);
+            }
+            String serviceKey = System.getenv().get(SERVICE_KEY);
+            if (serviceKey == null) {
+                serviceKey = System.getProperty(SERVICE_KEY);
+            }
             LOG.debug("serviceName = " + serviceName + ", serviceKey = " + serviceKey);
-            if (!(StringUtils.isNotEmpty(serviceName) && StringUtils.isNotEmpty(serviceKey))) {
+            if (StringUtils.isBlank(serviceName) || StringUtils.isBlank(serviceKey)) {
                 LOG.warn("Disable authentication, because serviceName or serviceKey not set.");
                 SERVICE = null;
             } else {
