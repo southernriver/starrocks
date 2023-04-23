@@ -2034,4 +2034,11 @@ public class Config extends ConfigBase {
     public static long max_per_node_grep_log_limit = 500000;
     @ConfField
     public static boolean enable_execute_script_on_frontend = true;
+
+    /**
+     * support print query before execution
+     */
+    @ConfField(mutable = true)
+    public static boolean support_print_query_before = false;
+
 }

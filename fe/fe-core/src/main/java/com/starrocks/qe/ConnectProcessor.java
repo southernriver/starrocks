@@ -34,6 +34,7 @@ import com.starrocks.common.ErrorReport;
 import com.starrocks.common.QueryDumpLog;
 import com.starrocks.common.UserException;
 import com.starrocks.common.util.DebugUtil;
+import com.starrocks.common.util.ExtraInfoLogger;
 import com.starrocks.common.util.UUIDUtil;
 import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.metric.MetricRepo;
@@ -358,6 +359,10 @@ public class ConnectProcessor {
                 stmts = com.starrocks.sql.parser.SqlParser.parse(originStmt, ctx.getSessionVariable());
             } catch (ParsingException parsingException) {
                 throw new AnalysisException(parsingException.getMessage());
+            }
+
+            if (Config.support_print_query_before) {
+                ExtraInfoLogger.getLogger().info("Print query: {}", originStmt);
             }
 
             for (int i = 0; i < stmts.size(); ++i) {
