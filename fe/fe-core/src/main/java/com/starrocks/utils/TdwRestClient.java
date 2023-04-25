@@ -166,10 +166,19 @@ public class TdwRestClient extends RestClient {
                     }
             );
         } catch (Throwable e) {
-            LOG.warn("{} has no select priv on {}.{}", userName, dbName, tableName, e);
+            String message;
+
             if (e instanceof UndeclaredThrowableException) {
+                message = String.format("%s has no select priv on %s.%s", userName, dbName, tableName);
+                LOG.warn(message, e);
                 throw new AnalysisException(((UndeclaredThrowableException) e).getUndeclaredThrowable().getMessage());
+            } else {
+                message = String.format("An exception was encountered while checking privileges, user: %s, table: %s.%s",
+                    userName, dbName, tableName);
+                LOG.warn(message, e);
+                throw new AnalysisException(message + ", " + e.getMessage());
             }
+
         }
         return true;
     }
