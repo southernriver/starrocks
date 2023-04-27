@@ -199,9 +199,11 @@ public class DynamicPartitionUtil {
         String timeZone = properties.get(DynamicPartitionProperty.TIME_ZONE);
         String end = properties.get(DynamicPartitionProperty.END);
         String enable = properties.get(DynamicPartitionProperty.ENABLE);
+        String buckets = properties.get(DynamicPartitionProperty.BUCKETS);
 
         if (!(Strings.isNullOrEmpty(enable) && Strings.isNullOrEmpty(timeUnit) && Strings.isNullOrEmpty(timeZone)
-                && Strings.isNullOrEmpty(prefix) && Strings.isNullOrEmpty(start) && Strings.isNullOrEmpty(end))) {
+                && Strings.isNullOrEmpty(prefix) && Strings.isNullOrEmpty(start) && Strings.isNullOrEmpty(end)
+                && Strings.isNullOrEmpty(buckets))) {
             if (Strings.isNullOrEmpty(enable)) {
                 properties.put(DynamicPartitionProperty.ENABLE, "true");
             }
@@ -219,6 +221,9 @@ public class DynamicPartitionUtil {
             }
             if (Strings.isNullOrEmpty(timeZone)) {
                 properties.put(DynamicPartitionProperty.TIME_ZONE, TimeUtils.getSystemTimeZone().getID());
+            }
+            if (Strings.isNullOrEmpty(buckets)) {
+                throw new DdlException("Must assign dynamic_partition.buckets properties");
             }
         }
         return true;
