@@ -48,6 +48,11 @@ public class HdfsService {
         fileSystemManager = new HdfsFsManager();
     }
 
+    public HdfsFs getFileSystem(String path, Map<String, String> loadProperties, THdfsProperties tProperties)
+            throws UserException {
+        return fileSystemManager.getFileSystem(path, loadProperties, tProperties);
+    }
+
     public void getTProperties(String path, Map<String, String> loadProperties, THdfsProperties tProperties)
             throws UserException {
         fileSystemManager.getTProperties(path, loadProperties, tProperties);

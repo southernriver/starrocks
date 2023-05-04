@@ -22,6 +22,7 @@ import com.google.common.collect.Lists;
 import com.starrocks.analysis.BrokerDesc;
 import com.starrocks.common.ClientPool;
 import com.starrocks.common.UserException;
+import com.starrocks.fs.hdfs.HdfsFs;
 import com.starrocks.fs.hdfs.HdfsService;
 import com.starrocks.thrift.TBrokerCheckPathExistRequest;
 import com.starrocks.thrift.TBrokerCloseReaderRequest;
@@ -55,7 +56,10 @@ public class HdfsUtil {
 
     private static HdfsService hdfsService = new HdfsService();
 
-    
+    public static HdfsFs getFileSystem(String path, BrokerDesc brokerDesc) throws UserException {
+        return hdfsService.getFileSystem(path, brokerDesc.getProperties(), null);
+    }
+
     public static void getTProperties(String path, BrokerDesc brokerDesc,  THdfsProperties tProperties) throws UserException {
         hdfsService.getTProperties(path, brokerDesc.getProperties(), tProperties);
     }

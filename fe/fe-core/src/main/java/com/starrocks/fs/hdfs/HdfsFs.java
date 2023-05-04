@@ -19,6 +19,7 @@ package com.starrocks.fs.hdfs;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -36,6 +37,7 @@ public class HdfsFs {
     private UUID fileSystemId;
     private Configuration configuration;
     private String userName;
+    private UserGroupInformation ugi;
 
     public HdfsFs(HdfsFsIdentity identity) {
         this.identity = identity;
@@ -60,6 +62,10 @@ public class HdfsFs {
     public synchronized void setConfiguration(Configuration configuration) {
         this.configuration = configuration;
         this.lastAccessTimestamp = System.currentTimeMillis();
+    }
+
+    public void setUgi(UserGroupInformation ugi) {
+        this.ugi = ugi;
     }
 
     public void closeFileSystem() {
@@ -92,6 +98,11 @@ public class HdfsFs {
     public synchronized Configuration getConfiguration() {
         this.lastAccessTimestamp = System.currentTimeMillis();
         return configuration;
+    }
+
+    public UserGroupInformation getUgi() {
+        this.lastAccessTimestamp = System.currentTimeMillis();
+        return ugi;
     }
 
     public void updateLastUpdateAccessTime() {

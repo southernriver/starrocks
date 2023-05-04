@@ -23,8 +23,10 @@ package com.starrocks.connector.hive;
 
 import com.starrocks.common.Config;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hive.common.StatsSetupConst;
 import org.apache.hadoop.hive.common.ValidTxnList;
 import org.apache.hadoop.hive.common.ValidWriteIdList;
+import org.apache.hadoop.hive.metastore.HiveMetaHook;
 import org.apache.hadoop.hive.metastore.HiveMetaHookLoader;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.PartitionDropOptions;
@@ -33,6 +35,7 @@ import org.apache.hadoop.hive.metastore.api.AggrStats;
 import org.apache.hadoop.hive.metastore.api.AlreadyExistsException;
 import org.apache.hadoop.hive.metastore.api.Catalog;
 import org.apache.hadoop.hive.metastore.api.CheckConstraintsRequest;
+import org.apache.hadoop.hive.metastore.api.CheckLockRequest;
 import org.apache.hadoop.hive.metastore.api.CmRecycleRequest;
 import org.apache.hadoop.hive.metastore.api.CmRecycleResponse;
 import org.apache.hadoop.hive.metastore.api.ColumnStatistics;
@@ -117,6 +120,7 @@ import org.apache.hadoop.hive.metastore.api.UniqueConstraintsRequest;
 import org.apache.hadoop.hive.metastore.api.UnknownDBException;
 import org.apache.hadoop.hive.metastore.api.UnknownPartitionException;
 import org.apache.hadoop.hive.metastore.api.UnknownTableException;
+import org.apache.hadoop.hive.metastore.api.UnlockRequest;
 import org.apache.hadoop.hive.metastore.api.WMFullResourcePlan;
 import org.apache.hadoop.hive.metastore.api.WMMapping;
 import org.apache.hadoop.hive.metastore.api.WMNullablePool;
@@ -148,7 +152,6 @@ import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 import org.apache.thrift.transport.TTransportException;
 
-import javax.security.auth.login.LoginException;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.ByteBuffer;
@@ -163,6 +166,7 @@ import java.util.Map.Entry;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import javax.security.auth.login.LoginException;
 
 import static org.apache.hadoop.hive.metastore.utils.MetaStoreUtils.getDefaultCatalog;
 
@@ -179,6 +183,7 @@ public class HiveMetaStoreThriftClient implements IMetaStoreClient, AutoCloseabl
     private TTransport transport = null;
     private boolean isConnected = false;
     private URI metastoreUris[];
+    private final HiveMetaHookLoader hookLoader;
     protected final Configuration conf;
     // Keep a copy of HiveConf so if Session conf changes, we may need to get a new HMS client.
     private String tokenStrForm;
@@ -203,6 +208,7 @@ public class HiveMetaStoreThriftClient implements IMetaStoreClient, AutoCloseabl
 
     public HiveMetaStoreThriftClient(Configuration conf, HiveMetaHookLoader hookLoader, Boolean allowEmbedded)
             throws MetaException {
+        this.hookLoader = hookLoader;
 
         if (conf == null) {
             conf = MetastoreConf.newMetastoreConf();
@@ -1215,36 +1221,46 @@ public class HiveMetaStoreThriftClient implements IMetaStoreClient, AutoCloseabl
     }
 
     @Override
-    public void alter_table(String databaseName, String tblName, Table table)
+    public void alter_table(String dbName, String tblName, Table table)
             throws InvalidOperationException, MetaException, TException {
-        throw new TException("method not implemented");
-
+        alter_table_with_environmentContext(dbName, tblName, table, null);
     }
 
     @Override
     public void alter_table(String catName, String dbName, String tblName, Table newTable)
             throws InvalidOperationException, MetaException, TException {
-        throw new TException("method not implemented");
-
+        alter_table_with_environmentContext(dbName, tblName, newTable, null);
     }
 
     @Override
     public void alter_table(String catName, String dbName, String tblName, Table newTable,
                             EnvironmentContext envContext) throws InvalidOperationException, MetaException, TException {
-        throw new TException("method not implemented");
+        client.alter_table_with_environment_context(dbName, tblName, newTable, envContext);
     }
 
     @Override
-    public void alter_table(String defaultDatabaseName, String tblName, Table table, boolean cascade)
+    public void alter_table(String dbName, String tblName, Table table, boolean cascade)
             throws InvalidOperationException, MetaException, TException {
-        throw new TException("method not implemented");
+        EnvironmentContext environmentContext = new EnvironmentContext();
+        if (cascade) {
+            environmentContext.putToProperties(StatsSetupConst.CASCADE, StatsSetupConst.TRUE);
+        }
+        alter_table_with_environmentContext(dbName, tblName, table, environmentContext);
     }
 
     @Override
-    public void alter_table_with_environmentContext(String databaseName, String tblName, Table table,
-                                                    EnvironmentContext environmentContext)
+    public void alter_table_with_environmentContext(String dbName, String tblName, Table table,
+                                                    EnvironmentContext envContext)
             throws InvalidOperationException, MetaException, TException {
-        throw new TException("method not implemented");
+        HiveMetaHook hook = getHook(table);
+        if (hook != null) {
+            hook.preAlterTable(table, envContext);
+        }
+        client.alter_table_with_environment_context(dbName, tblName, table, envContext);
+    }
+
+    private HiveMetaHook getHook(Table tbl) throws MetaException {
+        return hookLoader == null ? null : hookLoader.getHook(tbl);
     }
 
     @Override
@@ -1811,19 +1827,18 @@ public class HiveMetaStoreThriftClient implements IMetaStoreClient, AutoCloseabl
 
     @Override
     public LockResponse lock(LockRequest request) throws NoSuchTxnException, TxnAbortedException, TException {
-        throw new TException("method not implemented");
+        return client.lock(request);
     }
 
     @Override
     public LockResponse checkLock(long lockid)
             throws NoSuchTxnException, TxnAbortedException, NoSuchLockException, TException {
-        throw new TException("method not implemented");
+        return client.check_lock(new CheckLockRequest(lockid));
     }
 
     @Override
     public void unlock(long lockid) throws NoSuchLockException, TxnOpenException, TException {
-        throw new TException("method not implemented");
-
+        client.unlock(new UnlockRequest(lockid));
     }
 
     @Override

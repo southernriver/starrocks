@@ -463,6 +463,7 @@ public class HdfsFsManager {
                 }
                 fileSystem.setFileSystem(dfsFileSystem);
                 fileSystem.setConfiguration(conf);
+                fileSystem.setUgi(ugi);
                 if (ugi != null) {
                     fileSystem.setUserName(username);
                 }

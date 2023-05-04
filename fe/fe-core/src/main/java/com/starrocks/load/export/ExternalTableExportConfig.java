@@ -11,6 +11,7 @@ import com.starrocks.analysis.TimestampArithmeticExpr;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.DynamicPartitionProperty;
 import com.starrocks.catalog.HiveTable;
+import com.starrocks.catalog.IcebergTable;
 import com.starrocks.catalog.InternalCatalog;
 import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.PrimitiveType;
@@ -22,6 +23,8 @@ import com.starrocks.common.ErrorReport;
 import com.starrocks.common.UserException;
 import com.starrocks.connector.ConnectorMetadata;
 import com.starrocks.connector.exception.StarRocksConnectorException;
+import com.starrocks.fs.HdfsUtil;
+import com.starrocks.fs.hdfs.HdfsFs;
 import com.starrocks.load.ExportJob;
 import com.starrocks.load.FsUtil;
 import com.starrocks.server.GlobalStateMgr;
@@ -29,9 +32,22 @@ import com.starrocks.sql.analyzer.AnalyzerUtils;
 import com.starrocks.sql.analyzer.SemanticException;
 import com.starrocks.task.ExportExportingTask;
 import com.starrocks.utils.TdwUtil;
+import org.apache.iceberg.DataFile;
+import org.apache.iceberg.DataFiles;
+import org.apache.iceberg.FileFormat;
+import org.apache.iceberg.Metrics;
+import org.apache.iceberg.MetricsConfig;
+import org.apache.iceberg.PartitionSpec;
+import org.apache.iceberg.ReplacePartitions;
+import org.apache.iceberg.hadoop.HadoopInputFile;
+import org.apache.iceberg.mapping.MappingUtil;
+import org.apache.iceberg.mapping.NameMapping;
+import org.apache.iceberg.orc.OrcMetrics;
+import org.apache.iceberg.parquet.ParquetUtil;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.security.PrivilegedExceptionAction;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -79,6 +95,8 @@ public class ExternalTableExportConfig {
         overwritePartition = getOverwritePartition(targetProperties);
         if (externalTable.getType() == Table.TableType.HIVE) {
             prepareForHive((HiveTable) externalTable, targetPartitionName);
+        } else if (externalTable.getType() == Table.TableType.ICEBERG) {
+            prepareForIceberg((IcebergTable) externalTable, partition, targetPartitionName);
         }
     }
 
@@ -350,6 +368,65 @@ public class ExternalTableExportConfig {
         } else {
             ErrorReport.reportSemanticException(ErrorCode.ERR_BAD_CATALOG_AND_DB_ERROR, hiveTable.getCatalogName());
         }
+    }
+
+    private void prepareForIceberg(IcebergTable icebergTable, String partition, String targetPartitionName) {
+        path = icebergTable.getTableLocation() + "/data" + targetPartitionName;
+        beforeFinishFunction = job -> {
+            Set<String> files = job.getExportedFiles();
+            if (files.isEmpty()) {
+                throw new StarRocksConnectorException("no data in partition: %s", partition);
+            }
+            org.apache.iceberg.Table table = icebergTable.getIcebergTable();
+            PartitionSpec partitionSpec = table.spec();
+            NameMapping nameMapping = MappingUtil.create(table.schema());
+
+            HdfsFs fileSystem;
+            ReplacePartitions replacePartitions;
+            try {
+                fileSystem = HdfsUtil.getFileSystem(path, brokerDesc);
+                replacePartitions = table.newReplacePartitions();
+            } catch (UserException e) {
+                String msg = String.format("failed to get FileSystem from path %s", path);
+                throw new StarRocksConnectorException(msg, e);
+            }
+            for (String filePath : files) {
+                HadoopInputFile inputFile = HadoopInputFile.fromLocation(filePath, fileSystem.getDFSFileSystem());
+                Metrics metrics = null;
+                try {
+                    if ("orc".equalsIgnoreCase(job.getFileFormat())) {
+                        metrics = OrcMetrics.fromInputFile(inputFile, MetricsConfig.getDefault(), nameMapping);
+                    } else if ("parquet".equalsIgnoreCase(job.getFileFormat())) {
+                        metrics = ParquetUtil.fileMetrics(inputFile, MetricsConfig.getDefault(), nameMapping);
+                    }
+                } catch (Throwable e) {
+                    LOG.error("failed to open reader for " + filePath, e);
+                    throw new StarRocksConnectorException("failed to open reader for " + filePath, e);
+                }
+                DataFile file = DataFiles.builder(partitionSpec)
+                        .withPath(filePath)
+                        .withFormat(FileFormat.fromFileName(filePath))
+                        .withMetrics(metrics)
+                        .withFileSizeInBytes(inputFile.getLength())
+                        .withPartitionPath(removeSlash(targetPartitionName))
+                        .build();
+                replacePartitions.addFile(file);
+            }
+            try {
+                if (fileSystem.getUgi() != null) {
+                    fileSystem.getUgi().doAs((PrivilegedExceptionAction<Void>) () -> {
+                        replacePartitions.commit();
+                        return null;
+                    });
+                } else {
+                    replacePartitions.commit();
+                }
+            } catch (Exception e) {
+                LOG.error("commit iceberg partition replace " + partition + "failed", e);
+                throw new StarRocksConnectorException("commit iceberg partition replace " + partition + "failed", e);
+            }
+            return null;
+        };
     }
 
     private String removeSlash(String path) {

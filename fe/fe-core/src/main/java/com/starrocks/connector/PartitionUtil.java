@@ -34,8 +34,8 @@ import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.common.DmlException;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.common.FileUtils;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.spark_project.guava.collect.Sets;
 
 import java.util.ArrayList;

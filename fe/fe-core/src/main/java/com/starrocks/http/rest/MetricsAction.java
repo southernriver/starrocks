@@ -35,8 +35,8 @@ import com.starrocks.metric.PrometheusMetricVisitor;
 import com.starrocks.metric.SimpleCoreMetricVisitor;
 import com.starrocks.mysql.privilege.PrivPredicate;
 import io.netty.handler.codec.http.HttpMethod;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 //fehost:port/metrics
 //fehost:port/metrics?type=core
