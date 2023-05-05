@@ -115,6 +115,15 @@ public class HiveMetastore implements IHiveMetastore {
         return resultBuilder.build();
     }
 
+    public Partition addPartition(String dbName, String tblName, String partitionName) {
+        org.apache.hadoop.hive.metastore.api.Table table = client.getTable(dbName, tblName);
+        org.apache.hadoop.hive.metastore.api.Partition partition = client.addPartitions(table, partitionName);
+        if (partition == null) {
+            return null;
+        }
+        return HiveMetastoreApiConverter.toPartition(partition.getSd(), partition.getParameters());
+    }
+
     public HivePartitionStats getTableStatistics(String dbName, String tblName) {
         org.apache.hadoop.hive.metastore.api.Table table = client.getTable(dbName, tblName);
         HiveCommonStats commonStats = toHiveCommonStats(table.getParameters());

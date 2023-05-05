@@ -2530,19 +2530,18 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
                     .stream().map(Identifier::getValue).collect(toList());
         }
 
-        StringLiteral stringLiteral = (StringLiteral) visit(context.string());
+        String typeName = context.target.getText();
+        // targetProperties
+        Map<String, String> targetProperties =
+                context.targetProperties != null ? getProperty(context.targetProperties.property()) : new HashMap<>();
         // properties
-        Map<String, String> properties = null;
-        if (context.properties() != null) {
-            properties = new HashMap<>();
-            List<Property> propertyList = visit(context.properties().property(), Property.class);
-            for (Property property : propertyList) {
-                properties.put(property.getKey(), property.getValue());
-            }
-        }
+        Map<String, String> properties = getProperties(context.properties());
         // brokers
         BrokerDesc brokerDesc = getBrokerDesc(context.brokerDesc());
-        return new ExportStmt(tableRef, columns, stringLiteral.getValue(), properties, brokerDesc);
+        if (brokerDesc == null) {
+            brokerDesc = new BrokerDesc(new HashMap<>());
+        }
+        return new ExportStmt(tableRef, columns, typeName, targetProperties, properties, brokerDesc);
     }
 
     @Override
@@ -5474,15 +5473,22 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
         }
     }
 
-    private Map<String, String> getProperties(StarRocksParser.PropertiesContext context) {
+    private Map<String, String> getProperty(List<StarRocksParser.PropertyContext> context) {
         Map<String, String> properties = new HashMap<>();
-        if (context != null && context.property() != null) {
-            List<Property> propertyList = visit(context.property(), Property.class);
+        if (context != null) {
+            List<Property> propertyList = visit(context, Property.class);
             for (Property property : propertyList) {
                 properties.put(property.getKey(), property.getValue());
             }
         }
         return properties;
+    }
+
+    private Map<String, String> getProperties(StarRocksParser.PropertiesContext context) {
+        if (context != null && context.property() != null) {
+            return getProperty(context.property());
+        }
+        return new HashMap<>();
     }
 
     private List<ParseNode> getLoadPropertyList(List<StarRocksParser.LoadPropertiesContext> loadPropertiesContexts) {
@@ -5550,13 +5556,9 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
 
     private Map<String, String> getDataSourceProperties(
             StarRocksParser.DataSourcePropertiesContext dataSourcePropertiesContext) {
-        Map<String, String> dataSourceProperties = new HashMap<>();
         if (dataSourcePropertiesContext != null) {
-            List<Property> propertyList = visit(dataSourcePropertiesContext.propertyList().property(), Property.class);
-            for (Property property : propertyList) {
-                dataSourceProperties.put(property.getKey(), property.getValue());
-            }
+            return getProperty(dataSourcePropertiesContext.propertyList().property());
         }
-        return dataSourceProperties;
+        return new HashMap<>();
     }
 }

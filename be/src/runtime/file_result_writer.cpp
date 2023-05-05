@@ -89,15 +89,25 @@ Status FileResultWriter::_create_file_writer() {
                 PlainTextBuilderOptions{_file_opts->column_separator, _file_opts->row_delimiter},
                 std::move(writable_file), _output_expr_ctxs);
         break;
-    case TFileFormatType::FORMAT_PARQUET:
-        _file_builder = std::make_unique<ParquetBuilder>(
-                std::move(writable_file), _output_expr_ctxs,
-                _file_opts->parquet_options, _file_opts->file_column_names);
+    case TFileFormatType::FORMAT_PARQUET: {
+        std::vector<TypeDescriptor> output_types;
+        for (const auto& type : _file_opts->file_output_types) {
+            output_types.push_back(TypeDescriptor::from_thrift(type));
+        }
+        _file_builder = std::make_unique<ParquetBuilder>(std::move(writable_file), _output_expr_ctxs,
+                                                         _file_opts->parquet_options, _file_opts->file_column_names,
+                                                         output_types);
         break;
-    case TFileFormatType::FORMAT_ORC:
+    }
+    case TFileFormatType::FORMAT_ORC: {
+        std::vector<TypeDescriptor> output_types;
+        for (const auto& type : _file_opts->file_output_types) {
+            output_types.push_back(TypeDescriptor::from_thrift(type));
+        }
         _file_builder = std::make_unique<ORCBuilder>(_file_opts->orc_options, std::move(writable_file),
-                                                     _output_expr_ctxs, nullptr, _file_opts->file_column_names);
+                                             _output_expr_ctxs, nullptr, _file_opts->file_column_names, output_types);
         break;
+    }
     default:
         return Status::InternalError(strings::Substitute("unsupported file format: $0", _file_opts->file_format));
     }

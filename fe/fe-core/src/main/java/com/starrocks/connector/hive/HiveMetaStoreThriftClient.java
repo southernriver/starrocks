@@ -983,7 +983,7 @@ public class HiveMetaStoreThriftClient implements IMetaStoreClient, AutoCloseabl
     @Override
     public Partition add_partition(Partition partition)
             throws InvalidObjectException, AlreadyExistsException, MetaException, TException {
-        throw new TException("method not implemented");
+        return client.add_partition(partition);
     }
 
     @Override

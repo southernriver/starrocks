@@ -5,20 +5,24 @@ package com.starrocks.connector.hive;
 import com.google.common.collect.Lists;
 import com.starrocks.common.Config;
 import com.starrocks.connector.ClassUtils;
+import com.starrocks.connector.PartitionUtil;
 import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.connector.hive.events.MetastoreNotificationFetchException;
 import com.starrocks.connector.hive.glue.AWSCatalogMetastoreClient;
 import com.starrocks.sql.PlannerProfile;
+import com.starrocks.utils.TdwUtil;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.HiveMetaHookLoader;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.RetryingMetaStoreClient;
+import org.apache.hadoop.hive.metastore.api.AlreadyExistsException;
 import org.apache.hadoop.hive.metastore.api.ColumnStatisticsObj;
 import org.apache.hadoop.hive.metastore.api.CurrentNotificationEventId;
 import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.NotificationEventResponse;
 import org.apache.hadoop.hive.metastore.api.Partition;
+import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.metastore.conf.MetastoreConf;
 import org.apache.logging.log4j.LogManager;
@@ -26,6 +30,7 @@ import org.apache.logging.log4j.Logger;
 import org.apache.thrift.transport.TTransportException;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -244,6 +249,95 @@ public class HiveMetaClient {
             }
         }
         return partitions;
+    }
+
+    public Partition addPartitions(Table table, String partitionName) {
+        if (Config.enable_check_tdw_pri) {
+            addPartitionToTdw(table, partitionName);
+            return null;
+        }
+        String dbName = table.getDbName();
+        String tblName = table.getTableName();
+        try (PlannerProfile.ScopedTimer ignored = PlannerProfile.getScopedTimer("HMS.addPartitions")) {
+            RecyclableClient client = null;
+            StarRocksConnectorException connectionException = null;
+            try {
+                client = getClient();
+                StorageDescriptor sd = table.getSd();
+                if (sd == null) {
+                    throw new StarRocksConnectorException("Table is missing storage descriptor");
+                }
+                List<String> partitionValues = PartitionUtil.toPartitionValues(partitionName);
+
+                // Create a new partition object
+                Partition partition = new Partition();
+                partition.setDbName(dbName);
+                partition.setTableName(tblName);
+                partition.setCreateTime((int) (System.currentTimeMillis() / 1000));
+                partition.setLastAccessTime((int) (System.currentTimeMillis() / 1000));
+                partition.setValues(partitionValues);
+
+                // Create a new storage descriptor for the partition
+                StorageDescriptor partitionSd = new StorageDescriptor(sd);
+                partitionSd.setLocation(sd.getLocation() + partitionName);
+                partition.setSd(partitionSd);
+
+                try {
+                    // Add the partition to the metastore
+                    return client.hiveClient.add_partition(partition);
+                } catch (AlreadyExistsException e) {
+                    LOG.warn("Failed to add partition on {}.{} {}", dbName, tblName, e.getMessage());
+                    return partition;
+                }
+            } catch (Exception e) {
+                LOG.error("Failed to add partition on {}.{}", dbName, tblName, e);
+                connectionException =
+                        new StarRocksConnectorException("Failed to add partition on [%s.%s] to meta store: %s",
+                                dbName, tblName, e.getMessage());
+                throw connectionException;
+            } finally {
+                if (client == null && connectionException != null) {
+                    LOG.error("Failed to get hive client. {}", connectionException.getMessage());
+                } else if (connectionException != null) {
+                    LOG.error("An exception occurred when using the current long link " +
+                            "to access metastore. msg： {}", connectionException.getMessage());
+                    client.close();
+                } else if (client != null) {
+                    client.finish();
+                }
+            }
+        }
+    }
+
+    public void addPartitionToTdw(Table table, String partitionPath) {
+        String dbName = table.getDbName();
+        String tblName = table.getTableName();
+        String userName = TdwUtil.getCurrentTdwUserName();
+        try (PlannerProfile.ScopedTimer ignored = PlannerProfile.getScopedTimer("TDW.addPartitions")) {
+            List<String> partitionValues = partitionPathToValues(partitionPath);
+            if (partitionValues.size() != 1) {
+                throw new StarRocksConnectorException("Export to multi-level partition is not supported yet");
+            }
+            TdwUtil.addPartition(dbName, tblName, partitionValues.get(0), userName);
+        }
+    }
+
+    private List<String> partitionPathToValues(String partitionPath) {
+        // /year=2023/month=03/day=24/ -> [2023, 03, 24]
+        List<String> partitionValues = new ArrayList<>();
+        for (String part : partitionPath.split("/")) {
+            String[] pair = part.split("=");
+            if (pair.length == 1) {
+                if (!pair[0].isEmpty()) {
+                    partitionValues.add(pair[0]);
+                }
+            } else if (pair.length > 1) {
+                if (!pair[1].isEmpty()) {
+                    partitionValues.add(pair[1]);
+                }
+            }
+        }
+        return partitionValues;
     }
 
     public List<ColumnStatisticsObj> getTableColumnStats(String dbName, String tableName, List<String> columns) {

@@ -60,7 +60,8 @@ public:
     ORCBuilder(ORCBuilderOptions options, std::unique_ptr<WritableFile> writable_file,
                const std::vector<ExprContext*>& output_expr_ctxs,
                TupleDescriptor* _output_tuple_desc,
-               std::vector<std::string>  column_names);
+               std::vector<std::string> column_names,
+               std::vector<TypeDescriptor> output_types);
     ~ORCBuilder() override = default;
 
     Status add_chunk(vectorized::Chunk* chunk) override;
@@ -83,6 +84,7 @@ private:
     std::unique_ptr<WritableFile> _writable_file;
     orc::MemoryPool* _memory_pool;
     const std::vector<std::string> _column_names;
+    std::vector<TypeDescriptor> _output_types;
     Status init(vectorized::Chunk* chunk);
 };
 

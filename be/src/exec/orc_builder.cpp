@@ -49,6 +49,11 @@ void fillDecimalV3Value(vectorized::Column* dataColumn, orc::ColumnVectorBatch* 
                         size_t precision, size_t scale);
 
 void fillDateValue(vectorized::Column* dataColumn, orc::ColumnVectorBatch* batch, size_t row, size_t batchIdx);
+void fillDateValue(vectorized::Column* dataColumn, orc::ColumnVectorBatch* batch, size_t row, size_t batchIdx);
+void fillDateValueAsDateLiteral(vectorized::Column* dataColumn, orc::ColumnVectorBatch* batch, size_t row,
+                                size_t batchIdx);
+void fillDateValueAsDateString(vectorized::Column* dataColumn, orc::ColumnVectorBatch* batch, size_t row,
+                               size_t batchIdx);
 
 void fillTimestampValue(vectorized::Column* dataColumn, orc::ColumnVectorBatch* batch, size_t row, size_t batchIdx);
 
@@ -103,7 +108,7 @@ const static std::unordered_map<PrimitiveType, orc::TypeKind> g_starrocks_orc_ty
         {TYPE_BIGINT, orc::LONG},        {TYPE_FLOAT, orc::FLOAT},
         {TYPE_DOUBLE, orc::DOUBLE},      {TYPE_DECIMALV2, orc::DECIMAL},
         {TYPE_DATE, orc::DATE},          {TYPE_DATETIME, orc::TIMESTAMP},
-        {TYPE_CHAR, orc::CHAR},          {TYPE_VARCHAR, orc::VARCHAR},
+        {TYPE_CHAR, orc::STRING},        {TYPE_VARCHAR, orc::STRING},
         {TYPE_DECIMAL32, orc::DECIMAL},  {TYPE_DECIMAL64, orc::DECIMAL},
         {TYPE_DECIMAL128, orc::DECIMAL},
 };
@@ -122,27 +127,12 @@ static Status _starrocks_type_to_orc_type_descriptor(const TypeDescriptor& starr
     if (scale < 0) {
         scale = starrocks::TypeDescriptor::MAX_SCALE;
     }
-    auto len = (int)starrocks_type.len;
     auto iter = g_starrocks_orc_type_mapping.find(starrocks_type.type);
     if (iter == g_starrocks_orc_type_mapping.end()) {
         return Status::NotSupported("Unsupported ORC type: " + starrocks_type.debug_string());
     }
     auto type = iter->second;
     switch (starrocks_type.type) {
-    case TYPE_CHAR: {
-        if (len < 0) {
-            len = starrocks::TypeDescriptor::MAX_CHAR_LENGTH;
-        }
-        result = orc::createCharType(orc::CHAR, len);
-        break;
-    }
-    case TYPE_VARCHAR: {
-        if (len < 0) {
-            len = starrocks::TypeDescriptor::MAX_VARCHAR_LENGTH;
-        }
-        result = orc::createCharType(orc::VARCHAR, len);
-        break;
-    }
     case TYPE_DECIMAL128:
     case TYPE_DECIMAL64:
     case TYPE_DECIMAL32:
@@ -163,14 +153,22 @@ const size_t ORCBuilder::OUTSTREAM_BUFFER_SIZE_BYTES = 1024 * 1024;
 ORCBuilder::ORCBuilder(ORCBuilderOptions options, std::unique_ptr<WritableFile> writable_file,
                        const std::vector<ExprContext*>& output_expr_ctxs,
                        TupleDescriptor* _output_tuple_desc,
-                       std::vector<std::string> column_names)
+                       std::vector<std::string> column_names,
+                       std::vector<TypeDescriptor> output_types)
         : _options(options),
           _output_expr_ctxs(output_expr_ctxs),
           _output_tuple_desc(_output_tuple_desc),
           _batchSize(1024),
           _init(false),
           _writable_file(std::move(writable_file)),
-          _column_names(std::move(column_names)) {}
+          _column_names(std::move(column_names)),
+          _output_types(std::move(output_types)) {
+    if (_output_types.empty()) {
+        for (auto ctx : _output_expr_ctxs) {
+            _output_types.push_back(ctx->root()->type());
+        }
+    }
+}
 
 Status ORCBuilder::init(vectorized::Chunk* chunk) {
     if (_init || chunk->num_rows() == 0) {
@@ -180,8 +178,8 @@ Status ORCBuilder::init(vectorized::Chunk* chunk) {
     size_t num_fields = _output_expr_ctxs.size();
     std::unique_ptr<orc::Type> schema = orc::createStructType();
     for (int idx = 0; idx < num_fields; idx++) {
-        // resolve column type
-        const auto type = _output_expr_ctxs.at(idx)->root()->type();
+        // resolve output type
+        const auto type = _output_types.at(idx);
         std::unique_ptr<orc::Type> fieldType;
         Status status = _starrocks_type_to_orc_type_descriptor(type, fieldType);
         if (!status.ok()) {
@@ -243,7 +241,8 @@ Status ORCBuilder::add_chunk(vectorized::Chunk* chunk) {
 
         for (uint64_t col = 0; col < numFields; ++col) {
             const orc::Type* subType = this->_type->getSubtype(col);
-            auto column = chunk->get_column_by_index(col);
+            string column_name = _column_names[col];
+            auto column = chunk->get_column_by_name(column_name);
             auto* curBatch = structBatch->fields[col];
             size_t precision = subType->getPrecision();
             size_t scale = subType->getScale();
@@ -260,6 +259,7 @@ Status ORCBuilder::add_chunk(vectorized::Chunk* chunk) {
             }
 
             const auto& srType = _output_expr_ctxs.at(col)->root()->type();
+            const auto& outType = _output_types.at(col);
             for (size_t row = finishedRows, batchIdx = 0; row < finishedRows + batchWriteRows; row++, batchIdx++) {
                 // handle null row values
                 if (isNullable && nullColumn->get_data()[row] != 0) {
@@ -295,7 +295,13 @@ Status ORCBuilder::add_chunk(vectorized::Chunk* chunk) {
                         fillStringValue(dataColumn, curBatch, row, batchIdx);
                         break;
                     case TYPE_DATE:
-                        fillDateValue(dataColumn, curBatch, row, batchIdx);
+                        if (outType.type == TYPE_VARCHAR || outType.type == TYPE_CHAR) {
+                            fillDateValueAsDateString(dataColumn, curBatch, row, batchIdx);
+                        } else if (outType.type == TYPE_BIGINT || outType.type == TYPE_INT) {
+                            fillDateValueAsDateLiteral(dataColumn, curBatch, row, batchIdx);
+                        } else {
+                            fillDateValue(dataColumn, curBatch, row, batchIdx);
+                        }
                         break;
                     case TYPE_DATETIME:
                         fillTimestampValue(dataColumn, curBatch, row, batchIdx);
@@ -425,6 +431,25 @@ void fillDateValue(vectorized::Column* dataColumn, orc::ColumnVectorBatch* batch
     auto* dateColumn = down_cast<vectorized::FixedLengthColumn<vectorized::DateValue>*>(dataColumn);
     double days = dateColumn->get_data()[row].julian() - t1970.julian();
     longBatch->data[batchIdx] = static_cast<int64_t>(days);
+}
+
+void fillDateValueAsDateLiteral(vectorized::Column* dataColumn, orc::ColumnVectorBatch* batch, size_t row,
+                                size_t batchIdx) {
+    auto* longBatch = down_cast<orc::LongVectorBatch*>(batch);
+    auto* dateColumn = down_cast<vectorized::FixedLengthColumn<vectorized::DateValue>*>(dataColumn);
+    double dateLiteral = dateColumn->get_data()[row].to_date_literal();
+    longBatch->data[batchIdx] = static_cast<int64_t>(dateLiteral);
+}
+
+void fillDateValueAsDateString(vectorized::Column* dataColumn, orc::ColumnVectorBatch* batch, size_t row,
+                               size_t batchIdx) {
+    auto* stringBatch = down_cast<orc::StringVectorBatch*>(batch);
+    auto* dateColumn = down_cast<vectorized::FixedLengthColumn<vectorized::DateValue>*>(dataColumn);
+    string bytes = dateColumn->get_data()[row].to_string();
+    char* dataPtr = bytes.data();
+    stringBatch->data[batchIdx] = dataPtr;
+    // yyyy-MM-dd
+    stringBatch->length[batchIdx] = 10;
 }
 
 void fillTimestampValue(vectorized::Column* dataColumn, orc::ColumnVectorBatch* batch, size_t row, size_t batchIdx) {

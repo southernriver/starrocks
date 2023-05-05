@@ -287,36 +287,6 @@ under the License.
             <version>${iceberg.version}</version>
         </dependency>
 
-        <dependency>
-            <groupId>org.apache.iceberg</groupId>
-            <artifactId>iceberg-core</artifactId>
-            <version>${iceberg.version}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.apache.avro</groupId>
-                    <artifactId>avro</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.iceberg</groupId>
-            <artifactId>iceberg-common</artifactId>
-            <version>${iceberg.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.iceberg</groupId>
-            <artifactId>iceberg-hive-metastore</artifactId>
-            <version>${iceberg.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.iceberg</groupId>
-            <artifactId>iceberg-bundled-guava</artifactId>
-            <version>${iceberg.version}</version>
-        </dependency>
-
         <!-- https://mvnrepository.com/artifact/org.apache.thrift/libthrift -->
         <dependency>
             <groupId>org.apache.thrift</groupId>
@@ -700,6 +670,26 @@ under the License.
             <version>4.2.2</version>
             <scope>compile</scope>
         </dependency>
+
+        <!-- supersql -->
+        <dependency>
+            <groupId>com.tencent.supersql</groupId>
+            <artifactId>avatica-core</artifactId>
+            <version>1.16.0-SUPERSQL-4.0.0</version>
+            <classifier>shaded</classifier>
+            <exclusions>
+                <exclusion>
+                    <groupId>*</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>com.tencent.tdw</groupId>
+            <artifactId>security-common</artifactId>
+            <version>1.1.5</version>
+            <classifier>shaded</classifier>
+        </dependency>
     </dependencies>
 
     <build>
@@ -1055,4 +1045,17 @@ under the License.
         </pluginManagement>
 
     </build>
+
+    <repositories>
+        <repository>
+            <id>tianqiong-releases-repo</id>
+            <url>https://mirrors.tencent.com/repository/maven/tianqiong-releases</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
 </project>

@@ -34,6 +34,8 @@ public interface IHiveMetastore {
 
     Map<String, Partition> getPartitionsByNames(String dbName, String tableName, List<String> partitionNames);
 
+    Partition addPartition(String dbName, String tblName, String partitionName);
+
     HivePartitionStats getTableStatistics(String dbName, String tableName);
 
     Map<String, HivePartitionStats> getPartitionStatistics(Table table, List<String> partitions);

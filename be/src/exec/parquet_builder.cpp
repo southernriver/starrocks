@@ -14,6 +14,8 @@
 
 #include "parquet_builder.h"
 
+#include <utility>
+
 #include <arrow/buffer.h>
 #include <arrow/io/file.h>
 #include <arrow/io/interfaces.h>
@@ -90,10 +92,18 @@ arrow::Status ParquetOutputStream::Close() {
 
 ParquetBuilder::ParquetBuilder(std::unique_ptr<WritableFile> writable_file,
                                const std::vector<ExprContext*>& output_expr_ctxs, const ParquetBuilderOptions& options,
-                               const std::vector<std::string>& file_column_names)
+                               const std::vector<std::string>& file_column_names,
+                               std::vector<TypeDescriptor> output_types)
         : _writable_file(std::move(writable_file)),
           _output_expr_ctxs(output_expr_ctxs),
+          _file_column_names(file_column_names),
+          _output_types(std::move(output_types)),
           _row_group_max_size(options.row_group_max_size) {
+    if (_output_types.empty()) {
+        for (auto ctx : _output_expr_ctxs) {
+            _output_types.push_back(ctx->root()->type());
+        }
+    }
     _init(options, file_column_names);
 }
 
@@ -125,7 +135,8 @@ Status ParquetBuilder::_init_schema(const std::vector<std::string>& file_column_
         ::parquet::Type::type parquet_data_type;
         ::parquet::ConvertedType::type parquet_converted_type;
         auto column_expr = _output_expr_ctxs[i]->root();
-        ParquetBuildHelper::build_file_data_type(parquet_data_type, parquet_converted_type, column_expr->type().type);
+        const auto type = _output_types[i].type;
+        ParquetBuildHelper::build_file_data_type(parquet_data_type, parquet_converted_type, type);
         ParquetBuildHelper::build_parquet_repetition_type(parquet_repetition_type, column_expr->is_nullable());
         ::parquet::schema::NodePtr nodePtr = ::parquet::schema::PrimitiveNode::Make(
                 file_column_names[i], parquet_repetition_type, parquet_data_type, parquet_converted_type);
@@ -184,7 +195,11 @@ void ParquetBuildHelper::build_file_data_type(parquet::Type::type& parquet_data_
         break;
     }
     case TYPE_CHAR:
-    case TYPE_VARCHAR:
+    case TYPE_VARCHAR: {
+        parquet_data_type = parquet::Type::BYTE_ARRAY;
+        parquet_converted_type = parquet::ConvertedType::UTF8;
+        break;
+    }
     case TYPE_DECIMAL:
     case TYPE_DECIMAL32:
     case TYPE_DECIMAL64:
@@ -254,6 +269,19 @@ void ParquetBuilder::_generate_rg_writer() {
             reinterpret_cast<const NATIVE_TYPE*>(down_cast<const COLUMN_TYPE*>(data_column)->get_data().data())); \
     _buffered_values_estimate[i] = col_writer->EstimatedBufferedValueBytes();  
 
+#define DISPATCH_PARQUET_DATE_NUMERIC_WRITER(WRITER, COLUMN_TYPE, NATIVE_TYPE) \
+    auto* dateColumn = down_cast<vectorized::FixedLengthColumn<vectorized::DateValue>*>(data_column);             \
+    std::vector<NATIVE_TYPE> res(num_rows);                                                                           \
+    for (size_t row_id = 0; row_id < num_rows; row_id++) {                                                        \
+        res[row_id] = dateColumn->get_data()[row_id].to_date_literal();                                           \
+    }                                                                                                             \
+    ParquetBuilder::_generate_rg_writer();                                                                        \
+    parquet::WRITER* col_writer = static_cast<parquet::WRITER*>(_rg_writer->column(i));                           \
+    col_writer->WriteBatch(                                                                                       \
+            num_rows, nullable ? def_level.data() : nullptr, nullptr,                                             \
+            reinterpret_cast<const NATIVE_TYPE*>(res.data()));                                                    \
+    _buffered_values_estimate[i] = col_writer->EstimatedBufferedValueBytes();
+
 #define DISPATCH_PARQUET_COMPLEX_WRITER(COLUMN_TYPE)                                                              \
     ParquetBuilder::_generate_rg_writer();                                                                        \
     parquet::ByteArrayWriter* col_writer = static_cast<parquet::ByteArrayWriter*>(_rg_writer->column(i));         \
@@ -266,6 +294,19 @@ void ParquetBuilder::_generate_rg_writer() {
     }                                                                                                             \
     _buffered_values_estimate[i] = col_writer->EstimatedBufferedValueBytes();
 
+#define DISPATCH_PARQUET_DATE_COMPLEX_WRITER(COLUMN_TYPE)                                                         \
+    auto* dateColumn = down_cast<vectorized::FixedLengthColumn<vectorized::DateValue>*>(data_column);             \
+    ParquetBuilder::_generate_rg_writer();                                                                        \
+    parquet::ByteArrayWriter* col_writer = static_cast<parquet::ByteArrayWriter*>(_rg_writer->column(i));         \
+    for (size_t row_id = 0; row_id < num_rows; row_id++) {                                                        \
+        string bytes = dateColumn->get_data()[row_id].to_string();                                                \
+        parquet::ByteArray value;                                                                                 \
+        value.ptr = reinterpret_cast<const uint8_t*>(bytes.data());                                               \
+        value.len = 10;                                                                                           \
+        col_writer->WriteBatch(1, nullable ? &def_level[row_id] : nullptr, nullptr, &value);                      \
+    }                                                                                                             \
+    _buffered_values_estimate[i] = col_writer->EstimatedBufferedValueBytes();
+
 Status ParquetBuilder::add_chunk(vectorized::Chunk* chunk) {
     if (!chunk->has_rows()) {
         return Status::OK();
@@ -273,7 +314,8 @@ Status ParquetBuilder::add_chunk(vectorized::Chunk* chunk) {
 
     size_t num_rows = chunk->num_rows();
     for (size_t i = 0; i < chunk->num_columns(); i++) {
-        const auto& col = chunk->get_column_by_index(i);
+        string column_name = _file_column_names[i];
+        const auto& col = chunk->get_column_by_name(column_name);
         bool nullable = col->is_nullable();
         auto null_column = nullable && down_cast<NullableColumn*>(col.get())->has_null()
                                    ? down_cast<NullableColumn*>(col.get())->null_column()
@@ -288,8 +330,9 @@ Status ParquetBuilder::add_chunk(vectorized::Chunk* chunk) {
             }
         }
 
-        const auto type = _output_expr_ctxs[i]->root()->type().type;
-        switch (type) {
+        const auto srType = _output_expr_ctxs[i]->root()->type().type;
+        const auto& outType = _output_types[i].type;
+        switch (srType) {
         case TYPE_BOOLEAN: {
             DISPATCH_PARQUET_NUMERIC_WRITER(BoolWriter, vectorized::BooleanColumn, bool)
             break;
@@ -317,15 +360,24 @@ Status ParquetBuilder::add_chunk(vectorized::Chunk* chunk) {
         }
         case TYPE_DATE: {
             ParquetBuilder::_generate_rg_writer();
-            parquet::Int32Writer* col_writer = static_cast<parquet::Int32Writer*>(_rg_writer->column(i));
-            std::vector<int32_t> res(num_rows);
-            const auto& t1970 = vectorized::DateValue::create(1970, 1, 1);
-            for (size_t row_id = 0; row_id < num_rows; row_id++) {
-                res[row_id] = down_cast<const vectorized::DateColumn*>(data_column)->get_data()[row_id].julian() - t1970.julian();
+            if (outType == TYPE_VARCHAR || outType == TYPE_CHAR) {
+                DISPATCH_PARQUET_DATE_COMPLEX_WRITER(vectorized::BinaryColumn);
+            } else if (outType == TYPE_BIGINT) {
+                DISPATCH_PARQUET_DATE_NUMERIC_WRITER(Int64Writer, vectorized::Int64Column, int64_t);
+            } else if (outType == TYPE_INT) {
+                DISPATCH_PARQUET_DATE_NUMERIC_WRITER(Int32Writer, vectorized::Int32Column, int32_t);
+            } else {
+                auto* col_writer = static_cast<parquet::Int32Writer*>(_rg_writer->column(i));
+                std::vector<int32_t> res(num_rows);
+                const auto& t1970 = vectorized::DateValue::create(1970, 1, 1);
+                for (size_t row_id = 0; row_id < num_rows; row_id++) {
+                    res[row_id] = down_cast<const vectorized::DateColumn*>(data_column)->get_data()[row_id].julian() -
+                                  t1970.julian();
+                }
+                col_writer->WriteBatch(num_rows, nullable ? def_level.data() : nullptr, nullptr,
+                                       reinterpret_cast<const int32_t*>(res.data()));
+                _buffered_values_estimate[i] = col_writer->EstimatedBufferedValueBytes();
             }
-            col_writer->WriteBatch(num_rows, nullable ? def_level.data() : nullptr, nullptr,
-                                           reinterpret_cast<const int32_t*>(res.data()));
-            _buffered_values_estimate[i] = col_writer->EstimatedBufferedValueBytes();
             break;
         }
         case TYPE_DATETIME: {

@@ -66,6 +66,12 @@ public class HiveMetastoreOperations {
         return metastore.getPartitionsByNames(dbName, tblName, partitionNames);
     }
 
+    public Partition addPartition(Table table, String partitionName) {
+        String dbName = ((HiveMetaStoreTable) table).getDbName();
+        String tblName = ((HiveMetaStoreTable) table).getTableName();
+        return metastore.addPartition(dbName, tblName, partitionName);
+    }
+
     public HivePartitionStats getTableStatistics(String dbName, String tblName) {
         return metastore.getTableStatistics(dbName, tblName);
     }

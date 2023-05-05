@@ -77,7 +77,8 @@ public:
 class ParquetBuilder : public FileBuilder {
 public:
     ParquetBuilder(std::unique_ptr<WritableFile> writable_file, const std::vector<ExprContext*>& output_expr_ctxs,
-                   const ParquetBuilderOptions& options, const std::vector<std::string>& file_column_names);
+                   const ParquetBuilderOptions& options, const std::vector<std::string>& file_column_names,
+                   std::vector<TypeDescriptor> output_types);
 
     ~ParquetBuilder() override = default;
 
@@ -104,6 +105,8 @@ private:
     std::unique_ptr<::parquet::ParquetFileWriter> _file_writer;
     ::parquet::RowGroupWriter* _rg_writer = nullptr;
     std::vector<int64_t> _buffered_values_estimate;
+    const std::vector<std::string> _file_column_names;
+    std::vector<TypeDescriptor> _output_types;
     const int64_t _row_group_max_size;
     bool _closed = false;
     int64_t _total_row_group_writen_bytes{0};

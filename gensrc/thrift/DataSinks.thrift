@@ -73,6 +73,7 @@ struct TResultFileSinkOptions {
     10: optional PlanNodes.THdfsProperties hdfs_properties
     11: optional TFileOptions file_options
     12: optional list<string> file_column_names
+    13: optional list<Types.TTypeDesc> file_output_types
 }
 
 struct TMemoryScratchSink {
@@ -160,6 +161,7 @@ struct TExportSink {
     20: optional string file_format
     21: optional TFileOptions file_options
     22: optional list<string> file_column_names
+    23: optional list<Types.TTypeDesc> file_output_types
 
     // export file name prefix
     30: optional string file_name_prefix

@@ -33,11 +33,10 @@ import com.starrocks.common.Config;
 import com.starrocks.common.FeConstants;
 import com.starrocks.common.LoadException;
 import com.starrocks.common.UserException;
-import com.starrocks.common.util.BrokerUtil;
 import com.starrocks.common.util.CommandResult;
 import com.starrocks.common.util.Util;
-import com.starrocks.fs.HdfsUtil;
 import com.starrocks.load.EtlStatus;
+import com.starrocks.load.FsUtil;
 import com.starrocks.load.loadv2.SparkLoadAppHandle.State;
 import com.starrocks.load.loadv2.dpp.DppResult;
 import com.starrocks.load.loadv2.etl.EtlJobConfig;
@@ -122,11 +121,7 @@ public class SparkEtlJobHandler {
 
         try {
             byte[] configData = etlJobConfig.configToJson().getBytes(StandardCharsets.UTF_8);
-            if (brokerDesc.hasBroker()) {
-                BrokerUtil.writeFile(configData, jobConfigHdfsPath, brokerDesc);
-            } else {
-                HdfsUtil.writeFile(configData, jobConfigHdfsPath, brokerDesc);
-            }
+            FsUtil.writeFile(configData, jobConfigHdfsPath, brokerDesc);
         } catch (UserException e) {
             throw new LoadException(e.getMessage());
         }
@@ -260,12 +255,7 @@ public class SparkEtlJobHandler {
             // get dpp result
             String dppResultFilePath = EtlJobConfig.getDppResultFilePath(etlOutputPath);
             try {
-                byte[] data;
-                if (brokerDesc.hasBroker()) {
-                    data = BrokerUtil.readFile(dppResultFilePath, brokerDesc);
-                } else {
-                    data = HdfsUtil.readFile(dppResultFilePath, brokerDesc);
-                }
+                byte[] data = FsUtil.readFile(dppResultFilePath, brokerDesc);
                 String dppResultStr = new String(data, StandardCharsets.UTF_8);
                 DppResult dppResult = new Gson().fromJson(dppResultStr, DppResult.class);
                 if (dppResult != null) {
@@ -324,11 +314,7 @@ public class SparkEtlJobHandler {
         List<TBrokerFileStatus> fileStatuses = Lists.newArrayList();
         String etlFilePaths = outputPath + "/*";
         try {
-            if (brokerDesc.hasBroker()) {
-                BrokerUtil.parseFile(etlFilePaths, brokerDesc, fileStatuses);
-            } else {
-                HdfsUtil.parseFile(etlFilePaths, brokerDesc, fileStatuses);
-            }
+            FsUtil.parseFile(etlFilePaths, brokerDesc, fileStatuses);
         } catch (UserException e) {
             throw new Exception(e);
         }
@@ -354,11 +340,7 @@ public class SparkEtlJobHandler {
 
     public void deleteEtlOutputPath(String outputPath, BrokerDesc brokerDesc) {
         try {
-            if (brokerDesc.hasBroker()) {
-                BrokerUtil.deletePath(outputPath, brokerDesc);
-            } else {
-                HdfsUtil.deletePath(outputPath, brokerDesc);
-            }
+            FsUtil.deletePath(outputPath, brokerDesc);
             LOG.info("delete path success. path: {}", outputPath);
         } catch (UserException e) {
             LOG.warn("delete path failed. path: {}", outputPath, e);

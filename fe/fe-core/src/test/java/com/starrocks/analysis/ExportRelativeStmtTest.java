@@ -153,7 +153,7 @@ public class ExportRelativeStmtTest {
         List<String> columnLst = Lists.newArrayList("c1", "c2");
 
         ExportStmt stmt1 = new ExportStmt(new TableRef(tb, null), columnLst, path,
-                new HashMap<>(), null);
+                new HashMap<>(), new HashMap<>(), null);
 
         try {
             Analyzer.analyze(stmt1, AnalyzeTestUtil.getConnectContext());

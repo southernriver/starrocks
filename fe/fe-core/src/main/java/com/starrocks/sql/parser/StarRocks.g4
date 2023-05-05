@@ -1361,7 +1361,7 @@ showWhiteListStatement
 // ------------------------------------------- Export Statement --------------------------------------------------------
 
 exportStatement
-    : EXPORT TABLE tableDesc columnAliases? TO string properties? brokerDesc?
+    : EXPORT TABLE tableDesc columnAliases? TO target=identifierOrString targetProperties=propertyList? properties? brokerDesc?
     ;
 
 cancelExportStatement

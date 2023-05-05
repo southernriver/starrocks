@@ -132,6 +132,11 @@ public class HiveMetadata implements ConnectorMetadata {
     }
 
     @Override
+    public Partition addPartition(Table table, String partitionName) {
+        return hmsOps.addPartition(table, partitionName);
+    }
+
+    @Override
     public Statistics getTableStatistics(OptimizerContext session,
                                          Table table,
                                          List<ColumnRefOperator> columns,

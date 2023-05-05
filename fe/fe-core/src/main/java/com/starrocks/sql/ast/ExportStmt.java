@@ -4,6 +4,7 @@ package com.starrocks.sql.ast;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Strings;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.starrocks.analysis.BrokerDesc;
@@ -15,10 +16,15 @@ import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.Partition;
 import com.starrocks.catalog.Table;
+import com.starrocks.catalog.Type;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Config;
 import com.starrocks.common.util.PrintableMap;
 import com.starrocks.common.util.PropertyAnalyzer;
+import com.starrocks.load.ExportJob;
+import com.starrocks.load.export.ExportTargetType;
+import com.starrocks.load.export.ExternalTableExportConfig;
+import com.starrocks.load.export.HiveExportConfig;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.analyzer.SemanticException;
@@ -28,13 +34,14 @@ import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 // EXPORT statement, export data to dirs by broker.
 //
 // syntax:
 //      EXPORT TABLE tablename [PARTITION (name1[, ...])]
 //          [(col1, col2[, ...])]
-//          TO 'export_target_path'
+//          TO 'export_target_path'|EXTERNAL_TABLE
 //          [PROPERTIES("key"="value")]
 //          WITH BROKER 'broker_name' [( $broker_attrs)]
 public class ExportStmt extends StatementBase {
@@ -53,25 +60,37 @@ public class ExportStmt extends StatementBase {
     private TableName tblName;
     private List<String> partitions;
     private List<String> columnNames;
+    private String typeName;
     // path should include "/"
     private String path;
     private String fileNamePrefix;
     private final BrokerDesc brokerDesc;
+    private Map<String, String> targetProperties = Maps.newHashMap();
     private Map<String, String> properties = Maps.newHashMap();
     private String columnSeparator;
     private String rowDelimiter;
     private boolean includeQueryId = true;
     private String fileFormat = "csv";
+    private List<String> exportColumnNames;
+    private Map<String, Type> exportTypes;
+
+    // configs
+    private ExternalTableExportConfig externalTableExportConfig;
+    private HiveExportConfig hiveExportConfig;
 
     // may catalog.db.table
     private TableRef tableRef;
     private long exportStartTime;
 
-    public ExportStmt(TableRef tableRef, List<String> columnNames, String path,
-                      Map<String, String> properties, BrokerDesc brokerDesc) {
+    public ExportStmt(TableRef tableRef, List<String> columnNames, String typeName,
+                      Map<String, String> targetProperties, Map<String, String> properties, BrokerDesc brokerDesc) {
         this.tableRef = tableRef;
         this.columnNames = columnNames;
-        this.path = path.trim();
+        this.typeName = typeName.trim();
+        this.path = typeName;
+        if (properties != null) {
+            this.targetProperties = targetProperties;
+        }
         if (properties != null) {
             this.properties = properties;
         }
@@ -114,6 +133,10 @@ public class ExportStmt extends StatementBase {
         return columnNames;
     }
 
+    public String getTypeName() {
+        return typeName;
+    }
+
     public String getPath() {
         return path;
     }
@@ -124,6 +147,10 @@ public class ExportStmt extends StatementBase {
 
     public BrokerDesc getBrokerDesc() {
         return brokerDesc;
+    }
+
+    public Map<String, String> getTargetProperties() {
+        return targetProperties;
     }
 
     public Map<String, String> getProperties() {
@@ -144,6 +171,14 @@ public class ExportStmt extends StatementBase {
 
     public String getFileFormat() {
         return this.fileFormat;
+    }
+
+    public List<String> getExportColumnNames() {
+        return exportColumnNames;
+    }
+
+    public Map<String, Type> getExportTypes() {
+        return exportTypes;
     }
 
     @Override
@@ -188,15 +223,15 @@ public class ExportStmt extends StatementBase {
             }
 
             // check columns
+            Set<String> tableColumns = Sets.newTreeSet(String.CASE_INSENSITIVE_ORDER);
+            for (Column column : table.getBaseSchema()) {
+                tableColumns.add(column.getName());
+            }
             if (columnNames != null) {
                 if (columnNames.isEmpty()) {
                     throw new SemanticException("Columns is empty.");
                 }
 
-                Set<String> tableColumns = Sets.newTreeSet(String.CASE_INSENSITIVE_ORDER);
-                for (Column column : table.getBaseSchema()) {
-                    tableColumns.add(column.getName());
-                }
                 Set<String> uniqColumnNames = Sets.newTreeSet(String.CASE_INSENSITIVE_ORDER);
                 for (String columnName : columnNames) {
                     if (!uniqColumnNames.add(columnName)) {
@@ -206,13 +241,84 @@ public class ExportStmt extends StatementBase {
                         throw new SemanticException("Column [" + columnName + "] does not exist in table.");
                     }
                 }
+                exportColumnNames = Lists.newArrayList(columnNames);
+            } else {
+                exportColumnNames = Lists.newArrayList(tableColumns);
             }
         } finally {
             db.readUnlock();
         }
     }
 
-    public void checkPath() {
+    public void checkType(Table table) {
+        ExportTargetType type;
+        try {
+            type = ExportTargetType.valueOf(typeName);
+        } catch (IllegalArgumentException e) {
+            type = ExportTargetType.HDFS;
+            typeName = type.name();
+            if (path.startsWith("\"")) {
+                path = path.substring(1);
+            }
+            if (path.endsWith("\"")) {
+                path = path.trim().substring(0, path.length() - 1);
+            }
+            targetProperties.put("path", path);
+        }
+        switch (type) {
+            case EXTERNAL_TABLE:
+                if (partitions.size() != 1) {
+                    throw new SemanticException("Does not support export multiple partitions to external table now.");
+                }
+                externalTableExportConfig =
+                        new ExternalTableExportConfig(tblName, targetProperties, brokerDesc);
+                externalTableExportConfig.analyzeProperties(table, partitions.get(0));
+                path = externalTableExportConfig.getPath();
+                exportTypes = externalTableExportConfig.getExportTypes();
+                exportColumnNames = externalTableExportConfig.reorder(exportColumnNames);
+                checkPath();
+                break;
+            case HDFS:
+            case LOCAL:
+                path = targetProperties.get("path");
+                checkPath();
+                break;
+            case HIVE:
+                hiveExportConfig =
+                        new HiveExportConfig(targetProperties);
+                hiveExportConfig.analyzeProperties();
+                path = hiveExportConfig.getPath();
+                checkPath();
+                break;
+            default:
+                break;
+        }
+    }
+
+    public Function<ExportJob, Void> getBeforeFinishFunction() {
+        ExportTargetType type = ExportTargetType.valueOf(typeName);
+        switch (type) {
+            case EXTERNAL_TABLE:
+                return externalTableExportConfig.getBeforeFinishFunction();
+            case HDFS:
+            case LOCAL:
+                path = targetProperties.get("path");
+                checkPath();
+                break;
+            case HIVE:
+                hiveExportConfig =
+                        new HiveExportConfig(targetProperties);
+                hiveExportConfig.analyzeProperties();
+                path = hiveExportConfig.getPath();
+                checkPath();
+                break;
+            default:
+                break;
+        }
+        return null;
+    }
+
+    private void checkPath() {
         if (Strings.isNullOrEmpty(path)) {
             throw new SemanticException("No dest path specified.");
         }
@@ -306,8 +412,14 @@ public class ExportStmt extends StatementBase {
         sb.append("\n");
 
         sb.append(" TO ").append("'");
-        sb.append(path);
+        sb.append(typeName);
         sb.append("'");
+
+        if (targetProperties != null && !targetProperties.isEmpty()) {
+            sb.append("\n(");
+            sb.append(new PrintableMap<String, String>(targetProperties, "=", true, false));
+            sb.append(")");
+        }
 
         if (properties != null && !properties.isEmpty()) {
             sb.append("\nPROPERTIES (");

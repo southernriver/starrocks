@@ -255,6 +255,10 @@ public class CachingHiveMetastore implements IHiveMetastore {
         return partitions.build();
     }
 
+    public Partition addPartition(String dbName, String tblName, String partitionName) {
+        return metastore.addPartition(dbName, tblName, partitionName);
+    }
+
     public HivePartitionStats getTableStatistics(String dbName, String tblName) {
         return get(tableStatsCache, HiveTableName.of(dbName, tblName));
     }

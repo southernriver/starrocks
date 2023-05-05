@@ -11,6 +11,7 @@ import com.starrocks.common.AnalysisException;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.MetaNotFoundException;
 import com.starrocks.common.UserException;
+import com.starrocks.connector.hive.Partition;
 import com.starrocks.sql.ast.AddPartitionClause;
 import com.starrocks.sql.ast.AlterMaterializedViewStmt;
 import com.starrocks.sql.ast.AlterTableStmt;
@@ -87,6 +88,10 @@ public interface ConnectorMetadata {
 
     default List<PartitionInfo> getPartitions(Table table, List<String> partitionNames) {
         return Lists.newArrayList();
+    }
+
+    default Partition addPartition(Table table, String partitionName) {
+        return null;
     }
 
     /**

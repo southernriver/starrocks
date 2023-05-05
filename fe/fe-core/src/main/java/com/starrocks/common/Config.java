@@ -895,6 +895,11 @@ public class Config extends ConfigBase {
     @ConfField(mutable = true)
     public static long export_max_bytes_per_be_per_task = 268435456; // 256M
     /**
+     * Mem can be used of each export task on each BE. 2GB is a good enough value
+     */
+    @ConfField(mutable = true)
+    public static long export_default_load_mem_per_task = 2147483648L; // 2GB
+    /**
      * Size of export task thread pool, default is 5.
      */
     @ConfField
@@ -1378,6 +1383,13 @@ public class Config extends ConfigBase {
     public static boolean enable_check_tdw_pri = true;
     @ConfField(mutable = true)
     public static String tdw_pri_username = "";
+
+    @ConfField
+    public static String supersql_public_url = "qy-qe-nginx-tauth.tencent-distribute.com:11006";
+    @ConfField
+    public static String supersql_proxy_platform = "olap_metadata";
+    @ConfField
+    public static String supersql_proxy_platform_key = "";
 
     @ConfField
     public static boolean enable_monitor_for_supersql = false;

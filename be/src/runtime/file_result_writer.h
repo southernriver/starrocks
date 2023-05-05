@@ -48,6 +48,7 @@ struct ResultFileOptions {
     THdfsProperties hdfs_properties;
     bool use_broker;
     std::vector<std::string> file_column_names;
+    std::vector<TTypeDesc> file_output_types;
     ParquetBuilderOptions parquet_options;
     ORCBuilderOptions orc_options;
 
@@ -75,6 +76,9 @@ struct ResultFileOptions {
         }
         if (t_opt.__isset.file_column_names) {
             file_column_names = t_opt.file_column_names;
+        }
+        if (t_opt.__isset.file_output_types) {
+            file_output_types = t_opt.file_output_types;
         }
         if (t_opt.__isset.file_options && t_opt.file_options.__isset.parquet_max_group_bytes) {
             parquet_options.row_group_max_size = t_opt.file_options.parquet_max_group_bytes;

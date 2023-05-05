@@ -27,15 +27,14 @@ import com.starrocks.common.MarkedCountDownLatch;
 import com.starrocks.common.Status;
 import com.starrocks.common.UserException;
 import com.starrocks.common.Version;
-import com.starrocks.common.util.BrokerUtil;
 import com.starrocks.common.util.DebugUtil;
 import com.starrocks.common.util.ProfileManager;
 import com.starrocks.common.util.RuntimeProfile;
 import com.starrocks.common.util.TimeUtils;
-import com.starrocks.fs.HdfsUtil;
 import com.starrocks.load.ExportChecker;
 import com.starrocks.load.ExportFailMsg;
 import com.starrocks.load.ExportJob;
+import com.starrocks.load.FsUtil;
 import com.starrocks.qe.Coordinator;
 import com.starrocks.qe.QeProcessorImpl;
 import com.starrocks.server.GlobalStateMgr;
@@ -75,7 +74,7 @@ public class ExportExportingTask extends PriorityLeaderTask {
         LOG.info("begin execute export job in exporting state. job: {}", job);
 
         // check timeout
-        if (getLeftTimeSecond() < 0) {
+        if (getLeftTimeSecond(job) < 0) {
             job.cancelInternal(ExportFailMsg.CancelType.TIMEOUT, "timeout");
             return;
         }
@@ -117,7 +116,7 @@ public class ExportExportingTask extends PriorityLeaderTask {
 
         boolean success = false;
         try {
-            success = subTasksDoneSignal.await(getLeftTimeSecond(), TimeUnit.SECONDS);
+            success = subTasksDoneSignal.await(getLeftTimeSecond(job), TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             LOG.warn("export sub task signal await error", e);
         }
@@ -140,6 +139,17 @@ public class ExportExportingTask extends PriorityLeaderTask {
             failMsg += mvStatus.getErrorMsg();
             job.cancelInternal(ExportFailMsg.CancelType.RUN_FAIL, failMsg);
             LOG.warn("move tmp file to final destination fail. job:{}", job);
+            registerProfile();
+            return;
+        }
+
+        // before finish function, like add to metastore
+        Status beforeFinishStatus = job.beforeFinish();
+        if (!beforeFinishStatus.ok()) {
+            String failMsg = "call beforeFinish fail, ";
+            failMsg += beforeFinishStatus.getErrorMsg();
+            job.cancelInternal(ExportFailMsg.CancelType.RUN_FAIL, failMsg);
+            LOG.warn("call beforeFinish fail. job:{}", job);
             registerProfile();
             return;
         }
@@ -171,7 +181,7 @@ public class ExportExportingTask extends PriorityLeaderTask {
         return true;
     }
 
-    private int getLeftTimeSecond() {
+    private static int getLeftTimeSecond(ExportJob job) {
         return (int) (job.getTimeoutSecond() - (System.currentTimeMillis() - job.getCreateTimeMs()) / 1000);
     }
 
@@ -217,65 +227,50 @@ public class ExportExportingTask extends PriorityLeaderTask {
             // data_f8d0f324-83b3-11eb-9e09-02425ee98b69_0_0_0.csv
             exportedFile = exportedFile.substring(0, exportedFile.lastIndexOf("."));
             exportedFile = exportPath + exportedFile;
-            boolean success = false;
-            String failMsg = null;
 
-            for (int i = 0; i < RETRY_NUM; ++i) {
-                try {
-                    // check export file exist
-                    if (!job.getBrokerDesc().hasBroker()) {
-                        if (HdfsUtil.checkPathExist(exportedFile, job.getBrokerDesc())) {
-                            failMsg = exportedFile + " already exist";
-                            LOG.warn("move {} to {} fail. job id: {}, retry: {}, msg: {}",
-                                    exportedTempFile, exportedFile, job.getId(), i, failMsg);
-                            break;
-                        }
-                        if (!HdfsUtil.checkPathExist(exportedTempFile, job.getBrokerDesc())) {
-                            failMsg = exportedFile + " temp file not exist";
-                            LOG.warn("move {} to {} fail. job id: {}, retry: {}, msg: {}",
-                                    exportedTempFile, exportedFile, job.getId(), i, failMsg);
-                            break;
-                        }
-                    } else {
-                        if (BrokerUtil.checkPathExist(exportedFile, job.getBrokerDesc())) {
-                            failMsg = exportedFile + " already exist";
-                            LOG.warn("move {} to {} fail. job id: {}, retry: {}, msg: {}",
-                                    exportedTempFile, exportedFile, job.getId(), i, failMsg);
-                            break;
-                        }
-                        if (!BrokerUtil.checkPathExist(exportedTempFile, job.getBrokerDesc())) {
-                            failMsg = exportedFile + " temp file not exist";
-                            LOG.warn("move {} to {} fail. job id: {}, retry: {}, msg: {}",
-                                    exportedTempFile, exportedFile, job.getId(), i, failMsg);
-                            break;
-                        }
-                    }
-
-                    // move
-                    int timeoutMs = Math.min(Math.max(1, getLeftTimeSecond()), 3600) * 1000;
-                    if (!job.getBrokerDesc().hasBroker()) {
-                        HdfsUtil.rename(exportedTempFile, exportedFile, job.getBrokerDesc(), timeoutMs);
-                    } else {
-                        BrokerUtil.rename(exportedTempFile, exportedFile, job.getBrokerDesc(), timeoutMs);
-                    }
-                    job.addExportedFile(exportedFile);
-                    success = true;
-                    LOG.info("move {} to {} success. job id: {}", exportedTempFile, exportedFile, job.getId());
-                    break;
-                } catch (UserException e) {
-                    failMsg = e.getMessage();
-                    LOG.warn("move {} to {} fail. job id: {}, retry: {}, msg: {}",
-                            exportedTempFile, exportedFile, job.getId(), i, failMsg);
-                }
-            }
-
-            if (!success) {
+            String failMsg = moveFile(job, exportedTempFile, exportedFile);
+            if (failMsg != null) {
                 return new Status(TStatusCode.INTERNAL_ERROR, failMsg);
             }
+            job.addExportedFile(exportedFile);
         }
 
         job.clearExportedTempFiles();
         return Status.OK;
+    }
+
+    public static String moveFile(ExportJob job, String from, String to) {
+        String failMsg = null;
+
+        for (int i = 0; i < RETRY_NUM; ++i) {
+            try {
+                // check export file exist
+                if (FsUtil.checkPathExist(to, job.getBrokerDesc())) {
+                    failMsg = to + " already exist";
+                    LOG.warn("move {} to {} fail. job id: {}, retry: {}, msg: {}",
+                            from, to, job.getId(), i, failMsg);
+                    break;
+                }
+                if (!FsUtil.checkPathExist(from, job.getBrokerDesc())) {
+                    failMsg = from + " file not exist";
+                    LOG.warn("move {} to {} fail. job id: {}, retry: {}, msg: {}",
+                            from, to, job.getId(), i, failMsg);
+                    break;
+                }
+
+                // move
+                int timeoutMs = Math.min(Math.max(1, getLeftTimeSecond(job)), 3600) * 1000;
+                FsUtil.rename(from, to, job.getBrokerDesc(), timeoutMs);
+                LOG.info("move {} to {} success. job id: {}", from, to, job.getId());
+                break;
+            } catch (UserException e) {
+                failMsg = e.getMessage();
+                LOG.warn("move {} to {} fail. job id: {}, retry: {}, msg: {}",
+                        from, to, job.getId(), i, failMsg);
+            }
+        }
+
+        return failMsg;
     }
 
     private class ExportExportingSubTask extends PriorityLeaderTask {
@@ -363,7 +358,7 @@ public class ExportExportingTask extends PriorityLeaderTask {
         }
 
         private void actualExecCoord(Coordinator coord) throws Exception {
-            int leftTimeSecond = getLeftTimeSecond();
+            int leftTimeSecond = getLeftTimeSecond(job);
             if (leftTimeSecond <= 0) {
                 throw new UserException("timeout");
             }

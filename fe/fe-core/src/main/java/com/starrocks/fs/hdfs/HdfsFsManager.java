@@ -235,7 +235,7 @@ public class HdfsFsManager {
     private static final String KS3_SCHEME = "ks3";
     private static final String OBS_SCHEME = "obs";
 
-    private static final String USER_NAME_KEY = "username";
+    public static final String USER_NAME_KEY = "username";
     private static final String PASSWORD_KEY = "password";
     // arguments for ha hdfs
     private static final String DFS_NAMESERVICES_KEY = "dfs.nameservices";
@@ -445,7 +445,9 @@ public class HdfsFsManager {
                 Configuration conf = new HDFSConfigurationWrap();
                 conf.set(FS_HDFS_IMPL_DISABLE_CACHE, disableCache);
                 UserGroupInformation ugi = null;
-                if (!Strings.isNullOrEmpty(username) && conf.get("hadoop.security.authentication").equals("simple")) {
+                if (!Strings.isNullOrEmpty(username)
+                        && (conf.get("hadoop.security.authentication").equals("simple")
+                        || conf.get("hadoop.security.authentication").equals("TAUTH"))) {
                     ugi = UserGroupInformation.createRemoteUser(username);
                 }
                 FileSystem dfsFileSystem = null;

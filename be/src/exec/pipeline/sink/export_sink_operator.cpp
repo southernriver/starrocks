@@ -180,13 +180,20 @@ Status ExportSinkIOBuffer::_open_file_writer() {
                                         .line_terminated_by = _t_export_sink.row_delimiter},
                 std::move(output_file), _output_expr_ctxs);
     } else if (file_format == "parquet") {
+        std::vector<TypeDescriptor> output_types;
+        for (const auto& type : _t_export_sink.file_output_types) {
+            output_types.push_back(TypeDescriptor::from_thrift(type));
+        }
         _file_builder = std::make_unique<ParquetBuilder>(
                 std::move(output_file), _output_expr_ctxs,
-                _parquet_options, _t_export_sink.file_column_names);
+                _parquet_options, _t_export_sink.file_column_names, output_types);
     } else if (file_format == "orc") {
-        LOG(INFO) << "open file writer with path: " << file_path;
-        _file_builder = std::make_unique<ORCBuilder>(_orc_options, std::move(output_file),
-                                                     _output_expr_ctxs, nullptr, _t_export_sink.file_column_names);
+        std::vector<TypeDescriptor> output_types;
+        for (const auto& type : _t_export_sink.file_output_types) {
+            output_types.push_back(TypeDescriptor::from_thrift(type));
+        }
+        _file_builder = std::make_unique<ORCBuilder>(_orc_options, std::move(output_file), _output_expr_ctxs, nullptr,
+                                                     _t_export_sink.file_column_names, output_types);
     } else {
         return Status::NotSupported("unsupported file format " + file_format);
     }

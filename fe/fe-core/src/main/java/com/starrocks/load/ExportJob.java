@@ -42,6 +42,7 @@ import com.starrocks.catalog.Database;
 import com.starrocks.catalog.MysqlTable;
 import com.starrocks.catalog.PrimitiveType;
 import com.starrocks.catalog.Replica;
+import com.starrocks.catalog.ScalarType;
 import com.starrocks.catalog.Table;
 import com.starrocks.catalog.TabletInvertedIndex;
 import com.starrocks.catalog.Type;
@@ -54,7 +55,6 @@ import com.starrocks.common.Status;
 import com.starrocks.common.UserException;
 import com.starrocks.common.io.Text;
 import com.starrocks.common.io.Writable;
-import com.starrocks.common.util.BrokerUtil;
 import com.starrocks.common.util.DebugUtil;
 import com.starrocks.common.util.ParseUtil;
 import com.starrocks.common.util.TimeUtils;
@@ -89,7 +89,7 @@ import com.starrocks.thrift.TScanRangeLocation;
 import com.starrocks.thrift.TScanRangeLocations;
 import com.starrocks.thrift.TStatusCode;
 import com.starrocks.thrift.TUniqueId;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -103,7 +103,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
+import java.util.function.Function;
 
 // NOTE: we must be carefully if we send next request
 //       as soon as receiving one instance's report from one BE,
@@ -157,6 +157,8 @@ public class ExportJob implements Writable {
     private Thread doExportingThread;
     private List<TScanRangeLocations> tabletLocations = Lists.newArrayList();
     private String fileFormat;
+    private Map<String, Type> exportTypes;
+    private Function<ExportJob, Void> beforeFinishFunction;
 
     public ExportJob() {
         this.id = -1;
@@ -213,6 +215,9 @@ public class ExportJob implements Writable {
         this.partitions = stmt.getPartitions();
         this.columnNames = stmt.getColumnNames();
         this.fileFormat = stmt.getFileFormat();
+        this.exportColumnNames = stmt.getExportColumnNames();
+        this.exportTypes = stmt.getExportTypes();
+        this.beforeFinishFunction = stmt.getBeforeFinishFunction();
 
         db.readLock();
         try {
@@ -249,17 +254,12 @@ public class ExportJob implements Writable {
         for (Column column : tableColumns) {
             nameToColumn.put(column.getName(), column);
         }
-        if (columnNames == null) {
-            exportColumns.addAll(tableColumns);
-        } else {
-            for (String columnName : columnNames) {
-                if (!nameToColumn.containsKey(columnName)) {
-                    throw new UserException("Column [" + columnName + "] does not exist in table.");
-                }
-                exportColumns.add(nameToColumn.get(columnName));
+        for (String columnName : exportColumnNames) {
+            if (!nameToColumn.containsKey(columnName)) {
+                throw new UserException("Column [" + columnName + "] does not exist in table.");
             }
+            exportColumns.add(nameToColumn.get(columnName));
         }
-        exportColumnNames = exportColumns.stream().map(Column::getName).collect(Collectors.toList());
         for (Column col : exportColumns) {
             SlotDescriptor slot = desc.addSlotDescriptor(exportTupleDesc);
             slot.setIsMaterialized(true);
@@ -409,8 +409,10 @@ public class ExportJob implements Writable {
         if (properties.containsKey(OutFileClause.PROP_MAX_FILE_ROW)) {
             fileOptions.setMax_file_size_rows(Long.parseLong(properties.get(OutFileClause.PROP_MAX_FILE_ROW)));
         }
+        List<Type> exportColumnTypes = createExportTypes();
         fragment.setSink(new ExportSink(exportTempPath, fileNamePrefix + taskIdx + "_", columnSeparator,
-                rowDelimiter, brokerDesc, hdfsProperties, fileFormat, fileOptions, exportColumnNames));
+                rowDelimiter, brokerDesc, hdfsProperties, fileFormat, fileOptions, exportColumnNames,
+                exportColumnTypes));
         try {
             fragment.createDataSink(TResultSinkType.MYSQL_PROTOCAL);
         } catch (Exception e) {
@@ -433,6 +435,42 @@ public class ExportJob implements Writable {
         }
 
         return outputExprs;
+    }
+
+    private List<Type> createExportTypes() throws AnalysisException {
+        List<Type> exportTypesList = Lists.newArrayListWithExpectedSize(exportTupleDesc.getSlots().size());
+        if (exportTypes != null && !exportTypes.isEmpty()) {
+            for (int i = 0; i < exportTupleDesc.getSlots().size(); i++) {
+                String exportColumn = exportColumnNames.get(i);
+                Type exportType = exportTypes.get(exportColumn);
+                if (exportType == null) {
+                    throw new AnalysisException(exportColumn + " is not in target");
+                }
+                SlotDescriptor slotDesc = exportTupleDesc.getSlots().get(i);
+                Type srType = slotDesc.getType();
+                if (srType.getPrimitiveType() == PrimitiveType.CHAR) {
+                    exportType = Type.CHAR;
+                }
+                if (srType.getPrimitiveType() == PrimitiveType.VARCHAR) {
+                    exportType = slotDesc.getColumn().getType();
+                }
+                if (srType.getPrimitiveType() == PrimitiveType.DATE && exportType.getPrimitiveType().isCharFamily()) {
+                    exportType = ScalarType.createVarcharType(10);
+                }
+                exportTypesList.add(exportType);
+            }
+            return exportTypesList;
+        }
+        for (int i = 0; i < exportTupleDesc.getSlots().size(); ++i) {
+            SlotDescriptor slotDesc = exportTupleDesc.getSlots().get(i);
+            Type type = slotDesc.getType();
+            if (type.getPrimitiveType() == PrimitiveType.CHAR) {
+                type = Type.CHAR;
+            }
+            exportTypesList.add(type);
+        }
+
+        return exportTypesList;
     }
 
     private void genCoordinators(ExportStmt stmt, List<PlanFragment> fragments, List<ScanNode> nodes) {
@@ -509,7 +547,7 @@ public class ExportJob implements Writable {
         if (properties.containsKey(LoadStmt.LOAD_MEM_LIMIT)) {
             return Long.parseLong(properties.get(LoadStmt.LOAD_MEM_LIMIT));
         } else {
-            return 0;
+            return Config.export_default_load_mem_per_task;
         }
     }
 
@@ -570,6 +608,10 @@ public class ExportJob implements Writable {
     public synchronized void addExportedFile(String file) {
         exportedFiles.add(file);
         LOG.debug("exported files: {}", this.exportedFiles);
+    }
+
+    public Set<String> getExportedFiles() {
+        return exportedFiles;
     }
 
     public synchronized Thread getDoExportingThread() {
@@ -738,30 +780,30 @@ public class ExportJob implements Writable {
         }
 
         // try to remove exported temp files
-        try {
-            if (!brokerDesc.hasBroker()) {
-                HdfsUtil.deletePath(exportTempPath, brokerDesc);
-            } else {
-                BrokerUtil.deletePath(exportTempPath, brokerDesc);
-            }
-            LOG.info("remove export temp path success, path: {}", exportTempPath);
-        } catch (UserException e) {
-            LOG.warn("remove export temp path fail, path: {}", exportTempPath);
-        }
+        removeExportTempPath();
         // try to remove exported files
         for (String exportedFile : exportedFiles) {
             try {
-                if (!brokerDesc.hasBroker()) {
-                    HdfsUtil.deletePath(exportedFile, brokerDesc);
-                } else {
-                    BrokerUtil.deletePath(exportedFile, brokerDesc);
-                }
+                FsUtil.deletePath(exportedFile, brokerDesc);
                 LOG.info("remove exported file success, path: {}", exportedFile);
             } catch (UserException e) {
                 LOG.warn("remove exported file fail, path: {}", exportedFile);
             }
         }
         LOG.info("export job cancelled. job: {}", this);
+    }
+
+    public Status beforeFinish() {
+        if (beforeFinishFunction == null) {
+            return Status.OK;
+        }
+        try {
+            beforeFinishFunction.apply(this);
+        } catch (Exception e) {
+            LOG.warn(e.getMessage(), e);
+            return new Status(TStatusCode.INTERNAL_ERROR, e.getMessage());
+        }
+        return Status.OK;
     }
 
     public synchronized void finish() {
@@ -773,17 +815,17 @@ public class ExportJob implements Writable {
         releaseSnapshots();
 
         // try to remove exported temp files
+        removeExportTempPath();
+        LOG.info("export job finished. job: {}", this);
+    }
+
+    public void removeExportTempPath() {
         try {
-            if (!brokerDesc.hasBroker()) {
-                HdfsUtil.deletePath(exportTempPath, brokerDesc);
-            } else {
-                BrokerUtil.deletePath(exportTempPath, brokerDesc);
-            }
+            FsUtil.deletePath(exportTempPath, brokerDesc);
             LOG.info("remove export temp path success, path: {}", exportTempPath);
         } catch (UserException e) {
             LOG.warn("remove export temp path fail, path: {}", exportTempPath);
         }
-        LOG.info("export job finished. job: {}", this);
     }
 
     @Override

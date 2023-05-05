@@ -23,20 +23,22 @@ package com.starrocks.planner;
 
 import com.starrocks.analysis.BrokerDesc;
 import com.starrocks.catalog.FsBroker;
-import com.starrocks.common.util.PrintableMap;
+import com.starrocks.catalog.Type;
 import com.starrocks.common.Config;
+import com.starrocks.common.util.PrintableMap;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.thrift.TDataSink;
 import com.starrocks.thrift.TDataSinkType;
 import com.starrocks.thrift.TExplainLevel;
-import com.starrocks.thrift.THdfsProperties;
 import com.starrocks.thrift.TExportSink;
-import com.starrocks.thrift.TFileType;
-import com.starrocks.thrift.TNetworkAddress;
 import com.starrocks.thrift.TFileOptions;
+import com.starrocks.thrift.TFileType;
+import com.starrocks.thrift.THdfsProperties;
+import com.starrocks.thrift.TNetworkAddress;
 import org.apache.commons.lang.StringEscapeUtils;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class ExportSink extends DataSink {
     private final String exportPath;
@@ -48,9 +50,10 @@ public class ExportSink extends DataSink {
     private final String fileFormat;
     private final TFileOptions fileOptions;
     private final List<String> exportColumnNames;
+    private final List<Type> exportColumnTypes;
     public ExportSink(String exportPath, String fileNamePrefix, String columnSeparator, String rowDelimiter,
             BrokerDesc brokerDesc, THdfsProperties hdfsProperties, String fileFormat, TFileOptions fileOptions,
-            List<String> exportColumnNames) {
+            List<String> exportColumnNames, List<Type> exportColumnTypes) {
         this.exportPath = exportPath;
         this.fileNamePrefix = fileNamePrefix;
         this.columnSeparator = columnSeparator;
@@ -60,12 +63,13 @@ public class ExportSink extends DataSink {
         this.fileFormat = fileFormat;
         this.fileOptions = fileOptions;
         this.exportColumnNames = exportColumnNames;
+        this.exportColumnTypes = exportColumnTypes;
     }
 
     // for insert broker table
     public ExportSink(String exportPath, String columnSeparator,
                       String rowDelimiter, BrokerDesc brokerDesc) {
-        this(exportPath, null, columnSeparator, rowDelimiter, brokerDesc, null, null, null, null);
+        this(exportPath, null, columnSeparator, rowDelimiter, brokerDesc, null, null, null, null, null);
     }
 
     public String getFileNamePrefix() {
@@ -122,6 +126,8 @@ public class ExportSink extends DataSink {
         if (fileFormat.equals("parquet") || fileFormat.equals("orc")) {
             tExportSink.setFile_options(fileOptions);
             tExportSink.setFile_column_names(exportColumnNames);
+            tExportSink.setFile_output_types(
+                    exportColumnTypes.stream().map(Type::toThrift).collect(Collectors.toList()));
         }
 
         result.setExport_sink(tExportSink);

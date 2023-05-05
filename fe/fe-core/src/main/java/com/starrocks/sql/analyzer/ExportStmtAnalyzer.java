@@ -14,10 +14,12 @@ import com.starrocks.catalog.FsBroker;
 import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.Table;
 import com.starrocks.common.AnalysisException;
+import com.starrocks.common.Config;
 import com.starrocks.common.ErrorCode;
 import com.starrocks.common.ErrorReport;
 import com.starrocks.common.proc.ExportProcNode;
 import com.starrocks.common.util.OrderByPair;
+import com.starrocks.fs.hdfs.HdfsFsManager;
 import com.starrocks.load.ExportJob;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.GlobalStateMgr;
@@ -28,6 +30,7 @@ import com.starrocks.sql.ast.PartitionNames;
 import com.starrocks.sql.ast.ShowExportStmt;
 import com.starrocks.sql.ast.StatementBase;
 import com.starrocks.sql.common.MetaUtils;
+import com.starrocks.utils.TdwUtil;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -76,7 +79,7 @@ public class ExportStmtAnalyzer {
             // generate file name prefix
             analyzeDbName(tableName.getDb(), context);
             statement.checkTable(mgr);
-            statement.checkPath();
+            statement.checkType(table);
 
             // check broker whether exist
             BrokerDesc brokerDesc = statement.getBrokerDesc();
@@ -92,6 +95,14 @@ public class ExportStmtAnalyzer {
                 FsBroker broker = mgr.getBrokerMgr().getAnyBroker(brokerDesc.getName());
                 if (broker == null) {
                     throw new SemanticException("failed to get alive broker");
+                }
+            } else {
+                if (Strings.isNullOrEmpty(brokerDesc.getProperties().get(HdfsFsManager.USER_NAME_KEY))) {
+                    String user = Config.enable_check_tdw_pri ? TdwUtil.getCurrentTdwUserName() :
+                            ConnectContext.get().getQualifiedUser();
+                    if (user != null) {
+                        brokerDesc.getProperties().put(HdfsFsManager.USER_NAME_KEY, user);
+                    }
                 }
             }
             // check properties
