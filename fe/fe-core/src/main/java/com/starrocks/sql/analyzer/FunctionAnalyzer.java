@@ -78,6 +78,12 @@ public class FunctionAnalyzer {
             // array_map(x+y <- (x,y), arr1, arr2)
             functionCallExpr.setType(new ArrayType(functionCallExpr.getChild(0).getChild(0).getType()));
         }
+
+        if (fnName.getFunction().equals(FunctionSet.ARRAY_SPLIT)) {
+            Preconditions.checkState(functionCallExpr.getChildren().size() > 1,
+                    "array_split should have at least two inputs");
+            functionCallExpr.setType(new ArrayType(functionCallExpr.getChild(0).getType()));
+        }
     }
 
     private static void analyzeBuiltinAggFunction(FunctionCallExpr functionCallExpr) {
@@ -173,7 +179,7 @@ public class FunctionAnalyzer {
             }
         }
 
-        if (fnName.getFunction().equals(FunctionSet.ARRAY_SORTBY)) {
+        if (fnName.getFunction().equals(FunctionSet.ARRAY_SORTBY) || fnName.getFunction().equals(FunctionSet.ARRAY_SPLIT)) {
             if (functionCallExpr.getChildren().size() != 2) {
                 throw new SemanticException("array_sortby only support 2 parameters");
             }

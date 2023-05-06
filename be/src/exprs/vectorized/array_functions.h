@@ -177,6 +177,96 @@ public:
     DEFINE_VECTORIZED_FN(array_map);
     DEFINE_VECTORIZED_FN(array_filter);
 
+	DEFINE_VECTORIZED_FN(array_auc_tint2tint);
+	DEFINE_VECTORIZED_FN(array_auc_tint2sint);
+	DEFINE_VECTORIZED_FN(array_auc_tint2int);
+	DEFINE_VECTORIZED_FN(array_auc_tint2bint);
+	DEFINE_VECTORIZED_FN(array_auc_tint2lint);
+	DEFINE_VECTORIZED_FN(array_auc_tint2float);
+	DEFINE_VECTORIZED_FN(array_auc_tint2double);
+	DEFINE_VECTORIZED_FN(array_auc_tint2decimal);
+
+	DEFINE_VECTORIZED_FN(array_auc_sint2tint);
+	DEFINE_VECTORIZED_FN(array_auc_sint2sint);
+	DEFINE_VECTORIZED_FN(array_auc_sint2int);
+	DEFINE_VECTORIZED_FN(array_auc_sint2bint);
+	DEFINE_VECTORIZED_FN(array_auc_sint2lint);
+	DEFINE_VECTORIZED_FN(array_auc_sint2float);
+	DEFINE_VECTORIZED_FN(array_auc_sint2double);
+	DEFINE_VECTORIZED_FN(array_auc_sint2decimal);
+
+	DEFINE_VECTORIZED_FN(array_auc_int2tint);
+	DEFINE_VECTORIZED_FN(array_auc_int2sint);
+	DEFINE_VECTORIZED_FN(array_auc_int2int);
+	DEFINE_VECTORIZED_FN(array_auc_int2bint);
+	DEFINE_VECTORIZED_FN(array_auc_int2lint);
+	DEFINE_VECTORIZED_FN(array_auc_int2float);
+	DEFINE_VECTORIZED_FN(array_auc_int2double);
+	DEFINE_VECTORIZED_FN(array_auc_int2decimal);
+
+	DEFINE_VECTORIZED_FN(array_auc_bint2tint);
+	DEFINE_VECTORIZED_FN(array_auc_bint2sint);
+	DEFINE_VECTORIZED_FN(array_auc_bint2int);
+	DEFINE_VECTORIZED_FN(array_auc_bint2bint);
+	DEFINE_VECTORIZED_FN(array_auc_bint2lint);
+	DEFINE_VECTORIZED_FN(array_auc_bint2float);
+	DEFINE_VECTORIZED_FN(array_auc_bint2double);
+	DEFINE_VECTORIZED_FN(array_auc_bint2decimal);
+
+	DEFINE_VECTORIZED_FN(array_auc_lint2tint);
+	DEFINE_VECTORIZED_FN(array_auc_lint2sint);
+	DEFINE_VECTORIZED_FN(array_auc_lint2int);
+	DEFINE_VECTORIZED_FN(array_auc_lint2bint);
+	DEFINE_VECTORIZED_FN(array_auc_lint2lint);
+	DEFINE_VECTORIZED_FN(array_auc_lint2float);
+	DEFINE_VECTORIZED_FN(array_auc_lint2double);
+	DEFINE_VECTORIZED_FN(array_auc_lint2decimal);
+
+	DEFINE_VECTORIZED_FN(array_auc_float2tint);
+	DEFINE_VECTORIZED_FN(array_auc_float2sint);
+	DEFINE_VECTORIZED_FN(array_auc_float2int);
+	DEFINE_VECTORIZED_FN(array_auc_float2bint);
+	DEFINE_VECTORIZED_FN(array_auc_float2lint);
+	DEFINE_VECTORIZED_FN(array_auc_float2float);
+	DEFINE_VECTORIZED_FN(array_auc_float2double);
+	DEFINE_VECTORIZED_FN(array_auc_float2decimal);
+
+	DEFINE_VECTORIZED_FN(array_auc_double2tint);
+	DEFINE_VECTORIZED_FN(array_auc_double2sint);
+	DEFINE_VECTORIZED_FN(array_auc_double2int);
+	DEFINE_VECTORIZED_FN(array_auc_double2bint);
+	DEFINE_VECTORIZED_FN(array_auc_double2lint);
+	DEFINE_VECTORIZED_FN(array_auc_double2float);
+	DEFINE_VECTORIZED_FN(array_auc_double2double);
+	DEFINE_VECTORIZED_FN(array_auc_double2decimal);
+
+	DEFINE_VECTORIZED_FN(array_auc_decimal2tint);
+	DEFINE_VECTORIZED_FN(array_auc_decimal2sint);
+	DEFINE_VECTORIZED_FN(array_auc_decimal2int);
+	DEFINE_VECTORIZED_FN(array_auc_decimal2bint);
+	DEFINE_VECTORIZED_FN(array_auc_decimal2lint);
+	DEFINE_VECTORIZED_FN(array_auc_decimal2float);
+	DEFINE_VECTORIZED_FN(array_auc_decimal2double);
+	DEFINE_VECTORIZED_FN(array_auc_decimal2decimal);
+
+	DEFINE_VECTORIZED_FN(array_range3_tinyint);
+	DEFINE_VECTORIZED_FN(array_range3_smallint);
+	DEFINE_VECTORIZED_FN(array_range3_int);
+	DEFINE_VECTORIZED_FN(array_range3_bigint);
+	DEFINE_VECTORIZED_FN(array_range3_largeint);
+	DEFINE_VECTORIZED_FN(array_range2_tinyint);
+	DEFINE_VECTORIZED_FN(array_range2_smallint);
+	DEFINE_VECTORIZED_FN(array_range2_int);
+	DEFINE_VECTORIZED_FN(array_range2_bigint);
+	DEFINE_VECTORIZED_FN(array_range2_largeint);
+	DEFINE_VECTORIZED_FN(array_range_tinyint);
+	DEFINE_VECTORIZED_FN(array_range_smallint);
+	DEFINE_VECTORIZED_FN(array_range_int);
+	DEFINE_VECTORIZED_FN(array_range_bigint);
+	DEFINE_VECTORIZED_FN(array_range_largeint);
+
+	DEFINE_VECTORIZED_FN(array_split);
+
     enum ArithmeticType { SUM, AVG, MIN, MAX };
 
 private:
@@ -202,6 +292,14 @@ private:
 
     template <PrimitiveType type>
     static ColumnPtr array_max(const Columns& columns);
+
+	template <PrimitiveType score_type, PrimitiveType label_type>
+	static ColumnPtr array_auc(const Columns& columns);
+
+	template <PrimitiveType data_type>
+	static ColumnPtr array_range(const Columns& columns);
+
+	static ColumnPtr array_split(const Columns& columns);
 };
 
 } // namespace starrocks::vectorized

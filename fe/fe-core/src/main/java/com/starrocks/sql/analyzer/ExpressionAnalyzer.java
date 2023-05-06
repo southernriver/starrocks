@@ -107,7 +107,8 @@ public class ExpressionAnalyzer {
             // expand this in the future.
             if (((FunctionCallExpr) expr).getFnName().getFunction().equals(FunctionSet.ARRAY_MAP) ||
                     ((FunctionCallExpr) expr).getFnName().getFunction().equals(FunctionSet.ARRAY_FILTER) ||
-                    ((FunctionCallExpr) expr).getFnName().getFunction().equals(FunctionSet.ARRAY_SORTBY)) {
+                    ((FunctionCallExpr) expr).getFnName().getFunction().equals(FunctionSet.ARRAY_SORTBY) ||
+                    ((FunctionCallExpr) expr).getFnName().getFunction().equals(FunctionSet.ARRAY_SPLIT)) {
                 return true;
             } else if (((FunctionCallExpr) expr).getFnName().getFunction().equals(FunctionSet.TRANSFORM)) {
                 // transform just a alias of array_map
@@ -132,7 +133,8 @@ public class ExpressionAnalyzer {
             functionCallExpr.addChild(arr1);
             functionCallExpr.addChild(arrayMap);
             return arrayMap;
-        } else if (functionCallExpr.getFnName().getFunction().equals(FunctionSet.ARRAY_SORTBY)
+        } else if ((functionCallExpr.getFnName().getFunction().equals(FunctionSet.ARRAY_SORTBY)
+                || functionCallExpr.getFnName().getFunction().equals(FunctionSet.ARRAY_SPLIT))
                 && functionCallExpr.getChild(0) instanceof LambdaFunctionExpr) {
             // array_sortby(lambda_func_expr, arr1...) -> array_sortby(arr1, array_map(lambda_func_expr, arr1...))
             FunctionCallExpr arrayMap = new FunctionCallExpr(FunctionSet.ARRAY_MAP,
@@ -165,6 +167,10 @@ public class ExpressionAnalyzer {
         for (int i = 1; i < childSize; ++i) {
             Expr expr = expression.getChild(i);
             bottomUpAnalyze(visitor, expr, scope);
+        }
+        // putting lambda inputs should after analyze
+        for (int i = 1; i < childSize; ++i) {
+            Expr expr = expression.getChild(i);
             if (expr instanceof NullLiteral) {
                 expr.setType(Type.ARRAY_INT); // Let it have item type.
             }
@@ -181,6 +187,7 @@ public class ExpressionAnalyzer {
         // visit LambdaFunction
         visitor.visit(expression.getChild(0), scope);
         Expr res = rewriteHighOrderFunction(expression);
+        scope.clearLambdaInputs();
         if (res != null) {
             visitor.visit(res, scope);
         }
@@ -802,7 +809,7 @@ public class ExpressionAnalyzer {
                 node.setChild(1, new CastExpr(Type.ARRAY_BOOLEAN, node.getChild(1)));
                 argumentTypes[1] = Type.ARRAY_BOOLEAN;
                 fn = Expr.getBuiltinFunction(fnName, argumentTypes, Function.CompareMode.IS_NONSTRICT_SUPERTYPE_OF);
-            } else if (fnName.equals(FunctionSet.ARRAY_SORTBY)) {
+            } else if (fnName.equals(FunctionSet.ARRAY_SORTBY) || fnName.equals(FunctionSet.ARRAY_SPLIT)) {
                 if (node.getChildren().size() != 2) {
                     throw new SemanticException(fnName + " should have 2 array inputs or lambda functions.");
                 }

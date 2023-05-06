@@ -4952,4 +4952,86 @@ TEST_F(ArrayFunctionsTest, array_sortby_with_only_null) {
     }
 }
 
+TEST_F(ArrayFunctionsTest, array_auc) {
+	Columns columns;
+	auto tc1 = ColumnHelper::create_column(TYPE_ARRAY_FLOAT, false);
+	tc1->append_datum(DatumArray{(float)0.1, (float)0.4, (float)0.35, (float)0.8});
+	columns.emplace_back(tc1);
+
+	auto tc2 = ColumnHelper::create_column(TYPE_ARRAY_INT, false);
+	tc2->append_datum(DatumArray{(int32_t)0, (int32_t)0, (int32_t)1, (int32_t)1});
+	columns.emplace_back(tc2);
+
+	ColumnPtr result = ArrayFunctions::array_auc<TYPE_FLOAT, TYPE_INT>(columns);
+	ASSERT_EQ(result->get(0).get_double(), 0.75);
+
+
+	columns.clear();
+	auto tc3 = ColumnHelper::create_column(TYPE_ARRAY_FLOAT, true);
+	tc3->append_datum(DatumArray{(float)(0.1), (float)0.4, (float)0.35, (float)0.9});
+	columns.emplace_back(tc3);
+
+	auto tc4 = ColumnHelper::create_column(TYPE_ARRAY_FLOAT, true);
+	tc4->append_datum(DatumArray{(float)0, (float)-1, (float)0.25, (float)1});
+	columns.emplace_back(tc4);
+	ColumnPtr result2 = ArrayFunctions::array_auc<TYPE_FLOAT, TYPE_FLOAT>(columns);
+	ASSERT_EQ(result2->get(0).get_double(), 0.75);
+}
+
+TEST_F(ArrayFunctionsTest, array_range) {
+	Columns columns;
+	auto start1 = Int8Column::create();
+	start1->append(1);
+	columns.emplace_back(start1);
+	auto end1 = Int8Column::create();
+	end1->append(10);
+	columns.emplace_back(end1);
+	auto step1 = Int8Column::create();
+	step1->append(1);
+	columns.emplace_back(step1);
+	ColumnPtr result1 = ArrayFunctions::array_range<TYPE_TINYINT>(columns);
+	ASSERT_EQ(result1->get(0).get_array().size(), 9);
+	ASSERT_EQ(result1->get(0).get_array()[5].get_int8(), 6);
+
+
+	columns.clear();
+	auto start2 = Int8Column::create();
+	start2->append(1);
+	columns.emplace_back(start2);
+	auto end2 = Int8Column::create();
+	end2->append(10);
+	columns.emplace_back(end2);
+	ColumnPtr result2 = ArrayFunctions::array_range2_tinyint(nullptr, columns);
+	ASSERT_EQ(result2->get(0).get_array().size(), 9);
+	ASSERT_EQ(result2->get(0).get_array()[5].get_int8(), 6);
+
+	columns.clear();
+	auto end3 = Int64Column::create();
+	end3->append((int64_t)10);
+	columns.emplace_back(end3);
+	ColumnPtr result3 = ArrayFunctions::array_range_bigint(nullptr, columns);
+	ASSERT_EQ(result3->get(0).get_array().size(), 10);
+	ASSERT_EQ(result3->get(0).get_array()[5].get_int64(), 5);
+}
+
+TEST_F(ArrayFunctionsTest, array_split) {
+	Columns columns;
+	auto src_column = ColumnHelper::create_column(TYPE_ARRAY_INT, true);
+	src_column->append_datum(DatumArray{(int32_t)3, (int32_t)5, (int32_t)6, (int32_t)3, (int32_t)5, (int32_t)6});
+	columns.emplace_back(src_column);
+
+	auto split_column = ColumnHelper::create_column(TYPE_ARRAY_BOOLEAN, false);
+	split_column->append_datum(DatumArray{true, false, false, true, true, false});
+	columns.emplace_back(split_column);
+
+
+	ColumnPtr result = ArrayFunctions::array_split(nullptr, columns);
+	ASSERT_EQ(result->size(), 1);
+	//	char* r = *result->debug_string().c_str();
+
+	ASSERT_EQ(result->get(0).get_array().size(), 3);
+	ASSERT_EQ(result->get(0).get_array()[2].get_array()[1].get_int32(), 6);
+	ASSERT_EQ(result->get(0).get_array()[1].get_array().size(), 1);
+	ASSERT_EQ(result->get(0).get_array()[2].get_array()[0].get_int32(), 5);
+}
 } // namespace starrocks::vectorized

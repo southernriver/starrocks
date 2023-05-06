@@ -1259,6 +1259,145 @@ ColumnPtr ArrayFunctions::array_arithmetic(const Columns& columns) {
     }
 }
 
+template <PrimitiveType score_type, PrimitiveType label_type>
+ColumnPtr ArrayFunctions::array_auc(const Columns& columns) {
+	ColumnPtr score_column = columns[0];
+	ColumnPtr label_column = columns[1];
+	score_column = FunctionHelper::get_data_column_of_const(score_column);
+	score_column = FunctionHelper::get_data_column_of_nullable(score_column);
+	label_column = FunctionHelper::get_data_column_of_const(label_column);
+	label_column = FunctionHelper::get_data_column_of_nullable(label_column);
+	if (score_column->only_null() || label_column->only_null()) {
+		throw std::runtime_error("array_auc cannot process values of type Nullable!");
+	}
+
+	auto* score_array = down_cast<ArrayColumn*>(score_column.get());
+	auto* label_array = down_cast<ArrayColumn*>(label_column.get());
+	if (score_array->has_null() || label_array->has_null()) {
+		throw std::runtime_error("array_auc cannot process values of type Nullable!");
+	}
+
+	ColumnPtr& raw_score_column = score_array->elements_column();
+	ColumnPtr& raw_label_column = label_array->elements_column();
+
+	if (auto score_null = dynamic_cast<const NullableColumn*>(&score_array->elements()); score_null != nullptr) {
+		raw_score_column = score_null->data_column();
+	}
+	if (auto label_null = dynamic_cast<const NullableColumn*>(&label_array->elements()); label_null != nullptr) {
+		raw_label_column = label_null->data_column();
+	}
+
+	const UInt32Column& label_offsets = label_array->offsets();
+
+	const int num_array = score_array->size();
+	auto res = RunTimeColumnType<TYPE_DOUBLE>::create();
+	res->reserve(num_array);
+	struct ScoreLabel
+	{
+			float score;
+			bool label;
+	};
+	auto& score_raw_elements = ColumnHelper::cast_to_raw<score_type>(raw_score_column)->get_data();
+	auto& label_raw_elements = ColumnHelper::cast_to_raw<label_type>(raw_label_column)->get_data();
+
+	for (size_t i = 0; i < num_array; ++i) {
+		size_t offset = label_offsets.get_data().data()[i];
+		size_t array_len = label_offsets.get_data().data()[i+1] - label_offsets.get_data().data()[i];
+		Buffer<ScoreLabel> sorted_labels(array_len);
+		for (size_t j = offset, m = 0; j < offset + array_len; ++j, ++m) {
+			bool label;
+			if constexpr (label_type == TYPE_DECIMALV2) {
+				label = label_raw_elements[j] > DecimalV2Value(0);
+			} else {
+				label = label_raw_elements[j] > 0;
+			}
+			sorted_labels[m].score = score_raw_elements[j];
+			sorted_labels[m].label = label;
+		}
+		std::sort(sorted_labels.begin(), sorted_labels.end(), [](const auto & lhs, const auto & rhs) { return lhs.score > rhs.score; });
+		size_t area = 0;
+		size_t count_positive = 0;
+		for (size_t k = 0; k < array_len; ++k)
+		{
+			if (sorted_labels[k].label)
+				++count_positive; /// The curve moves one step up. No area increase.
+			else
+				area += count_positive; /// The curve moves one step right. Area is increased by 1 * height = count_positive.
+		}
+		res->append((double)(area) / count_positive / (array_len - count_positive));
+	}
+	return res;
+}
+
+template <PrimitiveType data_type>
+ColumnPtr ArrayFunctions::array_range(const Columns& columns) {
+	ColumnPtr start_column = columns[0];
+	ColumnPtr end_column = columns[1];
+	ColumnPtr step_column = columns[2];
+	if (start_column->only_null() || end_column->only_null() || step_column->only_null()) {
+		return ColumnHelper::create_const_null_column(1);
+	}
+	start_column = FunctionHelper::get_data_column_of_const(start_column);
+	start_column = FunctionHelper::get_data_column_of_nullable(start_column);
+	end_column = FunctionHelper::get_data_column_of_const(end_column);
+	end_column = FunctionHelper::get_data_column_of_nullable(end_column);
+	step_column = FunctionHelper::get_data_column_of_const(step_column);
+	step_column = FunctionHelper::get_data_column_of_nullable(step_column);
+
+	auto& start = ColumnHelper::cast_to_raw<data_type>(start_column)->get_data()[0];
+	auto& end = ColumnHelper::cast_to_raw<data_type>(end_column)->get_data()[0];
+	auto& step = ColumnHelper::cast_to_raw<data_type>(step_column)->get_data()[0];
+
+	if (end < start || step <= 0) {
+		throw std::runtime_error("Illegal arguments for function array_range!");
+	}
+	TypeDescriptor resultType;
+	resultType.type = TYPE_ARRAY;
+	resultType.children.emplace_back(data_type);
+	auto res = ColumnHelper::create_column(resultType, false);
+	DatumArray array;
+	array.reserve((end - start) / step);
+	for (RunTimeCppType<data_type> i = start; i < end; i += step) {
+		array.emplace_back(i);
+	}
+	res->append_datum(array);
+	return res;
+}
+
+ColumnPtr ArrayFunctions::array_split([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns& columns) {
+	size_t chunk_size = columns[0]->size();
+	if (chunk_size > 1) {
+		LOG(ERROR) << "Array size over limit 1";
+	}
+	ColumnPtr src_column = FunctionHelper::get_data_column_of_nullable(columns[0]);
+	auto* src_array = down_cast<ArrayColumn*>(src_column.get());
+
+	ColumnPtr split_column = FunctionHelper::get_data_column_of_nullable(columns[1]);
+	auto* split_array = down_cast<ArrayColumn*>(split_column.get());
+	ColumnPtr& raw_split_column = split_array->elements_column();
+	raw_split_column = FunctionHelper::get_data_column_of_nullable(raw_split_column);
+	auto& raw_split_elements = ColumnHelper::cast_to_raw<TYPE_BOOLEAN>(raw_split_column)->get_data();
+
+	size_t len = raw_split_elements.size();
+
+	auto offsets = UInt32Column::create();
+	DatumArray curArray;
+	for (size_t i = 0; i < len; i++) {
+		if (raw_split_elements[i]) {
+			offsets->append(i);
+		}
+	}
+	offsets->append((int) len);
+
+
+	auto offsets2 = UInt32Column::create();
+	offsets2->reserve(2);
+	offsets2->append(0);
+	offsets2->append(offsets->size() - 1);
+
+	return ArrayColumn::create(ArrayColumn::create(src_array->elements_column(), offsets), offsets2);
+}
+
 template <PrimitiveType type>
 ColumnPtr ArrayFunctions::array_sum(const Columns& columns) {
     return ArrayFunctions::template array_arithmetic<type, ArithmeticType::SUM>(columns);
@@ -1455,4 +1594,405 @@ ColumnPtr ArrayFunctions::array_max_varchar([[maybe_unused]] FunctionContext* co
     return ArrayFunctions::template array_max<TYPE_VARCHAR>(columns);
 }
 
+ColumnPtr ArrayFunctions::array_auc_tint2tint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_TINYINT, TYPE_TINYINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_tint2sint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_TINYINT, TYPE_SMALLINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_tint2int([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_TINYINT, TYPE_INT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_tint2bint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_TINYINT, TYPE_BIGINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_tint2lint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_TINYINT, TYPE_LARGEINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_tint2float([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_TINYINT, TYPE_FLOAT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_tint2double([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_TINYINT, TYPE_DOUBLE>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_tint2decimal([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_TINYINT, TYPE_DECIMALV2>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_sint2tint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_SMALLINT, TYPE_TINYINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_sint2sint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_SMALLINT, TYPE_SMALLINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_sint2int([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_SMALLINT, TYPE_INT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_sint2bint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_SMALLINT, TYPE_BIGINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_sint2lint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_SMALLINT, TYPE_LARGEINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_sint2float([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_SMALLINT, TYPE_FLOAT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_sint2double([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_SMALLINT, TYPE_DOUBLE>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_sint2decimal([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_TINYINT, TYPE_DECIMALV2>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_int2tint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_INT, TYPE_TINYINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_int2sint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_INT, TYPE_SMALLINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_int2int([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_INT, TYPE_INT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_int2bint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_INT, TYPE_BIGINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_int2lint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_INT, TYPE_LARGEINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_int2float([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_INT, TYPE_FLOAT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_int2double([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_INT, TYPE_DOUBLE>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_int2decimal([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_INT, TYPE_DECIMALV2>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_bint2tint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_BIGINT, TYPE_TINYINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_bint2sint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_BIGINT, TYPE_SMALLINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_bint2int([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_BIGINT, TYPE_INT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_bint2bint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_BIGINT, TYPE_BIGINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_bint2lint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_BIGINT, TYPE_LARGEINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_bint2float([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_BIGINT, TYPE_FLOAT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_bint2double([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_BIGINT, TYPE_DOUBLE>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_bint2decimal([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_BIGINT, TYPE_DECIMALV2>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_lint2tint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_LARGEINT, TYPE_TINYINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_lint2sint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_LARGEINT, TYPE_SMALLINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_lint2int([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_LARGEINT, TYPE_INT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_lint2bint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_LARGEINT, TYPE_BIGINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_lint2lint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_LARGEINT, TYPE_LARGEINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_lint2float([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_LARGEINT, TYPE_FLOAT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_lint2double([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_LARGEINT, TYPE_DOUBLE>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_lint2decimal([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_LARGEINT, TYPE_DECIMALV2>(columns);
+}
+
+
+
+ColumnPtr ArrayFunctions::array_auc_float2tint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_FLOAT, TYPE_TINYINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_float2sint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_FLOAT, TYPE_SMALLINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_float2int([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_FLOAT, TYPE_INT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_float2bint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_FLOAT, TYPE_BIGINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_float2lint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_FLOAT, TYPE_LARGEINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_float2float([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_FLOAT, TYPE_FLOAT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_float2double([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_FLOAT, TYPE_DOUBLE>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_float2decimal([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_FLOAT, TYPE_DECIMALV2>(columns);
+}
+
+
+
+ColumnPtr ArrayFunctions::array_auc_double2tint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_DOUBLE, TYPE_TINYINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_double2sint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_DOUBLE, TYPE_SMALLINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_double2int([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_DOUBLE, TYPE_INT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_double2bint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_DOUBLE, TYPE_BIGINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_double2lint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_DOUBLE, TYPE_LARGEINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_double2float([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_DOUBLE, TYPE_FLOAT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_double2double([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_DOUBLE, TYPE_DOUBLE>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_double2decimal([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_DOUBLE, TYPE_DECIMALV2>(columns);
+}
+
+
+
+ColumnPtr ArrayFunctions::array_auc_decimal2tint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_DECIMALV2, TYPE_TINYINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_decimal2sint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_DECIMALV2, TYPE_SMALLINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_decimal2int([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_DECIMALV2, TYPE_INT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_decimal2bint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_DECIMALV2, TYPE_BIGINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_decimal2lint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_DECIMALV2, TYPE_LARGEINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_decimal2float([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_DECIMALV2, TYPE_FLOAT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_decimal2double([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_DECIMALV2, TYPE_DOUBLE>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_auc_decimal2decimal([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_auc<TYPE_DECIMALV2, TYPE_DECIMALV2>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_range3_tinyint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_range<TYPE_TINYINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_range3_smallint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_range<TYPE_SMALLINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_range3_int([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_range<TYPE_INT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_range3_bigint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_range<TYPE_BIGINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_range3_largeint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	return ArrayFunctions::template array_range<TYPE_LARGEINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_range2_tinyint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	Columns fullColumns;
+	fullColumns.emplace_back(columns[0]);
+	fullColumns.emplace_back(columns[1]);
+	auto step = Int8Column::create();
+	step->append((int8_t)1);
+	fullColumns.emplace_back(step);
+	return ArrayFunctions::template array_range<TYPE_TINYINT>(fullColumns);
+}
+
+ColumnPtr ArrayFunctions::array_range2_smallint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	Columns fullColumns;
+	fullColumns.emplace_back(columns[0]);
+	fullColumns.emplace_back(columns[1]);
+	auto step = Int16Column::create();
+	step->append((int16_t)1);
+	fullColumns.emplace_back(step);
+	return ArrayFunctions::template array_range<TYPE_SMALLINT>(fullColumns);
+}
+
+ColumnPtr ArrayFunctions::array_range2_int([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	Columns fullColumns;
+	fullColumns.emplace_back(columns[0]);
+	fullColumns.emplace_back(columns[1]);
+	auto step = Int32Column::create();
+	step->append((int32_t)1);
+	fullColumns.emplace_back(step);
+	return ArrayFunctions::template array_range<TYPE_INT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_range2_bigint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	Columns fullColumns;
+	fullColumns.emplace_back(columns[0]);
+	fullColumns.emplace_back(columns[1]);
+	auto step = Int64Column::create();
+	step->append((int64_t)1);
+	fullColumns.emplace_back(step);
+	return ArrayFunctions::template array_range<TYPE_BIGINT>(columns);
+}
+
+ColumnPtr ArrayFunctions::array_range2_largeint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	Columns fullColumns;
+	fullColumns.emplace_back(columns[0]);
+	fullColumns.emplace_back(columns[1]);
+	auto step = Int128Column::create();
+	step->append((int128_t)1);
+	fullColumns.emplace_back(step);
+	return ArrayFunctions::template array_range<TYPE_LARGEINT>(fullColumns);
+}
+
+ColumnPtr ArrayFunctions::array_range_tinyint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	Columns fullColumns;
+	auto start = Int8Column::create();
+	start->append((int8_t)0);
+	fullColumns.emplace_back(start);
+
+	fullColumns.emplace_back(columns[0]);
+
+	auto step = Int8Column::create();
+	step->append((int8_t)1);
+	fullColumns.emplace_back(step);
+	return ArrayFunctions::template array_range<TYPE_TINYINT>(fullColumns);
+}
+
+ColumnPtr ArrayFunctions::array_range_smallint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	Columns fullColumns;
+	auto start = Int16Column::create();
+	start->append((int16_t)0);
+	fullColumns.emplace_back(start);
+
+	fullColumns.emplace_back(columns[0]);
+
+	auto step = Int16Column::create();
+	step->append((int16_t)1);
+	fullColumns.emplace_back(step);
+	return ArrayFunctions::template array_range<TYPE_SMALLINT>(fullColumns);
+}
+
+ColumnPtr ArrayFunctions::array_range_int([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	Columns fullColumns;
+	auto start = Int32Column::create();
+	start->append((int32_t)0);
+	fullColumns.emplace_back(start);
+
+	fullColumns.emplace_back(columns[0]);
+
+	auto step = Int32Column::create();
+	step->append((int32_t)1);
+	fullColumns.emplace_back(step);
+	return ArrayFunctions::template array_range<TYPE_INT>(fullColumns);
+}
+
+ColumnPtr ArrayFunctions::array_range_bigint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	Columns fullColumns;
+	auto start = Int64Column::create();
+	start->append((int64_t)0);
+	fullColumns.emplace_back(start);
+
+	fullColumns.emplace_back(columns[0]);
+
+	auto step = Int64Column::create();
+	step->append((int64_t)1);
+	fullColumns.emplace_back(step);
+	return ArrayFunctions::template array_range<TYPE_BIGINT>(fullColumns);
+}
+
+ColumnPtr ArrayFunctions::array_range_largeint([[maybe_unused]] starrocks_udf::FunctionContext *context, const Columns &columns) {
+	Columns fullColumns;
+	auto start = Int128Column::create();
+	start->append((int128_t)0);
+	fullColumns.emplace_back(start);
+
+	fullColumns.emplace_back(columns[0]);
+
+	auto step = Int128Column::create();
+	step->append((int128_t)1);
+	fullColumns.emplace_back(step);
+	return ArrayFunctions::template array_range<TYPE_LARGEINT>(fullColumns);
+}
 } // namespace starrocks::vectorized
