@@ -308,6 +308,13 @@ public:
     DEFINE_VECTORIZED_FN(regexp_replace);
 
     /**
+     * @param: [string_value, origin_value, replace_value
+     * @paramType: [BinaryColumn, BinaryColumn, BinaryColumn]
+     * @return: BinaryColumn
+     */
+    DEFINE_VECTORIZED_FN(plain_replace);
+
+    /**
      * @param: [DOUBLE]
      * @paramType: [DoubleColumn]
      * @return: BinaryColumn

@@ -30,6 +30,7 @@
 #include "util/raw_container.h"
 #include "util/sm3.h"
 #include "util/utf8.h"
+#include "runtime/Volnitsky.h"
 
 namespace starrocks::vectorized {
 // A regex to match any regex pattern is equivalent to a substring search.
@@ -2821,6 +2822,99 @@ static ColumnPtr regexp_replace_const(re2::RE2* const_re, const Columns& columns
     return result.build(ColumnHelper::is_all_const(columns));
 }
 
+static ColumnPtr regexp_replace_volnitsky(const Columns& columns) {
+    BinaryColumn* haystack = nullptr;
+    if (columns[0]->is_nullable()) {
+        auto* src_null = ColumnHelper::as_raw_column<NullableColumn>(columns[0]);
+        haystack = ColumnHelper::as_raw_column<BinaryColumn>(src_null->data_column());
+    } else {
+        haystack = ColumnHelper::as_raw_column<BinaryColumn>(columns[0]);
+    }
+    Slice needle = ColumnHelper::get_const_value<TYPE_VARCHAR>(columns[1]);
+    Slice replacement = ColumnHelper::get_const_value<TYPE_VARCHAR>(columns[2]);
+
+    uint32_t res_offset = 0;
+    const std::vector<uint32_t>& offsets = haystack->get_offset();
+    Offsets res_offsets;
+    Bytes res_data;
+    res_data.reserve(haystack->get_bytes().size());
+    res_offsets.resize(haystack->size() + 1);
+    res_offsets[0] = 0;
+
+    const char* begin = haystack->get_slice(0).data;
+    const char* pos = begin;
+    const char* end = pos + haystack->get_bytes().size();
+
+    auto searcher = VolnitskyUTF8(needle.data, needle.size, end - pos);
+
+    /// We will search for the next occurrence in all strings at once.
+    if (replacement.get_size() == needle.get_size()) {
+        /// Current index in the array of strings.
+        res_data.resize(end - begin);
+        memcpy(&res_data[0], begin, end - begin);
+        memcpy(&res_offsets[0], &offsets[0], offsets.size() * sizeof(uint32_t));
+
+        while (pos < end) {
+            const char *match = searcher.search(pos, end - pos);
+            memcpy(&res_data[match - begin], replacement.get_data(), replacement.get_size());
+            pos = match + 1;
+        }
+    } else {
+        /// Current index in the array of strings.
+        size_t i = 0;
+
+        while (pos < end)
+        {
+            const char * match = searcher.search(pos, end - pos);
+
+            /// Copy the data without changing
+            res_data.resize(res_data.size() + (match - pos));
+            memcpy(&res_data[res_offset], pos, match - pos);
+
+            /// Determine which index it belongs to.
+            while (i < offsets.size() - 1 && begin + offsets[i + 1] < match)
+            {
+                res_offsets[i + 1] = res_offset + ((begin + offsets[i + 1]) - pos);
+                ++i;
+            }
+            res_offset += (match - pos);
+
+            /// If you have reached the end, it's time to stop
+            if (i == offsets.size() - 1)
+                break;
+
+            /// Is it true that this string no longer needs to perform transformations.
+            bool can_finish_current_string = false;
+
+            /// We check that the entry does not go through the boundaries of strings.
+            if (match + needle.get_size() < begin + offsets[i + 1])
+            {
+                res_data.resize(res_data.size() + replacement.get_size());
+                memcpy(&res_data[res_offset], replacement.get_data(), replacement.get_size());
+                res_offset += replacement.get_size();
+                pos = match + needle.get_size();
+            }
+            else
+            {
+                pos = match;
+                can_finish_current_string = true;
+            }
+
+            if (can_finish_current_string)
+            {
+                res_data.resize(res_data.size() + (begin + offsets[i + 1] - pos));
+                memcpy(&res_data[res_offset], pos, (begin + offsets[i + 1] - pos));
+                res_offset += (begin + offsets[i + 1] - pos);
+                res_offsets[i + 1] = res_offset;
+                pos = begin + offsets[i + 1];
+                ++i;
+            }
+        }
+    }
+
+    return RunTimeColumnType<TYPE_VARCHAR>::create(std::move(res_data), std::move(res_offsets));
+}
+
 static ColumnPtr regexp_replace_use_hyperscan(StringFunctionsState* state, const Columns& columns) {
     auto str_viewer = ColumnViewer<TYPE_VARCHAR>(columns[0]);
     auto rpl_viewer = ColumnViewer<TYPE_VARCHAR>(columns[2]);
@@ -2902,6 +2996,10 @@ ColumnPtr StringFunctions::regexp_replace(FunctionContext* context, const Column
 
     re2::RE2::Options* options = state->options.get();
     return regexp_replace_general(context, options, columns);
+}
+
+ColumnPtr StringFunctions::plain_replace(FunctionContext* context, const Columns& columns) {
+    return regexp_replace_volnitsky(columns);
 }
 
 ColumnPtr StringFunctions::money_format_double(FunctionContext* context,
