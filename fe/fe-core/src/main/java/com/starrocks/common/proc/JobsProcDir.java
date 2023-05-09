@@ -29,6 +29,8 @@ import com.starrocks.alter.MaterializedViewHandler;
 import com.starrocks.alter.SchemaChangeHandler;
 import com.starrocks.catalog.Database;
 import com.starrocks.common.AnalysisException;
+import com.starrocks.load.ColddownJob;
+import com.starrocks.load.ColddownMgr;
 import com.starrocks.load.ExportJob;
 import com.starrocks.load.ExportMgr;
 import com.starrocks.load.loadv2.LoadManager;
@@ -49,6 +51,7 @@ public class JobsProcDir implements ProcDirInterface {
     private static final String ROLLUP = "rollup";
     private static final String SCHEMA_CHANGE = "schema_change";
     private static final String EXPORT = "export";
+    private static final String COLDDOWN = "colddown";
 
     private GlobalStateMgr globalStateMgr;
     private Database db;
@@ -80,6 +83,8 @@ public class JobsProcDir implements ProcDirInterface {
             return new SchemaChangeProcDir(globalStateMgr.getSchemaChangeHandler(), db);
         } else if (jobTypeName.equals(EXPORT)) {
             return new ExportProcNode(globalStateMgr.getExportMgr(), db);
+        } else if (jobTypeName.equals(COLDDOWN)) {
+            return new ColddownProcNode(globalStateMgr.getColddownMgr(), db);
         } else {
             throw new AnalysisException("Invalid job type: " + jobTypeName);
         }
@@ -138,6 +143,16 @@ public class JobsProcDir implements ProcDirInterface {
         cancelledNum = exportMgr.getJobNum(ExportJob.JobState.CANCELLED, dbId);
         totalNum = pendingNum + runningNum + finishedNum + cancelledNum;
         result.addRow(Lists.newArrayList(EXPORT, pendingNum.toString(), runningNum.toString(), finishedNum.toString(),
+                cancelledNum.toString(), totalNum.toString()));
+
+        // colddown
+        ColddownMgr colddownMgr = GlobalStateMgr.getCurrentState().getColddownMgr();
+        pendingNum = 0L;
+        runningNum = colddownMgr.getJobNum(ColddownJob.JobState.RUNNING, dbId);
+        finishedNum = 0L;
+        cancelledNum = colddownMgr.getJobNum(ColddownJob.JobState.CANCELLED, dbId);
+        totalNum = pendingNum + runningNum + finishedNum + cancelledNum;
+        result.addRow(Lists.newArrayList(COLDDOWN, pendingNum.toString(), runningNum.toString(), finishedNum.toString(),
                 cancelledNum.toString(), totalNum.toString()));
 
         return result;

@@ -147,6 +147,9 @@ public:
     METRIC_DEFINE_INT_COUNTER(load_rows_total, MetricUnit::ROWS);
     METRIC_DEFINE_INT_COUNTER(load_bytes_total, MetricUnit::BYTES);
 
+    METRIC_DEFINE_INT_COUNTER(exported_rows_total, MetricUnit::ROWS);
+    METRIC_DEFINE_INT_COUNTER(exported_bytes_total, MetricUnit::BYTES);
+
     METRIC_DEFINE_INT_COUNTER(memtable_flush_total, MetricUnit::OPERATIONS);
     METRIC_DEFINE_INT_COUNTER(memtable_flush_duration_us, MetricUnit::MICROSECONDS);
 

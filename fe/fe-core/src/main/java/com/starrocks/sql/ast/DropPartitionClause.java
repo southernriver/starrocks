@@ -3,6 +3,7 @@
 package com.starrocks.sql.ast;
 
 import com.starrocks.alter.AlterOpType;
+import com.starrocks.catalog.Partition;
 
 import java.util.Map;
 
@@ -13,6 +14,7 @@ public class DropPartitionClause extends AlterTableClause {
     // true if this is to drop a temp partition
     private final boolean isTempPartition;
     private final boolean forceDrop;
+    private Partition partition;
 
     public DropPartitionClause(boolean ifExists, String partitionName, boolean isTempPartition, boolean forceDrop) {
         super(AlterOpType.DROP_PARTITION);
@@ -37,6 +39,14 @@ public class DropPartitionClause extends AlterTableClause {
 
     public boolean isForceDrop() {
         return forceDrop;
+    }
+
+    public Partition getPartition() {
+        return partition;
+    }
+
+    public void setPartition(Partition partition) {
+        this.partition = partition;
     }
 
     @Override

@@ -152,7 +152,7 @@ public class ExportRelativeStmtTest {
         TableName tb = new TableName(dbName, tableName);
         List<String> columnLst = Lists.newArrayList("c1", "c2");
 
-        ExportStmt stmt1 = new ExportStmt(new TableRef(tb, null), columnLst, path,
+        ExportStmt stmt1 = new ExportStmt(new TableRef(tb, null), columnLst, null, path,
                 new HashMap<>(), new HashMap<>(), null);
 
         try {

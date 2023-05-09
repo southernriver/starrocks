@@ -13,6 +13,7 @@
 #include "formats/csv/output_stream.h"
 #include "fs/fs_broker.h"
 #include "runtime/runtime_state.h"
+#include "util/starrocks_metrics.h"
 #include "util/time.h"
 
 namespace starrocks::pipeline {
@@ -64,6 +65,8 @@ private:
     ParquetBuilderOptions _parquet_options;
     ORCBuilderOptions _orc_options;
     size_t _num_rows;
+    int64_t _number_written_rows = 0;
+    int64_t _number_written_bytes = 0;
 };
 
 Status ExportSinkIOBuffer::prepare(RuntimeState* state, RuntimeProfile* parent_profile) {
@@ -88,9 +91,17 @@ Status ExportSinkIOBuffer::prepare(RuntimeState* state, RuntimeProfile* parent_p
 
 void ExportSinkIOBuffer::close(RuntimeState* state) {
     if (_file_builder != nullptr) {
-        set_io_status(_file_builder->finish());
+        Status status = _file_builder->finish();
+        set_io_status(status);
+        if (status.ok()) {
+            _number_written_bytes += _file_builder->file_size();
+        }
         _file_builder.reset();
     }
+    state->update_num_rows_load_from_sink(_number_written_rows);
+    state->update_num_bytes_load_from_sink(_number_written_bytes);
+    StarRocksMetrics::instance()->exported_rows_total.increment(_number_written_rows);
+    StarRocksMetrics::instance()->exported_bytes_total.increment(_number_written_bytes);
     SinkIOBuffer::close(state);
 }
 
@@ -128,12 +139,14 @@ void ExportSinkIOBuffer::_process_chunk(bthread::TaskIterator<ChunkPtr>& iter) {
         return;
     }
 
+    _number_written_rows += chunkNumRows;
     if ((_orc_options.max_file_size_rows > 0 && _num_rows >= _orc_options.max_file_size_rows) ||
         (_orc_options.max_file_size_rows > 0 && _file_builder->file_size() >= _orc_options.max_file_size_rows)) {
         if (Status status = _file_builder->finish(); !status.ok()) {
             LOG(WARNING) << "finish file build failed, error: " << status.to_string();
             return;
         }
+        _number_written_bytes += _file_builder->file_size();
         if (Status status = _open_file_writer(); !status.ok()) {
             LOG(WARNING) << "open file write failed, error: " << status.to_string();
             return;

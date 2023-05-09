@@ -2,6 +2,7 @@
 package com.starrocks.sql.analyzer;
 
 import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableSet;
 import com.starrocks.analysis.BinaryPredicate;
 import com.starrocks.analysis.BrokerDesc;
 import com.starrocks.analysis.Expr;
@@ -34,6 +35,7 @@ import com.starrocks.utils.TdwUtil;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 
@@ -46,7 +48,8 @@ public class ExportStmtAnalyzer {
     }
 
 
-    static class ExportAnalyzerVisitor extends AstVisitor<Void, ConnectContext> {
+    public static class ExportAnalyzerVisitor extends AstVisitor<Void, ConnectContext> {
+        private static final Set<String> ACCEPTABLE_WHERE_KEYS = ImmutableSet.of("id", "state", "queryid", "tablename");
 
         public void analyze(StatementBase statement, ConnectContext session) {
             visit(statement, session);
@@ -58,7 +61,15 @@ public class ExportStmtAnalyzer {
             TableName tableName = statement.getTableRef().getName();
             // make sure catalog, db, table
             MetaUtils.normalizationTableName(context, tableName);
+            analyzeDbName(tableName.getDb(), context);
             Table table = MetaUtils.getTable(context, tableName);
+            statement.setTblName(tableName);
+
+            return visitExportStatement(statement, mgr, table);
+        }
+
+        public static Void visitExportStatement(ExportStmt statement, GlobalStateMgr mgr, Table table) {
+            TableName tableName = statement.getTableRef().getName();
             if (table.getType() == Table.TableType.OLAP &&
                     (((OlapTable) table).getState() == OlapTable.OlapTableState.RESTORE ||
                             ((OlapTable) table).getState() == OlapTable.OlapTableState.RESTORE_WITH_LOAD)) {
@@ -77,7 +88,6 @@ public class ExportStmtAnalyzer {
             // check db, table && partitions && columns whether exist
             // check path is valid
             // generate file name prefix
-            analyzeDbName(tableName.getDb(), context);
             statement.checkTable(mgr);
             statement.checkType(table);
 
@@ -139,8 +149,12 @@ public class ExportStmtAnalyzer {
             return null;
         }
 
-        @Override
-        public Void visitShowExportStatement(ShowExportStmt statement, ConnectContext context) {
+        protected Set<String> getAcceptableWhereKeys() {
+            return ACCEPTABLE_WHERE_KEYS;
+        }
+
+        protected Void visitShowExportStatement(ShowExportStmt statement, ConnectContext context,
+                                             SemanticException exception) {
             // analyze dbName
             statement.setDbName(analyzeDbName(statement.getDbName(), context));
             // analyze where clause if not null
@@ -149,9 +163,7 @@ public class ExportStmtAnalyzer {
                 boolean hasJobId = false;
                 boolean hasState = false;
                 boolean hasQueryId = false;
-                SemanticException exception = new SemanticException(
-                        "Where clause should look like : queryid = \"your_query_id\" " +
-                                "or STATE = \"PENDING|EXPORTING|FINISHED|CANCELLED\"");
+                boolean hasTableName = false;
                 checkPredicateType(whereExpr, exception);
 
                 // left child
@@ -159,14 +171,17 @@ public class ExportStmtAnalyzer {
                     throw exception;
                 }
                 String leftKey = ((SlotRef) whereExpr.getChild(0)).getColumnName();
+                if (!getAcceptableWhereKeys().contains(leftKey.toLowerCase())) {
+                    throw exception;
+                }
                 if (leftKey.equalsIgnoreCase("id")) {
                     hasJobId = true;
                 } else if (leftKey.equalsIgnoreCase("state")) {
                     hasState = true;
                 } else if (leftKey.equalsIgnoreCase("queryid")) {
                     hasQueryId = true;
-                } else {
-                    throw exception;
+                } else if (leftKey.equalsIgnoreCase("tableName")) {
+                    hasTableName = true;
                 }
 
                 // right child
@@ -183,7 +198,7 @@ public class ExportStmtAnalyzer {
                     statement.setStateValue(value.toUpperCase());
 
                     try {
-                        statement.setJobState(ExportJob.JobState.valueOf(value.toUpperCase()));
+                        setJobState(statement, value.toUpperCase());
                     } catch (IllegalArgumentException e) {
                         throw exception;
                     }
@@ -194,6 +209,15 @@ public class ExportStmtAnalyzer {
                     statement.setJobId(((IntLiteral) whereExpr.getChild(1)).getLongValue());
                 } else if (hasQueryId) {
                     statement.setQueryId(analyzeQueryID(whereExpr, exception));
+                } else if (hasTableName) {
+                    if (!(whereExpr.getChild(1) instanceof StringLiteral)) {
+                        throw exception;
+                    }
+                    String value = ((StringLiteral) whereExpr.getChild(1)).getStringValue();
+                    if (Strings.isNullOrEmpty(value)) {
+                        throw exception;
+                    }
+                    statement.setTableName(value);
                 }
             }
 
@@ -220,6 +244,18 @@ public class ExportStmtAnalyzer {
             return null;
         }
 
+        @Override
+        public Void visitShowExportStatement(ShowExportStmt statement, ConnectContext context) {
+            SemanticException exception = new SemanticException(
+                    "Where clause should look like : queryid = \"your_query_id\" " +
+                            "or STATE = \"PENDING|EXPORTING|FINISHED|CANCELLED\" or tableName=\"your_table\"");
+            return visitShowExportStatement(statement, context, exception);
+        }
+
+        protected void setJobState(ShowExportStmt statement, String stateValue) {
+            statement.setJobState(ExportJob.JobState.valueOf(stateValue.toUpperCase()));
+        }
+
         private UUID analyzeQueryID(Expr whereExpr, SemanticException exception) {
             if (!(whereExpr.getChild(1) instanceof StringLiteral)) {
                 ErrorReport.reportSemanticException(ErrorCode.ERR_COMMON_ERROR, exception.getMessage());
@@ -235,7 +271,7 @@ public class ExportStmtAnalyzer {
             return uuid;
         }
 
-        private String analyzeDbName(String dbName, ConnectContext context) {
+        protected String analyzeDbName(String dbName, ConnectContext context) {
             if (Strings.isNullOrEmpty(dbName)) {
                 dbName = context.getDatabase();
                 if (Strings.isNullOrEmpty(dbName)) {
@@ -245,7 +281,7 @@ public class ExportStmtAnalyzer {
             return dbName;
         }
 
-        private void checkPredicateType(Expr whereExpr, SemanticException exception) throws SemanticException {
+        protected void checkPredicateType(Expr whereExpr, SemanticException exception) throws SemanticException {
             // check predicate type
             if (whereExpr instanceof BinaryPredicate) {
                 BinaryPredicate binaryPredicate = (BinaryPredicate) whereExpr;

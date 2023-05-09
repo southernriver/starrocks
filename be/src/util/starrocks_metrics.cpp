@@ -146,6 +146,8 @@ StarRocksMetrics::StarRocksMetrics() : _metrics(_s_registry_name) {
     _metrics.register_metric("stream_load", MetricLabels().add("type", "load_rows"), &stream_load_rows_total);
     _metrics.register_metric("load_rows", &load_rows_total);
     _metrics.register_metric("load_bytes", &load_bytes_total);
+    _metrics.register_metric("exported_rows", &exported_rows_total);
+    _metrics.register_metric("exported_bytes", &exported_bytes_total);
 
 #define REGISTER_ROUTINE_LOAD_CONSUMER_METRIC(type, status, metric)                                                 \
     _metrics.register_metric("routine_load_consumer_num", MetricLabels().add("type", #type).add("status", #status), \

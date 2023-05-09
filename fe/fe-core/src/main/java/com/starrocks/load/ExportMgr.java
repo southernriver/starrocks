@@ -37,6 +37,7 @@ import com.starrocks.common.UserException;
 import com.starrocks.common.util.ListComparator;
 import com.starrocks.common.util.OrderByPair;
 import com.starrocks.common.util.TimeUtils;
+import com.starrocks.fs.hdfs.HdfsFsManager;
 import com.starrocks.mysql.privilege.PrivPredicate;
 import com.starrocks.mysql.privilege.Privilege;
 import com.starrocks.qe.ConnectContext;
@@ -44,6 +45,7 @@ import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.ast.CancelExportStmt;
 import com.starrocks.sql.ast.ExportStmt;
 import com.starrocks.sql.common.MetaUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -95,7 +97,7 @@ public class ExportMgr {
         return idToJob;
     }
 
-    public void addExportJob(UUID queryId, ExportStmt stmt) throws Exception {
+    public ExportJob addExportJob(UUID queryId, ExportStmt stmt) throws Exception {
         long jobId = GlobalStateMgr.getCurrentState().getNextId();
         ExportJob job = createJob(jobId, queryId, stmt);
         writeLock();
@@ -106,6 +108,7 @@ public class ExportMgr {
             writeUnlock();
         }
         LOG.info("add export job. {}", job);
+        return job;
     }
 
     public void unprotectAddJob(ExportJob job) {
@@ -171,7 +174,7 @@ public class ExportMgr {
 
     // NOTE: jobid and states may both specified, or only one of them, or neither
     public List<List<String>> getExportJobInfosByIdOrState(
-            long dbId, long jobId, Set<ExportJob.JobState> states, UUID queryId,
+            long dbId, long jobId, Set<ExportJob.JobState> states, UUID queryId, String table,
             ArrayList<OrderByPair> orderByPairs, long limit) {
 
         long resultNum = limit == -1L ? Integer.MAX_VALUE : limit;
@@ -205,8 +208,12 @@ public class ExportMgr {
                     continue;
                 }
 
-                // check auth
                 TableName tableName = job.getTableName();
+                if (table != null && (tableName != null && !tableName.toString().equals(table))) {
+                    continue;
+                }
+
+                // check auth
                 if (tableName == null || tableName.getTbl().equals("DUMMY")) {
                     // forward compatibility, no table name is saved before
                     Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
@@ -232,6 +239,9 @@ public class ExportMgr {
                 jobInfo.add(jobQueryId != null ? jobQueryId.toString() : FeConstants.null_string);
                 jobInfo.add(state.name());
                 jobInfo.add(job.getProgress() + "%");
+                jobInfo.add(job.getTableName().toString());
+                jobInfo.add(StringUtils.defaultString(
+                        job.getBrokerDesc().getProperties().get(HdfsFsManager.USER_NAME_KEY)));
 
                 // task infos
                 Map<String, Object> infoMap = Maps.newHashMap();
@@ -246,6 +256,7 @@ public class ExportMgr {
                 List<String> columns = job.getColumnNames() == null ? Lists.newArrayList("*") : job.getColumnNames();
                 infoMap.put("columns", job.isReplayed() ? "N/A" : columns);
                 infoMap.put("broker", job.getBrokerDesc().getName());
+                infoMap.put("where", job.getWhereSql());
                 infoMap.put("column separator", job.getColumnSeparator());
                 infoMap.put("row delimiter", job.getRowDelimiter());
                 infoMap.put("format", job.getFileFormat());

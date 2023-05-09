@@ -215,6 +215,12 @@ statement
     | cancelExportStatement
     | showExportStatement
 
+    // Colddown Statement
+    | createColddownStatement
+    | cancelColddownStatement
+    | showColddownStatement
+    | manualColddownStatement
+
     // Plugin Statement
     | installPluginStatement
     | uninstallPluginStatement
@@ -1361,7 +1367,8 @@ showWhiteListStatement
 // ------------------------------------------- Export Statement --------------------------------------------------------
 
 exportStatement
-    : EXPORT TABLE tableDesc columnAliases? TO target=identifierOrString targetProperties=propertyList? properties? brokerDesc?
+    : EXPORT TABLE tableDesc columnAliases?
+        (WHERE where=expression)? TO target=identifierOrString targetProperties=propertyList? properties? brokerDesc?
     ;
 
 cancelExportStatement
@@ -1372,6 +1379,32 @@ showExportStatement
     : SHOW EXPORT ((FROM | IN) catalog=qualifiedName)?
         ((LIKE pattern=string) | (WHERE expression))?
         (ORDER BY sortItem (',' sortItem)*)? (limitElement)?
+    ;
+
+// ------------------------------------------- Colddown Statement --------------------------------------------------------
+
+createColddownStatement
+    : CREATE COLDDOWN JOB name=identifier ON table=qualifiedName
+        columnAliases?
+        (WHERE where=expression)?
+        TO target=identifierOrString
+        targetProperties=propertyList?
+        properties?
+        brokerDesc?
+    ;
+
+cancelColddownStatement
+    : CANCEL COLDDOWN name=identifier
+    ;
+
+showColddownStatement
+    : SHOW COLDDOWN ((FROM | IN) catalog=qualifiedName)?
+        ((LIKE pattern=string) | (WHERE expression))?
+        (ORDER BY sortItem (',' sortItem)*)? (limitElement)?
+    ;
+
+manualColddownStatement
+    : MANUAL COLDDOWN PARTITION partition=identifier WITH JOB name=identifier
     ;
 
 // ------------------------------------------- Plugin Statement --------------------------------------------------------

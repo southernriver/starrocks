@@ -144,6 +144,8 @@ import com.starrocks.lake.StarOSAgent;
 import com.starrocks.lake.compaction.CompactionManager;
 import com.starrocks.leader.Checkpoint;
 import com.starrocks.leader.TaskRunStateSynchronizer;
+import com.starrocks.load.ColddownMgr;
+import com.starrocks.load.ColddownScheduler;
 import com.starrocks.load.DeleteHandler;
 import com.starrocks.load.ExportChecker;
 import com.starrocks.load.ExportMgr;
@@ -324,6 +326,7 @@ public class GlobalStateMgr {
     private RoutineLoadManager routineLoadManager;
     private StreamLoadManager streamLoadManager;
     private ExportMgr exportMgr;
+    private ColddownMgr colddownMgr;
     private Alter alter;
     private ConsistencyChecker consistencyChecker;
     private BackupHandler backupHandler;
@@ -466,6 +469,8 @@ public class GlobalStateMgr {
 
     private ConfigRefreshDaemon configRefreshDaemon;
 
+    private ColddownScheduler colddownScheduler;
+
     public List<Frontend> getFrontends(FrontendNodeType nodeType) {
         return nodeMgr.getFrontends(nodeType);
     }
@@ -556,6 +561,7 @@ public class GlobalStateMgr {
         this.streamLoadManager = new StreamLoadManager();
         this.routineLoadManager = new RoutineLoadManager();
         this.exportMgr = new ExportMgr();
+        this.colddownMgr = new ColddownMgr();
         this.alter = new Alter();
         this.consistencyChecker = new ConsistencyChecker();
         this.lock = new QueryableReentrantLock(true);
@@ -620,6 +626,8 @@ public class GlobalStateMgr {
         this.loadLoadingChecker = new LoadLoadingChecker(loadManager);
         this.routineLoadScheduler = new RoutineLoadScheduler(routineLoadManager);
         this.routineLoadTaskScheduler = new RoutineLoadTaskScheduler(routineLoadManager);
+
+        this.colddownScheduler = new ColddownScheduler(colddownMgr);
 
         this.smallFileMgr = new SmallFileMgr();
 
@@ -1202,6 +1210,9 @@ public class GlobalStateMgr {
         taskRunStateSynchronizer = new TaskRunStateSynchronizer();
         taskRunStateSynchronizer.start();
 
+        // start colddown job scheduler
+        colddownScheduler.start();
+
         if (Config.use_staros) {
             shardManager.getShardDeleter().start();
         }
@@ -1298,6 +1309,8 @@ public class GlobalStateMgr {
             checksum = nodeMgr.loadBrokers(dis, checksum);
             checksum = loadResources(dis, checksum);
             checksum = exportMgr.loadExportJob(dis, checksum);
+            checksum = colddownMgr.loadColddownJob(dis, checksum);
+            checksum = colddownMgr.loadPartitionColddownInfo(dis, checksum);
             checksum = backupHandler.loadBackupHandler(dis, checksum, this);
             checksum = auth.loadAuth(dis, checksum);
             // global transaction must be replayed before load jobs v2
@@ -1612,6 +1625,8 @@ public class GlobalStateMgr {
             checksum = nodeMgr.saveBrokers(dos, checksum);
             checksum = resourceMgr.saveResources(dos, checksum);
             checksum = exportMgr.saveExportJob(dos, checksum);
+            checksum = colddownMgr.saveColddownJob(dos, checksum);
+            checksum = colddownMgr.savePartitionColddownInfo(dos, checksum);
             checksum = backupHandler.saveBackupHandler(dos, checksum);
             checksum = auth.saveAuth(dos, checksum);
             checksum = globalTransactionMgr.saveTransactionState(dos, checksum);
@@ -2781,6 +2796,10 @@ public class GlobalStateMgr {
         return this.exportMgr;
     }
 
+    public ColddownMgr getColddownMgr() {
+        return colddownMgr;
+    }
+
     public SmallFileMgr getSmallFileMgr() {
         return this.smallFileMgr;
     }
@@ -3559,6 +3578,11 @@ public class GlobalStateMgr {
             exportMgr.removeOldExportJobs();
         } catch (Throwable t) {
             LOG.warn("export manager remove old export jobs failed", t);
+        }
+        try {
+            colddownMgr.removeOldColddownJobs();
+        } catch (Throwable t) {
+            LOG.warn("colddown manager remove old colddown jobs failed", t);
         }
         try {
             deleteHandler.removeOldDeleteInfo();

@@ -35,6 +35,7 @@ import com.starrocks.common.DdlException;
 import com.starrocks.common.ThreadPoolManager;
 import com.starrocks.common.UserException;
 import com.starrocks.common.util.KafkaUtil;
+import com.starrocks.load.ColddownJob;
 import com.starrocks.load.EtlJobType;
 import com.starrocks.load.loadv2.JobState;
 import com.starrocks.load.loadv2.LoadManager;
@@ -646,6 +647,9 @@ public final class MetricRepo {
         }
         collectIcebergRoutineLoadProcessMetrics(visitor);
 
+        // colddown metrics
+        collectColddownMetrics(visitor);
+
         // node info
         visitor.getNodeInfo();
         return visitor.build();
@@ -730,6 +734,55 @@ public final class MetricRepo {
             metric.setValue(iJob.pendingAndRunningTasks());
             visitor.visit(metric);
         }
+    }
+
+    private static void collectColddownMetrics(MetricVisitor visitor) {
+        List<ColddownJob> colddownJobs =
+                GlobalStateMgr.getCurrentState().getColddownMgr().getColddownJobs(ColddownJob.JobState.RUNNING);
+        GaugeMetricImpl<Integer> colddownNum = new GaugeMetricImpl<>(
+                "colddown_num", MetricUnit.OPERATIONS, "count of colddown job");
+        GaugeMetricImpl<Integer> runningJobs = new GaugeMetricImpl<>("colddown_exporting_num", MetricUnit.NOUNIT,
+                "colddown running export jobs");
+        int runningJobCount = 0;
+        for (ColddownJob job : colddownJobs) {
+            runningJobCount += job.getRunningExportJobs().size();
+
+            LongCounterMetric totalRows = new LongCounterMetric("colddown_exported_rows", MetricUnit.ROWS,
+                    "colddown exported rows");
+            addColddownJobLabel(totalRows, job);
+            totalRows.increase(job.getTotalExportedRows());
+            visitor.visit(totalRows);
+
+            LongCounterMetric totalBytes = new LongCounterMetric("colddown_exported_bytes", MetricUnit.BYTES,
+                    "colddown exported bytes");
+            addColddownJobLabel(totalBytes, job);
+            totalBytes.increase(job.getTotalExportedBytes());
+            visitor.visit(totalBytes);
+
+            LongCounterMetric totalSuccessExports = new LongCounterMetric("colddown_success_exports", MetricUnit.ROWS,
+                    "colddown success exported jobs");
+            addColddownJobLabel(totalSuccessExports, job);
+            totalSuccessExports.increase(job.getTotalSuccessExportJobs());
+            visitor.visit(totalSuccessExports);
+
+            if (job.getTotalFailedExportJobs() > 0) {
+                LongCounterMetric totalFailExports = new LongCounterMetric("colddown_fail_exports", MetricUnit.ROWS,
+                        "colddown failed exported jobs");
+                addColddownJobLabel(totalFailExports, job);
+                totalFailExports.increase(job.getTotalFailedExportJobs());
+                visitor.visit(totalFailExports);
+            }
+        }
+        colddownNum.setValue(colddownJobs.size());
+        visitor.visit(colddownNum);
+        runningJobs.setValue(runningJobCount);
+        visitor.visit(runningJobs);
+    }
+
+    private static void addColddownJobLabel(Metric<?> metric, ColddownJob job) {
+        metric.addLabel(new MetricLabel("job_name", job.getName()));
+        metric.addLabel(new MetricLabel("db_name", job.getTableName().getDb()));
+        metric.addLabel(new MetricLabel("tbl_name", job.getTableName().getTbl()));
     }
 
     public static synchronized List<Metric> getMetricsByName(String name) {

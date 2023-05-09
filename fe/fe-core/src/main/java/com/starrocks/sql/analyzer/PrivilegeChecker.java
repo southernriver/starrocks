@@ -54,6 +54,7 @@ import com.starrocks.sql.ast.CancelAlterTableStmt;
 import com.starrocks.sql.ast.CancelBackupStmt;
 import com.starrocks.sql.ast.CancelRefreshMaterializedViewStmt;
 import com.starrocks.sql.ast.CreateAnalyzeJobStmt;
+import com.starrocks.sql.ast.CreateColddownStmt;
 import com.starrocks.sql.ast.CreateDbStmt;
 import com.starrocks.sql.ast.CreateFunctionStmt;
 import com.starrocks.sql.ast.CreateMaterializedViewStatement;
@@ -403,6 +404,11 @@ public class PrivilegeChecker {
                         tblName.getTbl());
             }
             return null;
+        }
+
+        @Override
+        public Void visitCreateColddownStatement(CreateColddownStmt statement, ConnectContext context) {
+            return visitExportStatement(statement, context);
         }
 
         @Override

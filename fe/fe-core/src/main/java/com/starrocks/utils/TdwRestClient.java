@@ -154,8 +154,9 @@ public class TdwRestClient extends RestClient {
         return dsfResponse.getRetObj();
     }
 
-    public boolean queryPrivilegeForTable(String userName, String dbName, String tableName) throws AnalysisException {
-        DorisPrivilege privilege = new DorisPrivilege(dbName, tableName, Lists.newArrayList("select"));
+    public boolean verifyPrivilegeForTable(String userName, String dbName, String tableName, List<String> privileges)
+            throws AnalysisException {
+        DorisPrivilege privilege = new DorisPrivilege(dbName, tableName, privileges);
         UserGroupInformation ugi = UserGroupInformation.createUserForTesting(userName,
                 getUserGroup(userName).toArray(new String[0]));
         try {

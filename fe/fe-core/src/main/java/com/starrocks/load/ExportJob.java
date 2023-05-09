@@ -61,6 +61,7 @@ import com.starrocks.common.util.TimeUtils;
 import com.starrocks.fs.HdfsUtil;
 import com.starrocks.planner.DataPartition;
 import com.starrocks.planner.ExportSink;
+import com.starrocks.planner.LoadScanNode;
 import com.starrocks.planner.MysqlScanNode;
 import com.starrocks.planner.OlapScanNode;
 import com.starrocks.planner.PlanFragment;
@@ -69,12 +70,15 @@ import com.starrocks.planner.PlanNodeId;
 import com.starrocks.planner.ScanNode;
 import com.starrocks.proto.UnlockTabletMetadataRequest;
 import com.starrocks.qe.Coordinator;
+import com.starrocks.qe.SqlModeHelper;
 import com.starrocks.rpc.BrpcProxy;
 import com.starrocks.rpc.LakeService;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.ast.ExportStmt;
 import com.starrocks.sql.ast.LoadStmt;
 import com.starrocks.sql.ast.PartitionNames;
+import com.starrocks.sql.parser.ParsingException;
+import com.starrocks.sql.parser.SqlParser;
 import com.starrocks.system.Backend;
 import com.starrocks.task.AgentClient;
 import com.starrocks.thrift.TAgentResult;
@@ -103,6 +107,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 
 // NOTE: we must be carefully if we send next request
@@ -136,6 +141,7 @@ public class ExportJob implements Writable {
     private String exportTempPath;
     private String fileNamePrefix;
     private String columnSeparator;
+    private Expr whereExpr;
     private String rowDelimiter;
     private boolean includeQueryId;
     private Map<String, String> properties = Maps.newHashMap();
@@ -159,6 +165,9 @@ public class ExportJob implements Writable {
     private String fileFormat;
     private Map<String, Type> exportTypes;
     private Function<ExportJob, Void> beforeFinishFunction;
+    private AtomicLong exportedRowCount;
+    private AtomicLong totalExportedRowCount;
+    private AtomicLong totalExportedBytesCount;
 
     public ExportJob() {
         this.id = -1;
@@ -199,6 +208,7 @@ public class ExportJob implements Writable {
         Preconditions.checkNotNull(brokerDesc);
 
         this.columnSeparator = stmt.getColumnSeparator();
+        this.whereExpr = stmt.getWhereExpr();
         this.rowDelimiter = stmt.getRowDelimiter();
         this.includeQueryId = stmt.isIncludeQueryId();
         this.properties = stmt.getProperties();
@@ -218,6 +228,9 @@ public class ExportJob implements Writable {
         this.exportColumnNames = stmt.getExportColumnNames();
         this.exportTypes = stmt.getExportTypes();
         this.beforeFinishFunction = stmt.getBeforeFinishFunction();
+        this.exportedRowCount = new AtomicLong();
+        this.totalExportedRowCount = new AtomicLong();
+        this.totalExportedBytesCount = new AtomicLong();
 
         db.readLock();
         try {
@@ -372,6 +385,7 @@ public class ExportJob implements Writable {
         fragment.setOutputExprs(createOutputExprs());
 
         scanNode.setFragmentId(fragment.getFragmentId());
+        LoadScanNode.initWhereExpr(scanNode, whereExpr, analyzer);
         THdfsProperties hdfsProperties = new THdfsProperties();
         if (!brokerDesc.hasBroker()) {
             HdfsUtil.getTProperties(exportTempPath, brokerDesc, hdfsProperties);
@@ -538,6 +552,10 @@ public class ExportJob implements Writable {
         return this.columnSeparator;
     }
 
+    public String getWhereSql() {
+        return whereExpr == null ? "" : whereExpr.toSql();
+    }
+
     public String getRowDelimiter() {
         return this.rowDelimiter;
     }
@@ -574,6 +592,23 @@ public class ExportJob implements Writable {
 
     public synchronized void setProgress(int progress) {
         this.progress = progress;
+    }
+
+    public void setTotalExportedRowCount(AtomicLong totalExportedRowCount) {
+        this.totalExportedRowCount = totalExportedRowCount;
+    }
+
+    public void setTotalExportedBytesCount(AtomicLong totalExportedBytesCount) {
+        this.totalExportedBytesCount = totalExportedBytesCount;
+    }
+
+    public void increaseExportedRowCount(long rows) {
+        this.exportedRowCount.addAndGet(rows);
+        this.totalExportedRowCount.addAndGet(rows);
+    }
+
+    public void increaseExportedBytesCount(long bytes) {
+        this.totalExportedBytesCount.addAndGet(bytes);
     }
 
     public long getCreateTimeMs() {
@@ -806,6 +841,10 @@ public class ExportJob implements Writable {
         return Status.OK;
     }
 
+    public long getExportedRowCount() {
+        return exportedRowCount.get();
+    }
+
     public synchronized void finish() {
         if (!updateState(JobState.FINISHED)) {
             return;
@@ -837,6 +876,7 @@ public class ExportJob implements Writable {
                 + ", path=" + exportPath
                 + ", format=" + fileFormat
                 + ", partitions=(" + StringUtils.join(partitions, ",") + ")"
+                + ", where " + getWhereSql()
                 + ", progress=" + progress
                 + ", createTimeMs=" + TimeUtils.longToTimeString(createTimeMs)
                 + ", exportStartTimeMs=" + TimeUtils.longToTimeString(startTimeMs)
@@ -855,6 +895,7 @@ public class ExportJob implements Writable {
         out.writeLong(tableId);
         Text.writeString(out, exportPath);
         Text.writeString(out, columnSeparator);
+        Text.writeString(out, getWhereSql());
         Text.writeString(out, rowDelimiter);
         Text.writeString(out, fileFormat);
         out.writeInt(properties.size());
@@ -894,6 +935,15 @@ public class ExportJob implements Writable {
         tableName.write(out);
     }
 
+    public static Expr parseWhereExpr(String whereString) {
+        try {
+            return SqlParser.parseSqlToExpr(whereString, SqlModeHelper.MODE_DEFAULT);
+        } catch (ParsingException e) {
+            LOG.warn("parse where statement failed, expr={}, error={}", whereString, e.getMessage(), e);
+            throw e;
+        }
+    }
+
     public void readFields(DataInput in) throws IOException {
         isReplayed = true;
         id = in.readLong();
@@ -901,6 +951,13 @@ public class ExportJob implements Writable {
         tableId = in.readLong();
         exportPath = Text.readString(in);
         columnSeparator = Text.readString(in);
+
+        if (GlobalStateMgr.getCurrentStateJournalVersion() >= FeMetaVersion.VERSION_93) {
+            String whereStr = Text.readString(in);
+            if (whereStr.length() != 0) {
+                whereExpr = parseWhereExpr(whereStr);
+            }
+        }
         rowDelimiter = Text.readString(in);
         fileFormat = Text.readString(in);
 

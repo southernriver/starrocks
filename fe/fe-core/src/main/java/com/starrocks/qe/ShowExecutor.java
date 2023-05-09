@@ -82,6 +82,8 @@ import com.starrocks.common.util.OrderByPair;
 import com.starrocks.common.util.PrintableMap;
 import com.starrocks.credential.CloudCredentialUtil;
 import com.starrocks.lake.LakeTable;
+import com.starrocks.load.ColddownJob;
+import com.starrocks.load.ColddownMgr;
 import com.starrocks.load.DeleteHandler;
 import com.starrocks.load.ExportJob;
 import com.starrocks.load.ExportMgr;
@@ -115,6 +117,7 @@ import com.starrocks.sql.ast.ShowBasicStatsMetaStmt;
 import com.starrocks.sql.ast.ShowBrokerStmt;
 import com.starrocks.sql.ast.ShowCatalogsStmt;
 import com.starrocks.sql.ast.ShowCharsetStmt;
+import com.starrocks.sql.ast.ShowColddownStmt;
 import com.starrocks.sql.ast.ShowCollationStmt;
 import com.starrocks.sql.ast.ShowColumnStmt;
 import com.starrocks.sql.ast.ShowComputeNodesStmt;
@@ -257,6 +260,8 @@ public class ShowExecutor {
             handleShowBroker();
         } else if (stmt instanceof ShowResourcesStmt) {
             handleShowResources();
+        } else if (stmt instanceof ShowColddownStmt) {
+            handleShowColddown();
         } else if (stmt instanceof ShowExportStmt) {
             handleShowExport();
         } else if (stmt instanceof ShowBackendsStmt) {
@@ -1486,10 +1491,31 @@ public class ShowExecutor {
             states = Sets.newHashSet(state);
         }
         List<List<String>> infos = exportMgr.getExportJobInfosByIdOrState(
-                dbId, showExportStmt.getJobId(), states, showExportStmt.getQueryId(),
+                dbId, showExportStmt.getJobId(), states, showExportStmt.getQueryId(), showExportStmt.getTableName(),
                 showExportStmt.getOrderByPairs(), showExportStmt.getLimit());
 
         resultSet = new ShowResultSet(showExportStmt.getMetaData(), infos);
+    }
+
+    private void handleShowColddown() throws AnalysisException {
+        ShowColddownStmt showColddownStmt = (ShowColddownStmt) stmt;
+        GlobalStateMgr globalStateMgr = GlobalStateMgr.getCurrentState();
+        Database db = globalStateMgr.getDb(showColddownStmt.getDbName());
+        MetaUtils.checkDbNullAndReport(db, showColddownStmt.getDbName());
+        long dbId = db.getId();
+
+        ColddownMgr colddownMgr = globalStateMgr.getColddownMgr();
+
+        Set<ColddownJob.JobState> states = null;
+        ColddownJob.JobState state = showColddownStmt.getColddownJobState();
+        if (state != null) {
+            states = Sets.newHashSet(state);
+        }
+        List<List<String>> infos = colddownMgr.getColddownJobInfosByIdOrState(
+                dbId, showColddownStmt.getJobId(), states, showColddownStmt.getJobName(),
+                showColddownStmt.getTableName(), showColddownStmt.getOrderByPairs(), showColddownStmt.getLimit());
+
+        resultSet = new ShowResultSet(showColddownStmt.getMetaData(), infos);
     }
 
     private void handleShowBackends() {

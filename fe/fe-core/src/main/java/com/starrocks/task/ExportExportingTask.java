@@ -35,6 +35,7 @@ import com.starrocks.load.ExportChecker;
 import com.starrocks.load.ExportFailMsg;
 import com.starrocks.load.ExportJob;
 import com.starrocks.load.FsUtil;
+import com.starrocks.load.loadv2.LoadJob;
 import com.starrocks.qe.Coordinator;
 import com.starrocks.qe.QeProcessorImpl;
 import com.starrocks.server.GlobalStateMgr;
@@ -44,6 +45,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -369,7 +371,7 @@ public class ExportExportingTask extends PriorityLeaderTask {
             if (coord.join(leftTimeSecond)) {
                 Status status = coord.getExecStatus();
                 if (status.ok()) {
-                    onSubTaskFinished(coord.getExportFiles());
+                    onSubTaskFinished(coord.getExportFiles(), coord.getLoadCounters());
                 } else {
                     throw new UserException(status.getErrorMsg());
                 }
@@ -378,12 +380,14 @@ public class ExportExportingTask extends PriorityLeaderTask {
             }
         }
 
-        private void onSubTaskFinished(List<String> exportFiles) {
+        private void onSubTaskFinished(List<String> exportFiles, Map<String, String> loadCounters) {
             job.addExportedTempFiles(exportFiles);
             synchronized (subTasksDoneSignal) {
                 subTasksDoneSignal.markedCountDown(taskIdx, -1 /* dummy value */);
                 job.setProgress((int) (coordSize - subTasksDoneSignal.getCount()) * 100 / coordSize);
             }
+            job.increaseExportedRowCount(Long.parseLong(loadCounters.get(LoadEtlTask.DPP_NORMAL_ALL)));
+            job.increaseExportedBytesCount(Long.parseLong(loadCounters.get(LoadJob.LOADED_BYTES)));
             LOG.info("export sub task finish. task idx: {}, task query id: {}", taskIdx, getQueryId());
         }
 

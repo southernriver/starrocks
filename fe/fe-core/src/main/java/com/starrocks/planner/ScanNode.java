@@ -48,6 +48,14 @@ public abstract class ScanNode extends PlanNode {
         this.columnFilters = columnFilters;
     }
 
+    protected Expr analyzeAndCastFold(Expr whereExpr) throws UserException {
+        whereExpr = Expr.analyzeAndCastFold(whereExpr);
+        if (!whereExpr.getType().isBoolean()) {
+            throw new UserException("where statement is not a valid statement return bool");
+        }
+        return whereExpr;
+    }
+
     /**
      * cast expr to SlotDescriptor type
      */

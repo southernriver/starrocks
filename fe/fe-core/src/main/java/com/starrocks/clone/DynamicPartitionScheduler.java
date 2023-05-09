@@ -33,6 +33,7 @@ import com.starrocks.catalog.Database;
 import com.starrocks.catalog.DynamicPartitionProperty;
 import com.starrocks.catalog.HashDistributionInfo;
 import com.starrocks.catalog.OlapTable;
+import com.starrocks.catalog.Partition;
 import com.starrocks.catalog.PartitionInfo;
 import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.RangePartitionInfo;
@@ -48,6 +49,8 @@ import com.starrocks.common.util.DynamicPartitionUtil;
 import com.starrocks.common.util.LeaderDaemon;
 import com.starrocks.common.util.RangeUtils;
 import com.starrocks.common.util.TimeUtils;
+import com.starrocks.load.ColddownJob;
+import com.starrocks.load.ColddownMgr;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.ast.AddPartitionClause;
 import com.starrocks.sql.ast.DistributionDesc;
@@ -295,8 +298,12 @@ public class DynamicPartitionScheduler extends LeaderDaemon {
                 Range<PartitionKey> checkDropPartitionKey = idToRange.getValue();
                 RangeUtils.checkRangeIntersect(reservePartitionKeyRange, checkDropPartitionKey);
                 if (checkDropPartitionKey.upperEndpoint().compareTo(reservePartitionKeyRange.lowerEndpoint()) <= 0) {
-                    String dropPartitionName = olapTable.getPartition(checkDropPartitionId).getName();
-                    dropPartitionClauses.add(new DropPartitionClause(false, dropPartitionName, false, true));
+                    Partition partition = olapTable.getPartition(checkDropPartitionId);
+                    String dropPartitionName = partition.getName();
+                    DropPartitionClause dropPartitionClause =
+                            new DropPartitionClause(false, dropPartitionName, false, true);
+                    dropPartitionClause.setPartition(partition);
+                    dropPartitionClauses.add(dropPartitionClause);
                 }
             } catch (DdlException e) {
                 break;
@@ -375,6 +382,11 @@ public class DynamicPartitionScheduler extends LeaderDaemon {
                     continue OUTER;
                 }
                 try {
+                    if (shouldColddown(olapTable, dropPartitionClause.getPartition())) {
+                        LOG.info("partition " + olapTable.getName() + ":" + dropPartitionClause.getPartitionName() +
+                                " is submitted to colddown job, ignore dropping partition");
+                        continue;
+                    }
                     GlobalStateMgr.getCurrentState().dropPartition(db, olapTable, dropPartitionClause);
                     clearDropPartitionFailedMsg(tableName);
                 } catch (DdlException e) {
@@ -395,6 +407,26 @@ public class DynamicPartitionScheduler extends LeaderDaemon {
                 }
             }
         }
+    }
+
+    private boolean shouldColddown(Table table, Partition partition) {
+        boolean needColddown = false;
+        ColddownMgr colddownMgr = GlobalStateMgr.getCurrentState().getColddownMgr();
+        for (ColddownJob colddownJob : colddownMgr.getColddownJobs(table.getId())) {
+            if (colddownJob.isFinalState()) {
+                continue;
+            }
+            try {
+                needColddown = needColddown ||
+                        colddownJob.submitColddownPartitionFromTtl(partition);
+            } catch (Exception e) {
+                needColddown = true;
+                LOG.warn("Failed to submit colddown partition " + table.getName() + ":" + partition.getName() +
+                        " from ttl to colddown job " +
+                        colddownJob.getName(), e);
+            }
+        }
+        return needColddown;
     }
 
     private void executePartitionTimeToLive() {
@@ -474,6 +506,19 @@ public class DynamicPartitionScheduler extends LeaderDaemon {
             throws AnalysisException {
 
         ArrayList<DropPartitionClause> dropPartitionClauses = new ArrayList<>();
+        List<Map.Entry<Long, Range<PartitionKey>>> candidatePartitionList =
+                getSortedPartitionList(olapTable, ttlNumber);
+
+        for (Map.Entry<Long, Range<PartitionKey>> entry : candidatePartitionList) {
+            Long checkDropPartitionId = entry.getKey();
+            String dropPartitionName = olapTable.getPartition(checkDropPartitionId).getName();
+            dropPartitionClauses.add(new DropPartitionClause(false, dropPartitionName, false, true));
+        }
+        return dropPartitionClauses;
+    }
+
+    public static List<Map.Entry<Long, Range<PartitionKey>>> getSortedPartitionList(OlapTable olapTable, int excludeList)
+            throws AnalysisException {
         RangePartitionInfo rangePartitionInfo = (RangePartitionInfo) (olapTable.getPartitionInfo());
         List<Column> partitionColumns = rangePartitionInfo.getPartitionColumns();
 
@@ -485,7 +530,8 @@ public class DynamicPartitionScheduler extends LeaderDaemon {
 
         if (partitionType.isDateType()) {
             LocalDateTime currentDateTime = LocalDateTime.now();
-            PartitionValue currentPartitionValue = new PartitionValue(currentDateTime.format(DateUtils.DATE_FORMATTER_UNIX));
+            PartitionValue currentPartitionValue =
+                    new PartitionValue(currentDateTime.format(DateUtils.DATE_FORMATTER_UNIX));
             PartitionKey currentPartitionKey = PartitionKey.createPartitionKey(
                     ImmutableList.of(currentPartitionValue), partitionColumns);
 
@@ -507,17 +553,12 @@ public class DynamicPartitionScheduler extends LeaderDaemon {
         candidatePartitionList.sort(Comparator.comparing(o -> o.getValue().upperEndpoint()));
 
         int allPartitionNumber = candidatePartitionList.size();
-        if (allPartitionNumber <= ttlNumber) {
-            return dropPartitionClauses;
+        if (allPartitionNumber <= excludeList) {
+            return Collections.emptyList();
         } else {
-            int dropSize = allPartitionNumber - ttlNumber;
-            for (int i = 0; i < dropSize; i++) {
-                Long checkDropPartitionId = candidatePartitionList.get(i).getKey();
-                String dropPartitionName = olapTable.getPartition(checkDropPartitionId).getName();
-                dropPartitionClauses.add(new DropPartitionClause(false, dropPartitionName, false, true));
-            }
+            int subSize = allPartitionNumber - excludeList;
+            return candidatePartitionList.subList(0, subSize);
         }
-        return dropPartitionClauses;
     }
 
     private void recordCreatePartitionFailedMsg(String dbName, String tableName, String msg) {

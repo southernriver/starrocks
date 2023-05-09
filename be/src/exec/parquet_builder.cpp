@@ -435,7 +435,7 @@ void ParquetBuilder::_flush_row_group() {
 std::size_t ParquetBuilder::file_size() {
     DCHECK(_output_stream != nullptr);
     if (_rg_writer == nullptr) {
-        return 0;
+        return _total_row_group_writen_bytes;
     }
 
     return _total_row_group_writen_bytes + _get_rg_written_bytes();

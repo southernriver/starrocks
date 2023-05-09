@@ -42,10 +42,12 @@ import com.starrocks.common.util.SmallFileMgr.SmallFile;
 import com.starrocks.ha.LeaderInfo;
 import com.starrocks.journal.bdbje.Timestamp;
 import com.starrocks.leader.Checkpoint;
+import com.starrocks.load.ColddownJob;
 import com.starrocks.load.DeleteInfo;
 import com.starrocks.load.ExportJob;
 import com.starrocks.load.LoadErrorHub;
 import com.starrocks.load.MultiDeleteInfo;
+import com.starrocks.load.PartitionColddownInfo;
 import com.starrocks.load.loadv2.LoadJob.LoadJobStateUpdateInfo;
 import com.starrocks.load.loadv2.LoadJobFinalOperation;
 import com.starrocks.load.routineload.RoutineLoadJob;
@@ -315,6 +317,21 @@ public class JournalEntity implements Writable {
             case OperationType.OP_EXPORT_UPDATE_STATE:
                 data = new ExportJob.StateTransfer();
                 ((ExportJob.StateTransfer) data).readFields(in);
+                isRead = true;
+                break;
+            case OperationType.OP_COLDDOWN_CREATE:
+                data = new ColddownJob();
+                ((ColddownJob) data).readFields(in);
+                isRead = true;
+                break;
+            case OperationType.OP_COLDDOWN_UPDATE_STATE:
+                data = new ColddownJob.StateTransfer();
+                ((ColddownJob.StateTransfer) data).readFields(in);
+                isRead = true;
+                break;
+            case OperationType.OP_COLDDOWN_ADD_PARTITION_INFO:
+                data = new PartitionColddownInfo();
+                ((PartitionColddownInfo) data).readFields(in);
                 isRead = true;
                 break;
             case OperationType.OP_FINISH_DELETE:

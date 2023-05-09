@@ -123,6 +123,7 @@ import com.starrocks.sql.ast.CTERelation;
 import com.starrocks.sql.ast.CancelAlterSystemStmt;
 import com.starrocks.sql.ast.CancelAlterTableStmt;
 import com.starrocks.sql.ast.CancelBackupStmt;
+import com.starrocks.sql.ast.CancelColddownStmt;
 import com.starrocks.sql.ast.CancelExportStmt;
 import com.starrocks.sql.ast.CancelLoadStmt;
 import com.starrocks.sql.ast.CancelRefreshMaterializedViewStmt;
@@ -132,6 +133,7 @@ import com.starrocks.sql.ast.ColumnRenameClause;
 import com.starrocks.sql.ast.ColumnSeparator;
 import com.starrocks.sql.ast.CreateAnalyzeJobStmt;
 import com.starrocks.sql.ast.CreateCatalogStmt;
+import com.starrocks.sql.ast.CreateColddownStmt;
 import com.starrocks.sql.ast.CreateDbStmt;
 import com.starrocks.sql.ast.CreateFileStmt;
 import com.starrocks.sql.ast.CreateFunctionStmt;
@@ -207,6 +209,7 @@ import com.starrocks.sql.ast.LambdaArgument;
 import com.starrocks.sql.ast.LambdaFunctionExpr;
 import com.starrocks.sql.ast.ListPartitionDesc;
 import com.starrocks.sql.ast.LoadStmt;
+import com.starrocks.sql.ast.ManualColddownStmt;
 import com.starrocks.sql.ast.ManualRefreshSchemeDesc;
 import com.starrocks.sql.ast.ModifyBackendAddressClause;
 import com.starrocks.sql.ast.ModifyBrokerClause;
@@ -269,6 +272,7 @@ import com.starrocks.sql.ast.ShowBasicStatsMetaStmt;
 import com.starrocks.sql.ast.ShowBrokerStmt;
 import com.starrocks.sql.ast.ShowCatalogsStmt;
 import com.starrocks.sql.ast.ShowCharsetStmt;
+import com.starrocks.sql.ast.ShowColddownStmt;
 import com.starrocks.sql.ast.ShowCollationStmt;
 import com.starrocks.sql.ast.ShowColumnStmt;
 import com.starrocks.sql.ast.ShowComputeNodesStmt;
@@ -2529,6 +2533,7 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
             columns = visit(context.columnAliases().identifier(), Identifier.class)
                     .stream().map(Identifier::getValue).collect(toList());
         }
+        Expr whereExpr = context.where != null ? (Expr) visit(context.where) : null;
 
         String typeName = context.target.getText();
         // targetProperties
@@ -2541,7 +2546,7 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
         if (brokerDesc == null) {
             brokerDesc = new BrokerDesc(new HashMap<>());
         }
-        return new ExportStmt(tableRef, columns, typeName, targetProperties, properties, brokerDesc);
+        return new ExportStmt(tableRef, columns, whereExpr, typeName, targetProperties, properties, brokerDesc);
     }
 
     @Override
@@ -2583,6 +2588,74 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
             whereExpr = (Expr) visit(context.expression());
         }
         return new ShowExportStmt(catalog, whereExpr, orderByElements, le);
+    }
+
+    // ----------------------------------------------- Colddown Statement ------------------------------------------------
+    @Override
+    public ParseNode visitCreateColddownStatement(StarRocksParser.CreateColddownStatementContext context) {
+        String name = ((Identifier) visit(context.name)).getValue();
+
+        QualifiedName qualifiedName = getQualifiedName(context.table);
+        TableName tableName = qualifiedNameToTableName(qualifiedName);
+        TableRef tableRef = new TableRef(tableName, null, null);
+
+        List<String> columns = null;
+        if (context.columnAliases() != null) {
+            columns = visit(context.columnAliases().identifier(), Identifier.class)
+                    .stream().map(Identifier::getValue).collect(toList());
+        }
+        Expr whereExpr = context.where != null ? (Expr) visit(context.where) : null;
+
+        String typeName = context.target.getText();
+        // targetProperties
+        Map<String, String> targetProperties =
+                context.targetProperties != null ? getProperty(context.targetProperties.property()) : new HashMap<>();
+        // properties
+        Map<String, String> properties = getProperties(context.properties());
+        // brokers
+        BrokerDesc brokerDesc = getBrokerDesc(context.brokerDesc());
+        if (brokerDesc == null) {
+            brokerDesc = new BrokerDesc(new HashMap<>());
+        }
+        return new CreateColddownStmt(name, tableRef, columns, whereExpr, typeName, targetProperties, properties,
+                brokerDesc);
+    }
+
+    @Override
+    public ParseNode visitCancelColddownStatement(StarRocksParser.CancelColddownStatementContext context) {
+        String jobName = getIdentifierName(context.name);
+        return new CancelColddownStmt(jobName);
+    }
+
+    @Override
+    public ParseNode visitShowColddownStatement(StarRocksParser.ShowColddownStatementContext context) {
+        String catalog = null;
+        if (context.catalog != null) {
+            QualifiedName dbName = getQualifiedName(context.catalog);
+            catalog = dbName.toString();
+        }
+
+        LimitElement le = null;
+        if (context.limitElement() != null) {
+            le = (LimitElement) visit(context.limitElement());
+        }
+        List<OrderByElement> orderByElements = null;
+        if (context.ORDER() != null) {
+            orderByElements = new ArrayList<>();
+            orderByElements.addAll(visit(context.sortItem(), OrderByElement.class));
+        }
+        Expr whereExpr = null;
+        if (context.expression() != null) {
+            whereExpr = (Expr) visit(context.expression());
+        }
+        return new ShowColddownStmt(catalog, whereExpr, orderByElements, le);
+    }
+
+    @Override
+    public ParseNode visitManualColddownStatement(StarRocksParser.ManualColddownStatementContext context) {
+        String partition = ((Identifier) visit(context.partition)).getValue();
+        String name = ((Identifier) visit(context.name)).getValue();
+        return new ManualColddownStmt(partition, name);
     }
 
     // ------------------------------------------------- Plugin Statement --------------------------------------------------------

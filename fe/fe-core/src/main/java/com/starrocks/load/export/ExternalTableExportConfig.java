@@ -64,6 +64,7 @@ public class ExternalTableExportConfig {
     private static final String PARTITION_TIME_UNIT = "partition.time_unit";
     private static final String SR_TMP_PATH = "/__sr_tmp";
     private final TableName olapTableName;
+    private final Map<String, String> properties;
     private final Map<String, String> targetProperties;
     private final BrokerDesc brokerDesc;
     private Table.TableType targetTableType;
@@ -72,9 +73,10 @@ public class ExternalTableExportConfig {
     private boolean overwritePartition = true;
     private LinkedHashMap<String, Type> exportTypes;
 
-    public ExternalTableExportConfig(TableName olapTableName, Map<String, String> targetProperties,
-                                     BrokerDesc brokerDesc) {
+    public ExternalTableExportConfig(TableName olapTableName, Map<String, String> properties,
+                                     Map<String, String> targetProperties, BrokerDesc brokerDesc) {
         this.olapTableName = olapTableName;
+        this.properties = properties;
         this.targetProperties = targetProperties;
         this.brokerDesc = brokerDesc;
     }
@@ -113,7 +115,8 @@ public class ExternalTableExportConfig {
             }
         }
         Table table = GlobalStateMgr.getCurrentState().getMetadataMgr()
-                .getTable(extCatalogName, extDbName, extTableName.getTbl());
+                .getTableWithPrivileges(extCatalogName, extDbName, extTableName.getTbl(),
+                        Arrays.asList("select", "update"));
         if (table == null) {
             ErrorReport.reportSemanticException(ErrorCode.ERR_BAD_TABLE_ERROR, extTableName);
         }
@@ -166,6 +169,10 @@ public class ExternalTableExportConfig {
         Map<String, String> tableProperties = ((OlapTable) table).getTableProperty().getProperties();
         String timeUnitValue = tableProperties.get(DynamicPartitionProperty.TIME_UNIT);
         if (timeUnitValue == null) {
+            // for non-dynamic partition
+            timeUnitValue = properties.get(PARTITION_TIME_UNIT);
+        }
+        if (timeUnitValue == null) {
             throw new SemanticException("either " + DynamicPartitionProperty.TIME_UNIT + " in table or "
                     + PARTITION_TIME_UNIT + " in job should be specified");
         }
@@ -190,6 +197,10 @@ public class ExternalTableExportConfig {
         }
         if (tableProperties.containsKey(DynamicPartitionProperty.PREFIX)) {
             String prefixValue = tableProperties.get(DynamicPartitionProperty.PREFIX);
+            partition = partition.substring(prefixValue.length());
+        } else if (properties.containsKey(PARTITION_PREFIX)) {
+            // for non-dynamic partition
+            String prefixValue = properties.get(PARTITION_PREFIX);
             partition = partition.substring(prefixValue.length());
         }
         String tdwPartitionPrefix = "";

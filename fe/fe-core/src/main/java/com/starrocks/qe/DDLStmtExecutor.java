@@ -39,6 +39,7 @@ import com.starrocks.sql.ast.BaseGrantRevokeRoleStmt;
 import com.starrocks.sql.ast.CancelAlterSystemStmt;
 import com.starrocks.sql.ast.CancelAlterTableStmt;
 import com.starrocks.sql.ast.CancelBackupStmt;
+import com.starrocks.sql.ast.CancelColddownStmt;
 import com.starrocks.sql.ast.CancelExportStmt;
 import com.starrocks.sql.ast.CancelLoadStmt;
 import com.starrocks.sql.ast.CancelRefreshMaterializedViewStmt;
@@ -715,6 +716,14 @@ public class DDLStmtExecutor {
         public ShowResultSet visitCancelExportStatement(CancelExportStmt stmt, ConnectContext context) {
             ErrorReport.wrapWithRuntimeException(() -> {
                 context.getGlobalStateMgr().getExportMgr().cancelExportJob(stmt);
+            });
+            return null;
+        }
+
+        @Override
+        public ShowResultSet visitCancelColddownStatement(CancelColddownStmt stmt, ConnectContext context) {
+            ErrorReport.wrapWithRuntimeException(() -> {
+                context.getGlobalStateMgr().getColddownMgr().cancelColddownJob(stmt);
             });
             return null;
         }

@@ -904,6 +904,22 @@ public class Config extends ConfigBase {
      */
     @ConfField
     public static int export_task_pool_size = 5;
+    /**
+     * Colddown check interval, default is 60 seconds.
+     */
+    @ConfField
+    public static long colddown_scheduler_interval_second = 60;
+    // Configurations for cold down checker
+    @ConfField(mutable = true)
+    public static long cold_down_wait_seconds = 4 * 3600; // 4 hours
+    /**
+     * Cold down checker will run from *cold_down_check_start_time* to *cold_down_check_end_time*.
+     * Default is from 23:00 to 04:00
+     */
+    @ConfField(mutable = true)
+    public static String cold_down_check_start_time = "23";
+    @ConfField(mutable = true)
+    public static String cold_down_check_end_time = "4";
 
     // Configurations for consistency check
     /**

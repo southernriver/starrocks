@@ -285,4 +285,9 @@ public class OperationType {
 
     // constraint properties
     public static final short OP_MODIFY_TABLE_CONSTRAINT_PROPERTY = 11130;
+
+    // colddown job
+    public static final short OP_COLDDOWN_CREATE = 11140;
+    public static final short OP_COLDDOWN_UPDATE_STATE = 11141;
+    public static final short OP_COLDDOWN_ADD_PARTITION_INFO = 11142;
 }

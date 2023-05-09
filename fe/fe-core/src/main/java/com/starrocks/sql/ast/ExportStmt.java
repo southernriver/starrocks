@@ -9,6 +9,7 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.starrocks.analysis.BrokerDesc;
 import com.starrocks.analysis.Delimiter;
+import com.starrocks.analysis.Expr;
 import com.starrocks.analysis.RedirectStatus;
 import com.starrocks.analysis.TableName;
 import com.starrocks.analysis.TableRef;
@@ -60,6 +61,7 @@ public class ExportStmt extends StatementBase {
     private TableName tblName;
     private List<String> partitions;
     private List<String> columnNames;
+    private final Expr whereExpr;
     private String typeName;
     // path should include "/"
     private String path;
@@ -69,8 +71,8 @@ public class ExportStmt extends StatementBase {
     private Map<String, String> properties = Maps.newHashMap();
     private String columnSeparator;
     private String rowDelimiter;
-    private boolean includeQueryId = true;
-    private String fileFormat = "csv";
+    protected boolean includeQueryId = true;
+    private String fileFormat;
     private List<String> exportColumnNames;
     private Map<String, Type> exportTypes;
 
@@ -82,10 +84,11 @@ public class ExportStmt extends StatementBase {
     private TableRef tableRef;
     private long exportStartTime;
 
-    public ExportStmt(TableRef tableRef, List<String> columnNames, String typeName,
+    public ExportStmt(TableRef tableRef, List<String> columnNames, Expr whereExpr, String typeName,
                       Map<String, String> targetProperties, Map<String, String> properties, BrokerDesc brokerDesc) {
         this.tableRef = tableRef;
         this.columnNames = columnNames;
+        this.whereExpr = whereExpr;
         this.typeName = typeName.trim();
         this.path = typeName;
         if (properties != null) {
@@ -98,7 +101,6 @@ public class ExportStmt extends StatementBase {
         this.columnSeparator = DEFAULT_COLUMN_SEPARATOR;
         this.rowDelimiter = DEFAULT_LINE_DELIMITER;
         this.includeQueryId = true;
-        this.fileFormat = DEFAULT_FILE_FORMAT;
     }
 
     public long getExportStartTime() {
@@ -131,6 +133,10 @@ public class ExportStmt extends StatementBase {
 
     public List<String> getColumnNames() {
         return columnNames;
+    }
+
+    public Expr getWhereExpr() {
+        return whereExpr;
     }
 
     public String getTypeName() {
@@ -170,7 +176,7 @@ public class ExportStmt extends StatementBase {
     }
 
     public String getFileFormat() {
-        return this.fileFormat;
+        return fileFormat == null ? DEFAULT_FILE_FORMAT : fileFormat;
     }
 
     public List<String> getExportColumnNames() {
@@ -267,16 +273,9 @@ public class ExportStmt extends StatementBase {
         }
         switch (type) {
             case EXTERNAL_TABLE:
-                if (partitions.size() != 1) {
-                    throw new SemanticException("Does not support export multiple partitions to external table now.");
-                }
                 externalTableExportConfig =
-                        new ExternalTableExportConfig(tblName, targetProperties, brokerDesc);
-                externalTableExportConfig.analyzeProperties(table, partitions.get(0));
-                path = externalTableExportConfig.getPath();
-                exportTypes = externalTableExportConfig.getExportTypes();
-                exportColumnNames = externalTableExportConfig.reorder(exportColumnNames);
-                checkPath();
+                        new ExternalTableExportConfig(tblName, properties, targetProperties, brokerDesc);
+                checkExternalTable(externalTableExportConfig, table);
                 break;
             case HDFS:
             case LOCAL:
@@ -293,6 +292,27 @@ public class ExportStmt extends StatementBase {
             default:
                 break;
         }
+    }
+
+    protected void checkExternalTable(ExternalTableExportConfig externalTableExportConfig, Table table) {
+        if (partitions == null || partitions.size() != 1) {
+            throw new SemanticException("Does not support export multiple partitions to external table now.");
+        }
+        externalTableExportConfig.analyzeProperties(table, partitions.get(0));
+        path = externalTableExportConfig.getPath();
+        exportTypes = externalTableExportConfig.getExportTypes();
+        exportColumnNames = externalTableExportConfig.reorder(exportColumnNames);
+        if (fileFormat == null) {
+            switch (externalTableExportConfig.getTargetTableType()) {
+                case HIVE:
+                    fileFormat = "orc";
+                    break;
+                case ICEBERG:
+                    fileFormat = "parquet";
+                    break;
+            }
+        }
+        checkPath();
     }
 
     public Function<ExportJob, Void> getBeforeFinishFunction() {
@@ -407,6 +427,12 @@ public class ExportStmt extends StatementBase {
         if (partitions != null && !partitions.isEmpty()) {
             sb.append(" PARTITION (");
             Joiner.on(", ").appendTo(sb, partitions);
+            sb.append(")");
+        }
+        sb.append("\n");
+        if (whereExpr != null) {
+            sb.append("Where (");
+            sb.append(whereExpr.toSql());
             sb.append(")");
         }
         sb.append("\n");

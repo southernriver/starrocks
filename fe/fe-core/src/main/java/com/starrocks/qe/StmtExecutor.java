@@ -93,6 +93,7 @@ import com.starrocks.sql.analyzer.SemanticException;
 import com.starrocks.sql.ast.AddSqlBlackListStmt;
 import com.starrocks.sql.ast.AnalyzeHistogramDesc;
 import com.starrocks.sql.ast.AnalyzeStmt;
+import com.starrocks.sql.ast.CreateColddownStmt;
 import com.starrocks.sql.ast.CreateTableAsSelectStmt;
 import com.starrocks.sql.ast.DdlStmt;
 import com.starrocks.sql.ast.DelSqlBlackListStmt;
@@ -106,6 +107,7 @@ import com.starrocks.sql.ast.ExportStmt;
 import com.starrocks.sql.ast.InsertStmt;
 import com.starrocks.sql.ast.KillAnalyzeStmt;
 import com.starrocks.sql.ast.KillStmt;
+import com.starrocks.sql.ast.ManualColddownStmt;
 import com.starrocks.sql.ast.QueryStatement;
 import com.starrocks.sql.ast.SelectRelation;
 import com.starrocks.sql.ast.SetCatalogStmt;
@@ -520,6 +522,10 @@ public class StmtExecutor {
                 handleShow();
             } else if (parsedStmt instanceof KillStmt) {
                 handleKill();
+            } else if (parsedStmt instanceof CreateColddownStmt) {
+                handleCreateColddownStmt();
+            } else if (parsedStmt instanceof ManualColddownStmt) {
+                handleManualColddownStmt();
             } else if (parsedStmt instanceof ExportStmt) {
                 handleExportStmt(context.getQueryId());
             } else if (parsedStmt instanceof UnsupportedStmt) {
@@ -1245,6 +1251,16 @@ public class StmtExecutor {
         ExportStmt exportStmt = (ExportStmt) parsedStmt;
         exportStmt.setExportStartTime(context.getStartTime());
         context.getGlobalStateMgr().getExportMgr().addExportJob(queryId, exportStmt);
+    }
+
+    private void handleCreateColddownStmt() throws Exception {
+        CreateColddownStmt stmt = (CreateColddownStmt) parsedStmt;
+        context.getGlobalStateMgr().getColddownMgr().addColddownJob(stmt);
+    }
+
+    private void handleManualColddownStmt() throws Exception {
+        ManualColddownStmt stmt = (ManualColddownStmt) parsedStmt;
+        context.getGlobalStateMgr().getColddownMgr().manualColddownPartition(stmt);
     }
 
     public PQueryStatistics getQueryStatisticsForAuditLog() {

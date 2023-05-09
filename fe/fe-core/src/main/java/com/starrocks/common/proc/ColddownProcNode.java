@@ -1,6 +1,4 @@
 // This file is made available under Elastic License 2.0.
-// This file is based on code available under the Apache license here:
-//   https://github.com/apache/incubator-doris/blob/master/fe/fe-core/src/main/java/org/apache/doris/common/proc/ExportProcNode.java
 
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
@@ -25,39 +23,39 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.starrocks.catalog.Database;
 import com.starrocks.common.AnalysisException;
-import com.starrocks.load.ExportMgr;
+import com.starrocks.load.ColddownMgr;
 
 import java.util.List;
 
 // TODO(lingbin): think if need a sub node to show unfinished instances
-public class ExportProcNode implements ProcNodeInterface {
+public class ColddownProcNode implements ProcNodeInterface {
     public static final ImmutableList<String> TITLE_NAMES = new ImmutableList.Builder<String>()
-            .add("JobId").add("QueryId").add("State").add("Progress")
-            .add("TableName").add("user").add("TaskInfo").add("Path")
-            .add("CreateTime").add("StartTime").add("FinishTime")
-            .add("Timeout").add("ErrorMsg")
+            .add("JobId").add("JobName").add("State").add("TableName")
+            .add("user").add("TaskInfo").add("TargetType").add("TargetInfo")
+            .add("CreateTime").add("FinishTime")
+            .add("Timeout").add("Exporting partitions").add("ErrorMsg")
             .build();
 
     private static final int LIMIT = 2000;
 
-    private ExportMgr exportMgr;
+    private ColddownMgr colddownMgr;
     private Database db;
 
-    public ExportProcNode(ExportMgr exportMgr, Database db) {
-        this.exportMgr = exportMgr;
+    public ColddownProcNode(ColddownMgr colddownMgr, Database db) {
+        this.colddownMgr = colddownMgr;
         this.db = db;
     }
 
     @Override
     public ProcResult fetchResult() throws AnalysisException {
         Preconditions.checkNotNull(db);
-        Preconditions.checkNotNull(exportMgr);
+        Preconditions.checkNotNull(colddownMgr);
 
         BaseProcResult result = new BaseProcResult();
         result.setNames(TITLE_NAMES);
 
         List<List<String>> jobInfos =
-                exportMgr.getExportJobInfosByIdOrState(db.getId(), 0, null, null, null, null, LIMIT);
+                colddownMgr.getColddownJobInfosByIdOrState(db.getId(), 0, null, null, null, null, LIMIT);
         result.setRows(jobInfos);
         return result;
     }

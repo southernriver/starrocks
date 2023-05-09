@@ -35,6 +35,7 @@ public class ShowExportStmt extends ShowStmt {
     private long jobId = 0;
     private String stateValue = null;
     private UUID queryId = null;
+    private String tableName = null;
 
     private JobState jobState;
 
@@ -53,6 +54,10 @@ public class ShowExportStmt extends ShowStmt {
 
     public void setQueryId(UUID queryId) {
         this.queryId = queryId;
+    }
+
+    public void setTableName(String tableName) {
+        this.tableName = tableName;
     }
 
     public void setJobId(long jobId) {
@@ -109,10 +114,18 @@ public class ShowExportStmt extends ShowStmt {
         return queryId;
     }
 
+    public String getTableName() {
+        return tableName;
+    }
+
+    protected String getCommandName() {
+        return "EXPORT";
+    }
+
     @Override
     public String toSql() {
         StringBuilder sb = new StringBuilder();
-        sb.append("SHOW EXPORT ");
+        sb.append("SHOW " + getCommandName() + " ");
         if (!Strings.isNullOrEmpty(dbName)) {
             sb.append("FROM `").append(dbName).append("`");
         }
@@ -145,8 +158,12 @@ public class ShowExportStmt extends ShowStmt {
 
     @Override
     public ShowResultSetMetaData getMetaData() {
+        return getMetaData(ExportProcNode.TITLE_NAMES);
+    }
+
+    protected ShowResultSetMetaData getMetaData(List<String> titleNames) {
         ShowResultSetMetaData.Builder builder = ShowResultSetMetaData.builder();
-        for (String title : ExportProcNode.TITLE_NAMES) {
+        for (String title : titleNames) {
             builder.addColumn(new Column(title, ScalarType.createVarchar(30)));
         }
         return builder.build();

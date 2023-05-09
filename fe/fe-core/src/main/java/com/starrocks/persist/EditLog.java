@@ -49,12 +49,15 @@ import com.starrocks.journal.JournalEntity;
 import com.starrocks.journal.JournalInconsistentException;
 import com.starrocks.journal.JournalTask;
 import com.starrocks.journal.bdbje.Timestamp;
+import com.starrocks.load.ColddownJob;
+import com.starrocks.load.ColddownMgr;
 import com.starrocks.load.DeleteHandler;
 import com.starrocks.load.DeleteInfo;
 import com.starrocks.load.ExportJob;
 import com.starrocks.load.ExportMgr;
 import com.starrocks.load.LoadErrorHub;
 import com.starrocks.load.MultiDeleteInfo;
+import com.starrocks.load.PartitionColddownInfo;
 import com.starrocks.load.loadv2.LoadJob.LoadJobStateUpdateInfo;
 import com.starrocks.load.loadv2.LoadJobFinalOperation;
 import com.starrocks.load.routineload.RoutineLoadJob;
@@ -936,6 +939,24 @@ public class EditLog {
                     }
                     break;
                 }
+                case OperationType.OP_COLDDOWN_CREATE: {
+                    ColddownJob job = (ColddownJob) journal.getData();
+                    ColddownMgr colddownMgr = globalStateMgr.getColddownMgr();
+                    colddownMgr.replayCreateColddownJob(job);
+                    break;
+                }
+                case OperationType.OP_COLDDOWN_UPDATE_STATE: {
+                    ColddownJob.StateTransfer op2 = (ColddownJob.StateTransfer) journal.getData();
+                    ColddownMgr colddownMgr = globalStateMgr.getColddownMgr();
+                    colddownMgr.replayUpdateJobState(op2.getJobId(), op2.getState());
+                    break;
+                }
+                case OperationType.OP_COLDDOWN_ADD_PARTITION_INFO: {
+                    PartitionColddownInfo op2 = (PartitionColddownInfo) journal.getData();
+                    ColddownMgr colddownMgr = globalStateMgr.getColddownMgr();
+                    colddownMgr.replayCreatePartitionColddownInfo(op2);
+                    break;
+                }
                 default: {
                     if (Config.ignore_unknown_log_id) {
                         LOG.warn("UNKNOWN Operation Type {}", opCode);
@@ -1310,6 +1331,19 @@ public class EditLog {
     public void logExportUpdateState(long jobId, ExportJob.JobState newState) {
         ExportJob.StateTransfer transfer = new ExportJob.StateTransfer(jobId, newState);
         logEdit(OperationType.OP_EXPORT_UPDATE_STATE, transfer);
+    }
+
+    public void logColddownCreate(ColddownJob job) {
+        logEdit(OperationType.OP_COLDDOWN_CREATE, job);
+    }
+
+    public void logColddownUpdateState(long jobId, ColddownJob.JobState newState) {
+        ColddownJob.StateTransfer transfer = new ColddownJob.StateTransfer(jobId, newState);
+        logEdit(OperationType.OP_COLDDOWN_UPDATE_STATE, transfer);
+    }
+
+    public void logColddownAddPartitionInfo(PartitionColddownInfo partitionColddownInfo) {
+        logEdit(OperationType.OP_COLDDOWN_ADD_PARTITION_INFO, partitionColddownInfo);
     }
 
     public void logUpdateClusterAndBackendState(BackendIdsUpdateInfo info) {

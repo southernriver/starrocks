@@ -28,6 +28,7 @@ import com.starrocks.utils.TdwUtil;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -131,21 +132,22 @@ public class MetadataMgr {
         Optional<ConnectorMetadata> connectorMetadata = getOptionalMetadata(catalogName);
         return connectorMetadata.map(metadata -> metadata.getDb(dbName)).orElse(null);
     }
+
     public Table getTableWithUser(String catalogName, String dbName, String tblName) throws AnalysisException {
         if (Config.enable_check_tdw_pri) {
             if (!CatalogMgr.isInternalCatalog(catalogName)) {
-                TdwUtil.hasQueryPrivilege(dbName, tblName);
+                TdwUtil.verifyPrivileges(dbName, tblName, Collections.singletonList("select"));
             }
         }
         Optional<ConnectorMetadata> connectorMetadata = getOptionalMetadata(catalogName);
         return connectorMetadata.map(metadata -> metadata.getTable(dbName, tblName)).orElse(null);
     }
 
-    public Table getTable(String catalogName, String dbName, String tblName) {
+    public Table getTableWithPrivileges(String catalogName, String dbName, String tblName, List<String> privileges) {
         if (Config.enable_check_tdw_pri) {
             try {
                 if (!CatalogMgr.isInternalCatalog(catalogName)) {
-                    TdwUtil.hasQueryPrivilege(dbName, tblName);
+                    TdwUtil.verifyPrivileges(dbName, tblName, privileges);
                 }
             } catch (AnalysisException e) {
                 LOG.error(e.getMessage());
@@ -159,6 +161,10 @@ public class MetadataMgr {
             connectorTblMetaInfoMgr.setTableInfoForConnectorTable(catalogName, dbName, connectorTable);
         }
         return connectorTable;
+    }
+
+    public Table getTable(String catalogName, String dbName, String tblName) {
+        return getTableWithPrivileges(catalogName, dbName, tblName, Collections.singletonList("select"));
     }
 
     public Statistics getTableStatistics(OptimizerContext session,

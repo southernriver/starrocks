@@ -25,6 +25,7 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+import com.google.gson.Gson;
 import com.starrocks.analysis.BinaryPredicate;
 import com.starrocks.analysis.DateLiteral;
 import com.starrocks.analysis.Expr;
@@ -51,7 +52,10 @@ import com.starrocks.common.util.ListComparator;
 import com.starrocks.common.util.OrderByPair;
 import com.starrocks.common.util.TimeUtils;
 import com.starrocks.lake.StorageCacheInfo;
+import com.starrocks.load.ColddownMgr;
+import com.starrocks.load.PartitionColddownInfo;
 import com.starrocks.monitor.unit.ByteSizeValue;
+import com.starrocks.server.GlobalStateMgr;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -99,6 +103,7 @@ public class PartitionsProcDir implements ProcDirInterface {
             builder.add("StorageMedium").add("CooldownTime").add("LastConsistencyCheckTime").add("DataSize")
                     .add("IsInMemory").add("RowCount");
         }
+        builder.add("ColddownInfo");
         this.titleNames = builder.build();
     }
 
@@ -245,6 +250,7 @@ public class PartitionsProcDir implements ProcDirInterface {
                 partitionIds = partitions.stream().map(Partition::getId).collect(Collectors.toList());
             }
 
+            ColddownMgr colddownMgr = GlobalStateMgr.getCurrentState().getColddownMgr();
             Joiner joiner = Joiner.on(", ");
             for (Long partitionId : partitionIds) {
                 Partition partition = olapTable.getPartition(partitionId);
@@ -301,6 +307,14 @@ public class PartitionsProcDir implements ProcDirInterface {
                     partitionInfo.add(byteSizeValue);
                     partitionInfo.add(tblPartitionInfo.getIsInMemory(partitionId));
                     partitionInfo.add(partition.getRowCount());
+                }
+                List<PartitionColddownInfo> partitionColddownInfos = colddownMgr.getPartitionColddownInfos(partitionId);
+                if (!partitionColddownInfos.isEmpty()) {
+                    partitionInfo.add(new Gson().toJson(
+                            partitionColddownInfos.stream().map(PartitionColddownInfo::toSimpleString)
+                                    .collect(Collectors.toList())));
+                } else {
+                    partitionInfo.add("");
                 }
 
                 partitionInfos.add(partitionInfo);

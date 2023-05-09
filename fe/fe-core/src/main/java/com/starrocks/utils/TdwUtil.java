@@ -21,6 +21,7 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
 
@@ -89,12 +90,13 @@ public class TdwUtil {
         TDW_USER_THREADLOCAL_INFO.remove();
     }
 
-    public static boolean hasQueryPrivilege(String dbName, String tableName) throws AnalysisException {
+    public static boolean verifyPrivileges(String dbName, String tableName, List<String> privileges)
+            throws AnalysisException {
         String userName = getCurrentTdwUserName();
         if (userName == null) {
             userName = "root";
         }
-        return TdwRestClient.getInstance().queryPrivilegeForTable(userName, dbName, tableName);
+        return TdwRestClient.getInstance().verifyPrivilegeForTable(userName, dbName, tableName, privileges);
     }
 
     private static String generateAuth(String userName) throws SecureException {
