@@ -32,6 +32,10 @@ int64_t ParseUtil::parse_mem_spec(const std::string& mem_spec_str, const int64_t
         return 0;
     }
 
+    if (mem_spec_str == "auto") {
+        return std::max<int64_t>(memory_limit * 0.9, memory_limit - 6871947672);
+    }
+
     // Assume last character indicates unit or percent.
     int32_t number_str_len = mem_spec_str.size() - 1;
     int64_t multiplier = -1;
