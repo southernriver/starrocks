@@ -211,6 +211,10 @@ public class PrometheusMetricVisitor extends MetricVisitor {
                 .append(GlobalStateMgr.getCurrentSystemInfo().getAliveBackendNumber()).append("\n");
         sb.append(NODE_INFO).append("{type=\"be_node_num\", state=\"decommissioned\"} ")
                 .append(GlobalStateMgr.getCurrentSystemInfo().getDecommissionedBackendIds().size()).append("\n");
+        sb.append(NODE_INFO).append("{type=\"cn_node_num\", state=\"total\"} ")
+            .append(GlobalStateMgr.getCurrentSystemInfo().getComputeNodeIds(false).size()).append("\n");
+        sb.append(NODE_INFO).append("{type=\"cn_node_num\", state=\"alive\"} ")
+            .append(GlobalStateMgr.getCurrentSystemInfo().getComputeNodeIds(true).size()).append("\n");
         sb.append(NODE_INFO).append("{type=\"broker_node_num\", state=\"dead\"} ").append(
                         GlobalStateMgr.getCurrentState().getBrokerMgr().getAllBrokers().stream().filter(b -> !b.isAlive)
                                 .count())
