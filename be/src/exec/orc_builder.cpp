@@ -55,6 +55,12 @@ void fillDateValueAsDateLiteral(vectorized::Column* dataColumn, orc::ColumnVecto
 void fillDateValueAsDateString(vectorized::Column* dataColumn, orc::ColumnVectorBatch* batch, size_t row,
                                size_t batchIdx);
 
+void fillTimestampValueAsUnixSecond(vectorized::Column* dataColumn, orc::ColumnVectorBatch* batch, size_t row,
+                                size_t batchIdx);
+void fillTimestampValueAsTimestamp(vectorized::Column* dataColumn, orc::ColumnVectorBatch* batch, size_t row,
+                                size_t batchIdx);
+void fillTimestampValueAsDateTimeString(vectorized::Column* dataColumn, orc::ColumnVectorBatch* batch, size_t row,
+                                size_t batchIdx);
 void fillTimestampValue(vectorized::Column* dataColumn, orc::ColumnVectorBatch* batch, size_t row, size_t batchIdx);
 
 ORCOutputStream::ORCOutputStream(std::unique_ptr<WritableFile> writable_file, size_t buff_size) :
@@ -304,7 +310,15 @@ Status ORCBuilder::add_chunk(vectorized::Chunk* chunk) {
                         }
                         break;
                     case TYPE_DATETIME:
-                        fillTimestampValue(dataColumn, curBatch, row, batchIdx);
+                        if (outType.type == TYPE_VARCHAR || outType.type == TYPE_CHAR) {
+                            fillTimestampValueAsDateTimeString(dataColumn, curBatch, row, batchIdx);
+                        } else if (outType.type == TYPE_BIGINT) {
+                            fillTimestampValueAsTimestamp(dataColumn, curBatch, row, batchIdx);
+                        } else if (outType.type == TYPE_INT) {
+                            fillTimestampValueAsUnixSecond(dataColumn, curBatch, row, batchIdx);
+                        } else {
+                            fillTimestampValue(dataColumn, curBatch, row, batchIdx);
+                        }
                         break;
                     case TYPE_DECIMALV2:
                         fillDecimalV2Value(dataColumn, curBatch, row, batchIdx, precision, scale);
@@ -437,7 +451,7 @@ void fillDateValueAsDateLiteral(vectorized::Column* dataColumn, orc::ColumnVecto
                                 size_t batchIdx) {
     auto* longBatch = down_cast<orc::LongVectorBatch*>(batch);
     auto* dateColumn = down_cast<vectorized::FixedLengthColumn<vectorized::DateValue>*>(dataColumn);
-    double dateLiteral = dateColumn->get_data()[row].to_date_literal();
+    int32_t dateLiteral = dateColumn->get_data()[row].to_date_literal();
     longBatch->data[batchIdx] = static_cast<int64_t>(dateLiteral);
 }
 
@@ -448,8 +462,33 @@ void fillDateValueAsDateString(vectorized::Column* dataColumn, orc::ColumnVector
     string bytes = dateColumn->get_data()[row].to_string();
     char* dataPtr = bytes.data();
     stringBatch->data[batchIdx] = dataPtr;
-    // yyyy-MM-dd
-    stringBatch->length[batchIdx] = 10;
+    stringBatch->length[batchIdx] = bytes.size();
+}
+
+void fillTimestampValueAsUnixSecond(vectorized::Column* dataColumn, orc::ColumnVectorBatch* batch, size_t row,
+                               size_t batchIdx) {
+    auto* longBatch = down_cast<orc::LongVectorBatch*>(batch);
+    auto* dtColumn = down_cast<vectorized::FixedLengthColumn<vectorized::TimestampValue>*>(dataColumn);
+    int64_t dateLiteral = dtColumn->get_data()[row].to_unix_second();
+    longBatch->data[batchIdx] = static_cast<int64_t>(dateLiteral);
+}
+
+void fillTimestampValueAsTimestamp(vectorized::Column* dataColumn, orc::ColumnVectorBatch* batch, size_t row,
+                               size_t batchIdx) {
+    auto* longBatch = down_cast<orc::LongVectorBatch*>(batch);
+    auto* dtColumn = down_cast<vectorized::FixedLengthColumn<vectorized::TimestampValue>*>(dataColumn);
+    int64_t dateLiteral = dtColumn->get_data()[row].to_unix_second() * 1000;
+    longBatch->data[batchIdx] = static_cast<int64_t>(dateLiteral);
+}
+
+void fillTimestampValueAsDateTimeString(vectorized::Column* dataColumn, orc::ColumnVectorBatch* batch, size_t row,
+                               size_t batchIdx) {
+    auto* stringBatch = down_cast<orc::StringVectorBatch*>(batch);
+    auto* dtColumn = down_cast<vectorized::FixedLengthColumn<vectorized::TimestampValue>*>(dataColumn);
+    string bytes = dtColumn->get_data()[row].to_string();
+    char* dataPtr = bytes.data();
+    stringBatch->data[batchIdx] = dataPtr;
+    stringBatch->length[batchIdx] = bytes.size();
 }
 
 void fillTimestampValue(vectorized::Column* dataColumn, orc::ColumnVectorBatch* batch, size_t row, size_t batchIdx) {

@@ -469,7 +469,13 @@ public class ExportJob implements Writable {
                     exportType = slotDesc.getColumn().getType();
                 }
                 if (srType.getPrimitiveType() == PrimitiveType.DATE && exportType.getPrimitiveType().isCharFamily()) {
+                    // yyyy-MM-dd
                     exportType = ScalarType.createVarcharType(10);
+                }
+                if (srType.getPrimitiveType() == PrimitiveType.DATETIME &&
+                        exportType.getPrimitiveType().isCharFamily()) {
+                    // yyyy-MM-dd HH:mm:ss
+                    exportType = ScalarType.createVarcharType(19);
                 }
                 exportTypesList.add(exportType);
             }

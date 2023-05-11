@@ -221,7 +221,7 @@ public class ColddownJob implements Writable {
         if (properties.containsKey("colddown_partition_end")) {
             return Integer.parseInt(properties.get("colddown_partition_end"));
         } else {
-            return 0;
+            return -1;
         }
     }
 

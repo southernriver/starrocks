@@ -2,6 +2,7 @@
 
 package com.starrocks.load.export;
 
+import com.google.common.base.Charsets;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
@@ -37,6 +38,8 @@ import org.apache.iceberg.DataFiles;
 import org.apache.iceberg.FileFormat;
 import org.apache.iceberg.Metrics;
 import org.apache.iceberg.MetricsConfig;
+import org.apache.iceberg.PartitionField;
+import org.apache.iceberg.PartitionKey;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.ReplacePartitions;
 import org.apache.iceberg.hadoop.HadoopInputFile;
@@ -44,10 +47,15 @@ import org.apache.iceberg.mapping.MappingUtil;
 import org.apache.iceberg.mapping.NameMapping;
 import org.apache.iceberg.orc.OrcMetrics;
 import org.apache.iceberg.parquet.ParquetUtil;
+import org.apache.iceberg.types.Conversions;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
 import java.security.PrivilegedExceptionAction;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -414,14 +422,21 @@ public class ExternalTableExportConfig {
                     LOG.error("failed to open reader for " + filePath, e);
                     throw new StarRocksConnectorException("failed to open reader for " + filePath, e);
                 }
-                DataFile file = DataFiles.builder(partitionSpec)
-                        .withPath(filePath)
-                        .withFormat(FileFormat.fromFileName(filePath))
-                        .withMetrics(metrics)
-                        .withFileSizeInBytes(inputFile.getLength())
-                        .withPartitionPath(removeSlash(targetPartitionName))
-                        .build();
-                replacePartitions.addFile(file);
+                try {
+                    PartitionKey partitionKey = new PartitionKey(partitionSpec, table.schema());
+                    fillFromPath(partitionSpec, removeSlash(targetPartitionName), partitionKey);
+                    DataFile file = DataFiles.builder(partitionSpec)
+                            .withPath(filePath)
+                            .withFormat(FileFormat.fromFileName(filePath))
+                            .withMetrics(metrics)
+                            .withFileSizeInBytes(inputFile.getLength())
+                            .withPartition(partitionKey)
+                            .build();
+                    replacePartitions.addFile(file);
+                } catch (Throwable e) {
+                    LOG.error("failed to add file to iceberg " + filePath, e);
+                    throw new StarRocksConnectorException("failed to add file to iceberg " + filePath, e);
+                }
             }
             try {
                 if (fileSystem.getUgi() != null) {
@@ -438,6 +453,47 @@ public class ExternalTableExportConfig {
             }
             return null;
         };
+    }
+
+    /**
+     * base code is from DataFiles.fillFromPath(). Handle TIMESTAMP type
+     */
+    private void fillFromPath(PartitionSpec spec, String partitionPath, PartitionKey data)
+            throws UnsupportedEncodingException {
+        String[] partitions = partitionPath.split("/", -1);
+        org.apache.iceberg.relocated.com.google.common.base.Preconditions.checkArgument(
+                partitions.length <= spec.fields().size(),
+                "Invalid partition data, too many fields (expecting %s): %s",
+                spec.fields().size(),
+                partitionPath);
+        org.apache.iceberg.relocated.com.google.common.base.Preconditions.checkArgument(
+                partitions.length >= spec.fields().size(),
+                "Invalid partition data, not enough fields (expecting %s): %s",
+                spec.fields().size(),
+                partitionPath);
+
+        for (int i = 0; i < partitions.length; i += 1) {
+            PartitionField field = spec.fields().get(i);
+            String[] parts = partitions[i].split("=", 2);
+            org.apache.iceberg.relocated.com.google.common.base.Preconditions.checkArgument(
+                    parts.length == 2 && parts[0] != null && field.name().equals(parts[0]),
+                    "Invalid partition: %s",
+                    partitions[i]);
+
+            org.apache.iceberg.types.Type type = spec.partitionType().fields().get(i).type();
+            if (type.typeId() == org.apache.iceberg.types.Type.TypeID.TIMESTAMP) {
+                String timestampStr = parts[1];
+                timestampStr = URLDecoder.decode(timestampStr, Charsets.UTF_8.name());
+                if (timestampStr.endsWith("Z")) {
+                    timestampStr = timestampStr.substring(0, timestampStr.length() - 1);
+                }
+                LocalDateTime timestamp = LocalDateTime.parse(timestampStr);
+                // need long value
+                data.set(i, timestamp.toInstant(ZoneOffset.UTC).toEpochMilli() * 1000);
+            } else {
+                data.set(i, Conversions.fromPartitionString(type, parts[1]));
+            }
+        }
     }
 
     private String removeSlash(String path) {

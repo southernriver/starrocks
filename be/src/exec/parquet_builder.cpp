@@ -269,11 +269,37 @@ void ParquetBuilder::_generate_rg_writer() {
             reinterpret_cast<const NATIVE_TYPE*>(down_cast<const COLUMN_TYPE*>(data_column)->get_data().data())); \
     _buffered_values_estimate[i] = col_writer->EstimatedBufferedValueBytes();  
 
-#define DISPATCH_PARQUET_DATE_NUMERIC_WRITER(WRITER, COLUMN_TYPE, NATIVE_TYPE) \
+#define DISPATCH_PARQUET_DATE_NUMERIC_WRITER(WRITER, NATIVE_TYPE) \
     auto* dateColumn = down_cast<vectorized::FixedLengthColumn<vectorized::DateValue>*>(data_column);             \
-    std::vector<NATIVE_TYPE> res(num_rows);                                                                           \
+    std::vector<NATIVE_TYPE> res(num_rows);                                                                       \
     for (size_t row_id = 0; row_id < num_rows; row_id++) {                                                        \
         res[row_id] = dateColumn->get_data()[row_id].to_date_literal();                                           \
+    }                                                                                                             \
+    ParquetBuilder::_generate_rg_writer();                                                                        \
+    parquet::WRITER* col_writer = static_cast<parquet::WRITER*>(_rg_writer->column(i));                           \
+    col_writer->WriteBatch(                                                                                       \
+            num_rows, nullable ? def_level.data() : nullptr, nullptr,                                             \
+            reinterpret_cast<const NATIVE_TYPE*>(res.data()));                                                    \
+    _buffered_values_estimate[i] = col_writer->EstimatedBufferedValueBytes();
+
+#define DISPATCH_PARQUET_DATETIME_INT64_WRITER(WRITER, NATIVE_TYPE)                                  \
+    auto* timeColumn = down_cast<vectorized::FixedLengthColumn<vectorized::TimestampValue>*>(data_column);        \
+    std::vector<NATIVE_TYPE> res(num_rows);                                                                       \
+    for (size_t row_id = 0; row_id < num_rows; row_id++) {                                                        \
+        res[row_id] = timeColumn->get_data()[row_id].to_unix_second() * 1000;                                                  \
+    }                                                                                                             \
+    ParquetBuilder::_generate_rg_writer();                                                                        \
+    parquet::WRITER* col_writer = static_cast<parquet::WRITER*>(_rg_writer->column(i));                           \
+    col_writer->WriteBatch(                                                                                       \
+            num_rows, nullable ? def_level.data() : nullptr, nullptr,                                             \
+            reinterpret_cast<const NATIVE_TYPE*>(res.data()));                                                    \
+    _buffered_values_estimate[i] = col_writer->EstimatedBufferedValueBytes();
+
+#define DISPATCH_PARQUET_DATETIME_INT32_WRITER(WRITER, NATIVE_TYPE)                                  \
+    auto* timeColumn = down_cast<vectorized::FixedLengthColumn<vectorized::TimestampValue>*>(data_column);        \
+    std::vector<NATIVE_TYPE> res(num_rows);                                                                       \
+    for (size_t row_id = 0; row_id < num_rows; row_id++) {                                                        \
+        res[row_id] = timeColumn->get_data()[row_id].to_unix_second();                                            \
     }                                                                                                             \
     ParquetBuilder::_generate_rg_writer();                                                                        \
     parquet::WRITER* col_writer = static_cast<parquet::WRITER*>(_rg_writer->column(i));                           \
@@ -294,15 +320,15 @@ void ParquetBuilder::_generate_rg_writer() {
     }                                                                                                             \
     _buffered_values_estimate[i] = col_writer->EstimatedBufferedValueBytes();
 
-#define DISPATCH_PARQUET_DATE_COMPLEX_WRITER(COLUMN_TYPE)                                                         \
-    auto* dateColumn = down_cast<vectorized::FixedLengthColumn<vectorized::DateValue>*>(data_column);             \
+#define DISPATCH_PARQUET_DATETIME_COMPLEX_WRITER(COLUMN_TYPE)                                                     \
+    auto* dateColumn = down_cast<vectorized::FixedLengthColumn<COLUMN_TYPE>*>(data_column);                       \
     ParquetBuilder::_generate_rg_writer();                                                                        \
     parquet::ByteArrayWriter* col_writer = static_cast<parquet::ByteArrayWriter*>(_rg_writer->column(i));         \
     for (size_t row_id = 0; row_id < num_rows; row_id++) {                                                        \
         string bytes = dateColumn->get_data()[row_id].to_string();                                                \
         parquet::ByteArray value;                                                                                 \
         value.ptr = reinterpret_cast<const uint8_t*>(bytes.data());                                               \
-        value.len = 10;                                                                                           \
+        value.len = bytes.size();                                                                                 \
         col_writer->WriteBatch(1, nullable ? &def_level[row_id] : nullptr, nullptr, &value);                      \
     }                                                                                                             \
     _buffered_values_estimate[i] = col_writer->EstimatedBufferedValueBytes();
@@ -361,11 +387,11 @@ Status ParquetBuilder::add_chunk(vectorized::Chunk* chunk) {
         case TYPE_DATE: {
             ParquetBuilder::_generate_rg_writer();
             if (outType == TYPE_VARCHAR || outType == TYPE_CHAR) {
-                DISPATCH_PARQUET_DATE_COMPLEX_WRITER(vectorized::BinaryColumn);
+                DISPATCH_PARQUET_DATETIME_COMPLEX_WRITER(vectorized::DateValue);
             } else if (outType == TYPE_BIGINT) {
-                DISPATCH_PARQUET_DATE_NUMERIC_WRITER(Int64Writer, vectorized::Int64Column, int64_t);
+                DISPATCH_PARQUET_DATE_NUMERIC_WRITER(Int64Writer, int64_t);
             } else if (outType == TYPE_INT) {
-                DISPATCH_PARQUET_DATE_NUMERIC_WRITER(Int32Writer, vectorized::Int32Column, int32_t);
+                DISPATCH_PARQUET_DATE_NUMERIC_WRITER(Int32Writer, int32_t);
             } else {
                 auto* col_writer = static_cast<parquet::Int32Writer*>(_rg_writer->column(i));
                 std::vector<int32_t> res(num_rows);
@@ -382,17 +408,26 @@ Status ParquetBuilder::add_chunk(vectorized::Chunk* chunk) {
         }
         case TYPE_DATETIME: {
             ParquetBuilder::_generate_rg_writer();
-            parquet::Int64Writer* col_writer = static_cast<parquet::Int64Writer*>(_rg_writer->column(i));
-            std::vector<uint64_t> res(num_rows);
-            cctz::time_zone ctz;
-            TimezoneUtils::find_cctz_time_zone(TimezoneUtils::default_time_zone, ctz);
-            int64_t offset = TimezoneUtils::to_utc_offset(ctz);
-            for (size_t row_id = 0; row_id < num_rows; row_id++) {
-                res[row_id] = (down_cast<const vectorized::TimestampColumn*>(data_column)->get_data()[row_id].to_unix_second() - offset) * 1000;
+            if (outType == TYPE_VARCHAR || outType == TYPE_CHAR) {
+                DISPATCH_PARQUET_DATETIME_COMPLEX_WRITER(vectorized::TimestampValue);
+            } else if (outType == TYPE_BIGINT) {
+                DISPATCH_PARQUET_DATETIME_INT64_WRITER(Int64Writer, int64_t);
+            } else if (outType == TYPE_INT) {
+                DISPATCH_PARQUET_DATETIME_INT32_WRITER(Int32Writer, int32_t);
+            } else {
+                parquet::Int64Writer* col_writer = static_cast<parquet::Int64Writer*>(_rg_writer->column(i));
+                std::vector<uint64_t> res(num_rows);
+                cctz::time_zone ctz;
+                TimezoneUtils::find_cctz_time_zone(TimezoneUtils::default_time_zone, ctz);
+                int64_t offset = TimezoneUtils::to_utc_offset(ctz);
+                for (size_t row_id = 0; row_id < num_rows; row_id++) {
+                    res[row_id] = (down_cast<const vectorized::TimestampColumn*>(data_column)->get_data()[row_id]
+                                           .to_unix_second() - offset) * 1000;
+                }
+                col_writer->WriteBatch(num_rows, nullable ? def_level.data() : nullptr, nullptr,
+                                       reinterpret_cast<const int64_t*>(res.data()));
+                _buffered_values_estimate[i] = col_writer->EstimatedBufferedValueBytes();
             }
-            col_writer->WriteBatch(num_rows, nullable ? def_level.data() : nullptr, nullptr,
-                                           reinterpret_cast<const int64_t*>(res.data()));
-            _buffered_values_estimate[i] = col_writer->EstimatedBufferedValueBytes();
             break;
         }
         default: {
