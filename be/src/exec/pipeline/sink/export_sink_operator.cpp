@@ -37,10 +37,10 @@ public:
             _parquet_options.compression_type = _t_export_sink.file_options.compression_type;
         }
         if (_t_export_sink.__isset.file_options && _t_export_sink.file_options.__isset.max_file_size_bytes) {
-            _orc_options.max_file_size_bytes = _t_export_sink.file_options.max_file_size_bytes;
+            max_file_size_bytes = _t_export_sink.file_options.max_file_size_bytes;
         }
         if (_t_export_sink.__isset.file_options && _t_export_sink.file_options.__isset.max_file_size_rows) {
-            _orc_options.max_file_size_rows = _t_export_sink.file_options.max_file_size_rows;
+            max_file_size_rows = _t_export_sink.file_options.max_file_size_rows;
         }
         
     }
@@ -65,6 +65,8 @@ private:
     ParquetBuilderOptions _parquet_options;
     ORCBuilderOptions _orc_options;
     size_t _num_rows;
+    int64_t max_file_size_rows = -1;
+    int64_t max_file_size_bytes = -1;
     int64_t _number_written_rows = 0;
     int64_t _number_written_bytes = 0;
 };
@@ -140,8 +142,8 @@ void ExportSinkIOBuffer::_process_chunk(bthread::TaskIterator<ChunkPtr>& iter) {
     }
 
     _number_written_rows += chunkNumRows;
-    if ((_orc_options.max_file_size_rows > 0 && _num_rows >= _orc_options.max_file_size_rows) ||
-        (_orc_options.max_file_size_rows > 0 && _file_builder->file_size() >= _orc_options.max_file_size_rows)) {
+    if ((max_file_size_rows > 0 && _num_rows >= max_file_size_rows) ||
+        (max_file_size_bytes > 0 && _file_builder->file_size() >= max_file_size_bytes)) {
         if (Status status = _file_builder->finish(); !status.ok()) {
             LOG(WARNING) << "finish file build failed, error: " << status.to_string();
             return;

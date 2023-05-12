@@ -10,6 +10,7 @@ import com.google.common.collect.Sets;
 import com.starrocks.analysis.BrokerDesc;
 import com.starrocks.analysis.Delimiter;
 import com.starrocks.analysis.Expr;
+import com.starrocks.analysis.OutFileClause;
 import com.starrocks.analysis.RedirectStatus;
 import com.starrocks.analysis.TableName;
 import com.starrocks.analysis.TableRef;
@@ -20,6 +21,7 @@ import com.starrocks.catalog.Table;
 import com.starrocks.catalog.Type;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Config;
+import com.starrocks.common.util.ParseUtil;
 import com.starrocks.common.util.PrintableMap;
 import com.starrocks.common.util.PropertyAnalyzer;
 import com.starrocks.load.ExportJob;
@@ -412,6 +414,15 @@ public class ExportStmt extends StatementBase {
                 throw new AnalysisException("Invalid file format: " + fileFormatStr);
             }
             this.fileFormat = fileFormatStr.toLowerCase();
+        }
+
+        // check max file size
+        if (properties.containsKey(OutFileClause.PROP_MAX_FILE_SIZE)) {
+            long maxFileSizeBytes = ParseUtil.analyzeDataVolumn(properties.get(OutFileClause.PROP_MAX_FILE_SIZE));
+            if (maxFileSizeBytes > OutFileClause.MAX_FILE_SIZE_BYTES
+                    || maxFileSizeBytes < OutFileClause.MIN_FILE_SIZE_BYTES) {
+                throw new AnalysisException("max file size should between 5MB and 2GB. Given: " + maxFileSizeBytes);
+            }
         }
     }
 

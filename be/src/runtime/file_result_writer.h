@@ -89,7 +89,6 @@ struct ResultFileOptions {
         if (t_opt.__isset.file_options && t_opt.file_options.__isset.compression_type) {
             parquet_options.compression_type = t_opt.file_options.compression_type;
         }
-        orc_options.max_file_size_bytes = max_file_size_bytes;
     }
 
     ~ResultFileOptions() = default;

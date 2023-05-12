@@ -18,6 +18,7 @@ import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.PrimitiveType;
 import com.starrocks.catalog.Table;
 import com.starrocks.catalog.Type;
+import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Config;
 import com.starrocks.common.ErrorCode;
 import com.starrocks.common.ErrorReport;
@@ -122,13 +123,18 @@ public class ExternalTableExportConfig {
                 extDbName = olapTableName.getDb();
             }
         }
-        Table table = GlobalStateMgr.getCurrentState().getMetadataMgr()
-                .getTableWithPrivileges(extCatalogName, extDbName, extTableName.getTbl(),
-                        Arrays.asList("select", "update"));
-        if (table == null) {
-            ErrorReport.reportSemanticException(ErrorCode.ERR_BAD_TABLE_ERROR, extTableName);
+        Table table;
+        try {
+            table = GlobalStateMgr.getCurrentState().getMetadataMgr()
+                    .getTableWithPrivileges(extCatalogName, extDbName, extTableName.getTbl(),
+                            Arrays.asList("select", "update"));
+            if (table == null) {
+                ErrorReport.reportSemanticException(ErrorCode.ERR_BAD_TABLE_ERROR, extTableName);
+            }
+            return table;
+        } catch (AnalysisException e) {
+            throw new SemanticException(e.getMessage());
         }
-        return table;
     }
 
     private boolean getOverwritePartition(Map<String, String> targetProperties) {

@@ -221,6 +221,7 @@ public class ExportExportingTask extends PriorityLeaderTask {
     private Status moveTmpFiles() {
         Set<String> exportedTempFiles = job.getExportedTempFiles();
         String exportPath = job.getExportPath();
+        int fileIndex = 0;
         for (String exportedTempFile : exportedTempFiles) {
             // move exportPath/__starrocks_tmp/file to exportPath/file
             // data_f8d0f324-83b3-11eb-9e09-02425ee98b69_0_0_0.csv.1615609467311
@@ -228,13 +229,18 @@ public class ExportExportingTask extends PriorityLeaderTask {
             // remove timestamp suffix
             // data_f8d0f324-83b3-11eb-9e09-02425ee98b69_0_0_0.csv
             exportedFile = exportedFile.substring(0, exportedFile.lastIndexOf("."));
-            exportedFile = exportPath + exportedFile;
+            // .csv
+            String format = exportedFile.substring(exportedFile.lastIndexOf("."));
+            // data_f8d0f324-83b3-11eb-9e09-02425ee98b69_0_0_0_{$fileIndex}.csv
+            exportedFile = exportPath +
+                    exportedFile.substring(0, exportedFile.lastIndexOf(".")) + "_" + fileIndex + format;
 
             String failMsg = moveFile(job, exportedTempFile, exportedFile);
             if (failMsg != null) {
                 return new Status(TStatusCode.INTERNAL_ERROR, failMsg);
             }
             job.addExportedFile(exportedFile);
+            fileIndex++;
         }
 
         job.clearExportedTempFiles();

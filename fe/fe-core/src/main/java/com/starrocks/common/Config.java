@@ -1401,9 +1401,9 @@ public class Config extends ConfigBase {
     public static String tdw_pri_username = "";
 
     @ConfField
-    public static String supersql_public_url = "qy-qe-nginx-tauth.tencent-distribute.com:11006";
+    public static String supersql_public_url = "";
     @ConfField
-    public static String supersql_proxy_platform = "olap_metadata";
+    public static String supersql_proxy_platform = "";
     @ConfField
     public static String supersql_proxy_platform_key = "";
 

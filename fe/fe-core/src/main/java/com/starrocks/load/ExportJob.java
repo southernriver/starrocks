@@ -418,6 +418,8 @@ public class ExportJob implements Writable {
                 throw new AnalysisException("max file size should between 5MB and 2GB. Given: " + maxFileSizeBytes);
             }
             fileOptions.setMax_file_size_bytes(maxFileSizeBytes);
+        } else {
+            fileOptions.setMax_file_size_bytes(OutFileClause.DEFAULT_MAX_FILE_SIZE_BYTES);
         }
 
         if (properties.containsKey(OutFileClause.PROP_MAX_FILE_ROW)) {

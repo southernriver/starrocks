@@ -143,15 +143,11 @@ public class MetadataMgr {
         return connectorMetadata.map(metadata -> metadata.getTable(dbName, tblName)).orElse(null);
     }
 
-    public Table getTableWithPrivileges(String catalogName, String dbName, String tblName, List<String> privileges) {
+    public Table getTableWithPrivileges(String catalogName, String dbName, String tblName, List<String> privileges)
+            throws AnalysisException {
         if (Config.enable_check_tdw_pri) {
-            try {
-                if (!CatalogMgr.isInternalCatalog(catalogName)) {
-                    TdwUtil.verifyPrivileges(dbName, tblName, privileges);
-                }
-            } catch (AnalysisException e) {
-                LOG.error(e.getMessage());
-                return null;
+            if (!CatalogMgr.isInternalCatalog(catalogName)) {
+                TdwUtil.verifyPrivileges(dbName, tblName, privileges);
             }
         }
         Optional<ConnectorMetadata> connectorMetadata = getOptionalMetadata(catalogName);
@@ -164,7 +160,12 @@ public class MetadataMgr {
     }
 
     public Table getTable(String catalogName, String dbName, String tblName) {
-        return getTableWithPrivileges(catalogName, dbName, tblName, Collections.singletonList("select"));
+        try {
+            return getTableWithPrivileges(catalogName, dbName, tblName, Collections.singletonList("select"));
+        } catch (AnalysisException e) {
+            LOG.error(e.getMessage());
+            return null;
+        }
     }
 
     public Statistics getTableStatistics(OptimizerContext session,

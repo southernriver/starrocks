@@ -26,9 +26,7 @@ class ExprContext;
 class FileWriter;
 
 struct ORCBuilderOptions {
-    uint64_t stripe_size{128 * 1024 * 1024};
-    uint64_t max_file_size_bytes{128 * 1024 * 1024};
-    uint64_t max_file_size_rows{0};
+    uint64_t stripe_size{64 * 1024 * 1024};
     uint64_t compression_block_size{64 * 1024};
     orc::CompressionKind compression_kind{orc::CompressionKind_ZLIB};
     orc::CompressionStrategy compression_strategy{orc::CompressionStrategy_SPEED};
