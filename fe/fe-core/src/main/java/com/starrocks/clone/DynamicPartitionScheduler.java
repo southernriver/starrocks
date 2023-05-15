@@ -377,16 +377,16 @@ public class DynamicPartitionScheduler extends LeaderDaemon {
             }
 
             for (DropPartitionClause dropPartitionClause : dropPartitionClauses) {
+                if (shouldColddown(olapTable, dropPartitionClause.getPartition())) {
+                    LOG.info("partition " + olapTable.getName() + ":" + dropPartitionClause.getPartitionName() +
+                            " is submitted to colddown job, ignore dropping partition");
+                    continue;
+                }
                 if (!db.writeLockAndCheckExist()) {
                     LOG.warn("db: {}({}) has been dropped, skip", db.getFullName(), db.getId());
                     continue OUTER;
                 }
                 try {
-                    if (shouldColddown(olapTable, dropPartitionClause.getPartition())) {
-                        LOG.info("partition " + olapTable.getName() + ":" + dropPartitionClause.getPartitionName() +
-                                " is submitted to colddown job, ignore dropping partition");
-                        continue;
-                    }
                     GlobalStateMgr.getCurrentState().dropPartition(db, olapTable, dropPartitionClause);
                     clearDropPartitionFailedMsg(tableName);
                 } catch (DdlException e) {

@@ -65,7 +65,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class ColddownJob implements Writable {
     private static final Logger LOG = LogManager.getLogger(ColddownJob.class);
@@ -87,7 +86,6 @@ public class ColddownJob implements Writable {
     private ExportFailMsg failMsg;
     private String type;
     private Map<Long, Pair<ExportJob, Boolean>> runningExportJobs;
-    private ReentrantReadWriteLock lock;
     private AtomicLong totalExportedRows;
     private AtomicLong totalExportedBytes;
     private long totalSuccessExportJobs;
@@ -102,7 +100,6 @@ public class ColddownJob implements Writable {
         this.createTimeMs = System.currentTimeMillis();
         this.finishTimeMs = -1;
         this.failMsg = new ExportFailMsg(ExportFailMsg.CancelType.UNKNOWN, "");
-        lock = new ReentrantReadWriteLock();
     }
 
     public ColddownJob(long jobId, String name) {
@@ -112,7 +109,6 @@ public class ColddownJob implements Writable {
     }
 
     public void setJob(CreateColddownStmt stmt) throws UserException {
-        lock = new ReentrantReadWriteLock();
         String dbName = stmt.getTblName().getDb();
         Database db = GlobalStateMgr.getCurrentState().getDb(dbName);
         if (db == null) {
@@ -445,10 +441,18 @@ public class ColddownJob implements Writable {
         ExportStmtAnalyzer.ExportAnalyzerVisitor.visitExportStatement(exportStmt, GlobalStateMgr.getCurrentState(),
                 MetaUtils.getTable(tableName));
         UUID queryId = UUID.randomUUID();
-        ExportJob exportJob = GlobalStateMgr.getCurrentState().getExportMgr().addExportJob(queryId, exportStmt);
-        exportJob.setTotalExportedRowCount(totalExportedRows);
-        exportJob.setTotalExportedBytesCount(totalExportedBytes);
-        runningExportJobs.put(partition.getId(), Pair.create(exportJob, triggeredByTtl));
+
+        // lock to ensure runningExportJobs can be judged correctly
+        synchronized (this) {
+            Pair<ExportJob, Boolean> runningExportJob = runningExportJobs.get(partition.getId());
+            if (runningExportJob != null) {
+                return;
+            }
+            ExportJob exportJob = GlobalStateMgr.getCurrentState().getExportMgr().addExportJob(queryId, exportStmt);
+            exportJob.setTotalExportedRowCount(totalExportedRows);
+            exportJob.setTotalExportedBytesCount(totalExportedBytes);
+            runningExportJobs.put(partition.getId(), Pair.create(exportJob, triggeredByTtl));
+        }
     }
 
     private void colddownPartitions() throws Exception {
@@ -494,74 +498,68 @@ public class ColddownJob implements Writable {
                                             boolean ignoreFailureCount)
             throws Exception {
         ColddownMgr colddownMgr = GlobalStateMgr.getCurrentState().getColddownMgr();
-        // lock to ensure runningExportJobs can be judged correctly
-        lock.writeLock().lock();
-        try {
-            Pair<ExportJob, Boolean> runningExportJob = runningExportJobs.get(partition.getId());
-            // TODO: if partition is changed after last export job submitted,
-            //  should we cancel last one and submit new one if it is not triggered by ttl?
-            if (runningExportJob != null) {
-                return true;
-            }
-            if (partition.getVisibleVersion() == Partition.PARTITION_INIT_VERSION) {
-                LOG.debug("partition[{}]'s is init version. ignore", partition.getId());
-                return false;
-            }
-            // check if this partition has changed since last colddown
-            List<PartitionColddownInfo> partitionColddownInfos =
-                    colddownMgr.getPartitionColddownInfos(partition.getId(), name);
-            if (!partitionColddownInfos.isEmpty()) {
-                long lastSuccessSync = 0;
-                for (PartitionColddownInfo info : partitionColddownInfos) {
-                    if (info.isSuccess()) {
-                        lastSuccessSync = Math.max(lastSuccessSync, info.getSyncedTimeMs());
-                        // if it is triggered by ttl, new data changed after ttl triggered can be ignored,
-                        // so do not submit.
-                        if (info.isTriggeredByTtl()) {
-                            return false;
-                        }
-                        // synced time is when the export job started, so this if means data is not changed after last job
-                        if (info.getSyncedTimeMs() > partition.getVisibleVersionTime()) {
-                            return false;
-                        }
-                    }
-                }
-                if (!ignoreFailureCount) {
-                    // need to submit new export job now, if too many failures, do not submit new export job
-                    // because something must be wrong, should fix it first and use manual colddown command
-                    int failCountInTwoDays = 0;
-                    long twoDays = 2 * 86400 * 1000L;
-                    for (PartitionColddownInfo info : partitionColddownInfos) {
-                        if (!info.isSuccess()) {
-                            // count failures after last success
-                            if (info.getSyncedTimeMs() > lastSuccessSync &&
-                                    System.currentTimeMillis() - info.getSyncedTimeMs() <= twoDays) {
-                                failCountInTwoDays++;
-                            }
-                        }
-                    }
-                    // 3 fails in 2 days,
-                    if (failCountInTwoDays >= 3) {
-                        LOG.info("partition {} of colddown job {} reaches 3 failures in two days, ignore this" +
-                                        " partition. Please use manual colddown command after fix the problem ",
-                                partition.getName(), name);
-                        return true;
-                    }
-                }
-            }
-
-            long coldDownWaitMillis = getColddownWaitSeconds() * 1000;
-            if (triggeredByTtl) {
-                submitExportJob(partition, true);
-            } else if (!checkStable) {
-                submitExportJob(partition, false);
-            } else if (System.currentTimeMillis() - partition.getVisibleVersionTime() > coldDownWaitMillis) {
-                submitExportJob(partition, false);
-            }
+        Pair<ExportJob, Boolean> runningExportJob = runningExportJobs.get(partition.getId());
+        // TODO: if partition is changed after last export job submitted,
+        //  should we cancel last one and submit new one if it is not triggered by ttl?
+        if (runningExportJob != null) {
             return true;
-        } finally {
-            lock.writeLock().unlock();
         }
+        if (partition.getVisibleVersion() == Partition.PARTITION_INIT_VERSION) {
+            LOG.debug("partition[{}]'s is init version. ignore", partition.getId());
+            return false;
+        }
+        // check if this partition has changed since last colddown
+        List<PartitionColddownInfo> partitionColddownInfos =
+                colddownMgr.getPartitionColddownInfos(partition.getId(), name);
+        if (!partitionColddownInfos.isEmpty()) {
+            long lastSuccessSync = 0;
+            for (PartitionColddownInfo info : partitionColddownInfos) {
+                if (info.isSuccess()) {
+                    lastSuccessSync = Math.max(lastSuccessSync, info.getSyncedTimeMs());
+                    // if it is triggered by ttl, new data changed after ttl triggered can be ignored,
+                    // so do not submit.
+                    if (info.isTriggeredByTtl()) {
+                        return false;
+                    }
+                    // synced time is when the export job started, so this if means data is not changed after last job
+                    if (info.getSyncedTimeMs() > partition.getVisibleVersionTime()) {
+                        return false;
+                    }
+                }
+            }
+            if (!ignoreFailureCount) {
+                // need to submit new export job now, if too many failures, do not submit new export job
+                // because something must be wrong, should fix it first and use manual colddown command
+                int failCountInTwoDays = 0;
+                long twoDays = 2 * 86400 * 1000L;
+                for (PartitionColddownInfo info : partitionColddownInfos) {
+                    if (!info.isSuccess()) {
+                        // count failures after last success
+                        if (info.getSyncedTimeMs() > lastSuccessSync &&
+                                System.currentTimeMillis() - info.getSyncedTimeMs() <= twoDays) {
+                            failCountInTwoDays++;
+                        }
+                    }
+                }
+                // 3 fails in 2 days,
+                if (failCountInTwoDays >= 3) {
+                    LOG.info("partition {} of colddown job {} reaches 3 failures in two days, ignore this" +
+                                    " partition. Please use manual colddown command after fix the problem ",
+                            partition.getName(), name);
+                    return true;
+                }
+            }
+        }
+
+        long coldDownWaitMillis = getColddownWaitSeconds() * 1000;
+        if (triggeredByTtl) {
+            submitExportJob(partition, true);
+        } else if (!checkStable) {
+            submitExportJob(partition, false);
+        } else if (System.currentTimeMillis() - partition.getVisibleVersionTime() > coldDownWaitMillis) {
+            submitExportJob(partition, false);
+        }
+        return true;
     }
 
     @Override
