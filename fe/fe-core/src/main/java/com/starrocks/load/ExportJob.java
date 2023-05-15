@@ -424,6 +424,8 @@ public class ExportJob implements Writable {
 
         if (properties.containsKey(OutFileClause.PROP_MAX_FILE_ROW)) {
             fileOptions.setMax_file_size_rows(Long.parseLong(properties.get(OutFileClause.PROP_MAX_FILE_ROW)));
+        } else {
+            fileOptions.setMax_file_size_rows(OutFileClause.DEFAULT_MAX_FILE_SIZE_ROWS);
         }
         List<Type> exportColumnTypes = createExportTypes();
         fragment.setSink(new ExportSink(exportTempPath, fileNamePrefix + taskIdx + "_", columnSeparator,
@@ -575,6 +577,15 @@ public class ExportJob implements Writable {
         } else {
             return Config.export_default_load_mem_per_task;
         }
+    }
+
+    public String getMaxFileSize() {
+        return properties.getOrDefault(OutFileClause.PROP_MAX_FILE_SIZE,
+                OutFileClause.DEFAULT_MAX_FILE_SIZE_BYTES + "B");
+    }
+
+    public String getMaxFileRow() {
+        return properties.getOrDefault(OutFileClause.PROP_MAX_FILE_ROW, "" + OutFileClause.DEFAULT_MAX_FILE_SIZE_ROWS);
     }
 
     public int getTimeoutSecond() {
@@ -884,7 +895,7 @@ public class ExportJob implements Writable {
                 + ", path=" + exportPath
                 + ", format=" + fileFormat
                 + ", partitions=(" + StringUtils.join(partitions, ",") + ")"
-                + ", where " + getWhereSql()
+                + ", where=" + getWhereSql()
                 + ", progress=" + progress
                 + ", createTimeMs=" + TimeUtils.longToTimeString(createTimeMs)
                 + ", exportStartTimeMs=" + TimeUtils.longToTimeString(startTimeMs)

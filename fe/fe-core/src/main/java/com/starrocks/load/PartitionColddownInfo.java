@@ -22,6 +22,7 @@ package com.starrocks.load;
 import com.google.gson.Gson;
 import com.starrocks.common.io.Text;
 import com.starrocks.common.io.Writable;
+import org.joda.time.format.ISODateTimeFormat;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -114,7 +115,7 @@ public class PartitionColddownInfo implements Writable {
         result.put("jobName", jobName);
         result.put("success", success);
         result.put("triggeredByTtl", triggeredByTtl);
-        result.put("syncedTimeMs", syncedTimeMs);
+        result.put("syncedTimeMs", ISODateTimeFormat.dateTime().print(syncedTimeMs));
         result.put("exportedRowCount", exportedRowCount);
         return new Gson().toJson(result);
     }

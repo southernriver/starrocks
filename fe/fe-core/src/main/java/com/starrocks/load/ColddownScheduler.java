@@ -94,6 +94,18 @@ public class ColddownScheduler extends LeaderDaemon {
         }
     }
 
+    // reload work time, so that it can be config at runtime
+    private void reloadWorkTime() {
+        Date startDate = TimeUtils.getTimeAsDate(Config.cold_down_check_start_time);
+        Date endDate = TimeUtils.getTimeAsDate(Config.cold_down_check_end_time);
+
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTime(startDate);
+        startTime = calendar.get(Calendar.HOUR_OF_DAY);
+        calendar.setTime(endDate);
+        endTime = calendar.get(Calendar.HOUR_OF_DAY);
+    }
+
     private boolean initWorkTime() {
         Date startDate = TimeUtils.getTimeAsDate(Config.cold_down_check_start_time);
         Date endDate = TimeUtils.getTimeAsDate(Config.cold_down_check_end_time);
@@ -102,13 +114,7 @@ public class ColddownScheduler extends LeaderDaemon {
             return false;
         }
 
-        Calendar calendar = Calendar.getInstance();
-
-        calendar.setTime(startDate);
-        startTime = calendar.get(Calendar.HOUR_OF_DAY);
-
-        calendar.setTime(endDate);
-        endTime = calendar.get(Calendar.HOUR_OF_DAY);
+        reloadWorkTime();
         return true;
     }
 
@@ -116,6 +122,7 @@ public class ColddownScheduler extends LeaderDaemon {
      * check if it's time to do colddown
      */
     private boolean itsTime() {
+        reloadWorkTime();
         if (startTime == endTime) {
             return false;
         }

@@ -433,7 +433,8 @@ public class ColddownJob implements Writable {
         colddownPartitions();
     }
 
-    private void submitExportJob(Partition partition, boolean triggeredByTtl) throws Exception {
+    private void submitExportJob(Partition partition, boolean triggeredByTtl, Map<String, String> properties)
+            throws Exception {
         TableRef tableRef = new TableRef(tableName, null, new PartitionNames(false,
                 Collections.singletonList(partition.getName())));
         ExportStmt exportStmt =
@@ -467,11 +468,11 @@ public class ColddownJob implements Writable {
         }
         for (Map.Entry<Long, Range<PartitionKey>> entry : partitions) {
             Partition partition = table.getPartition(entry.getKey());
-            submitColddownPartition(partition, false, true, false);
+            submitColddownPartition(partition, false, true, false, properties);
         }
     }
 
-    public boolean submitColddownPartition(String partition) throws Exception {
+    public boolean submitColddownPartition(String partition, Map<String, String> properties) throws Exception {
         OlapTable table = (OlapTable) MetaUtils.getTable(dbId, tableId);
         Partition p = table.getPartition(partition);
         if (p == null) {
@@ -481,21 +482,21 @@ public class ColddownJob implements Writable {
         if (runningExportJob != null) {
             return false;
         }
-        return submitColddownPartition(p, false, false, true);
+        return submitColddownPartition(p, false, false, true, properties);
     }
 
     /**
      * return false only if no need to colddown
      */
     public boolean submitColddownPartitionFromTtl(Partition partition) throws Exception {
-        return submitColddownPartition(partition, true, false, false);
+        return submitColddownPartition(partition, true, false, false, properties);
     }
 
     /**
      * return false only if no need to colddown
      */
     private boolean submitColddownPartition(Partition partition, boolean triggeredByTtl, boolean checkStable,
-                                            boolean ignoreFailureCount)
+                                            boolean ignoreFailureCount, Map<String, String> properties)
             throws Exception {
         ColddownMgr colddownMgr = GlobalStateMgr.getCurrentState().getColddownMgr();
         Pair<ExportJob, Boolean> runningExportJob = runningExportJobs.get(partition.getId());
@@ -553,11 +554,11 @@ public class ColddownJob implements Writable {
 
         long coldDownWaitMillis = getColddownWaitSeconds() * 1000;
         if (triggeredByTtl) {
-            submitExportJob(partition, true);
+            submitExportJob(partition, true, properties);
         } else if (!checkStable) {
-            submitExportJob(partition, false);
+            submitExportJob(partition, false, properties);
         } else if (System.currentTimeMillis() - partition.getVisibleVersionTime() > coldDownWaitMillis) {
-            submitExportJob(partition, false);
+            submitExportJob(partition, false, properties);
         }
         return true;
     }

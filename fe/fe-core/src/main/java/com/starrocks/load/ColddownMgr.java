@@ -266,7 +266,12 @@ public class ColddownMgr {
         }
 
         try {
-            if (!matchedJob.submitColddownPartition(stmt.getPartition())) {
+            Map<String, String> newProperties = matchedJob.getProperties();
+            if (!stmt.getProperties().isEmpty()) {
+                newProperties = new HashMap<>(matchedJob.getProperties());
+                newProperties.putAll(stmt.getProperties());
+            }
+            if (!matchedJob.submitColddownPartition(stmt.getPartition(), newProperties)) {
                 throw new UserException("this partition has no change or is exporting now or has no data, ignore");
             }
         } catch (UserException e) {

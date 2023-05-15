@@ -107,11 +107,15 @@ public class ExportStmtAnalyzer {
                     throw new SemanticException("failed to get alive broker");
                 }
             } else {
-                if (Strings.isNullOrEmpty(brokerDesc.getProperties().get(HdfsFsManager.USER_NAME_KEY))) {
-                    String user = Config.enable_check_tdw_pri ? TdwUtil.getCurrentTdwUserName() :
-                            ConnectContext.get().getQualifiedUser();
-                    if (user != null) {
+                String user = Config.enable_check_tdw_pri ? TdwUtil.getCurrentTdwUserName() :
+                        (ConnectContext.get() == null ? null : ConnectContext.get().getQualifiedUser());
+                String userInBroker = brokerDesc.getProperties().get(HdfsFsManager.USER_NAME_KEY);
+                if (user != null) {
+                    if (Strings.isNullOrEmpty(userInBroker)) {
                         brokerDesc.getProperties().put(HdfsFsManager.USER_NAME_KEY, user);
+                    } else if (!userInBroker.equals(user) && !"root".equals(ConnectContext.get().getQualifiedUser())) {
+                        throw new SemanticException("username in broker should be equal to current logged in user: " +
+                                ConnectContext.get().getQualifiedUser());
                     }
                 }
             }

@@ -2,7 +2,10 @@
 
 package com.starrocks.sql.ast;
 
+import com.google.gson.Gson;
 import com.starrocks.analysis.RedirectStatus;
+
+import java.util.Map;
 
 //
 // syntax:
@@ -12,11 +15,13 @@ public class ManualColddownStmt extends StatementBase {
     private String dbName;
     private final String partition;
     private final String jobName;
+    private final Map<String, String> properties;
 
-    public ManualColddownStmt(String partition, String jobName) {
+    public ManualColddownStmt(String partition, String jobName, Map<String, String> properties) {
         super();
         this.partition = partition;
         this.jobName = jobName;
+        this.properties = properties;
     }
 
     public String getDbName() {
@@ -35,9 +40,17 @@ public class ManualColddownStmt extends StatementBase {
         return jobName;
     }
 
+    public Map<String, String> getProperties() {
+        return properties;
+    }
+
     @Override
     public String toSql() {
-        return "MANUAL COLDDOWN PARTITION " + partition + " WITH JOB " + jobName;
+        String sql = "MANUAL COLDDOWN PARTITION " + partition + " WITH JOB " + jobName;
+        if (!properties.isEmpty()) {
+            return sql + " PROPERTIES (" + new Gson().toJson(properties) + ")";
+        }
+        return sql;
     }
 
     @Override

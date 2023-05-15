@@ -2655,7 +2655,8 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
     public ParseNode visitManualColddownStatement(StarRocksParser.ManualColddownStatementContext context) {
         String partition = ((Identifier) visit(context.partition)).getValue();
         String name = ((Identifier) visit(context.name)).getValue();
-        return new ManualColddownStmt(partition, name);
+        Map<String, String> properties = getProperties(context.properties());
+        return new ManualColddownStmt(partition, name, properties);
     }
 
     // ------------------------------------------------- Plugin Statement --------------------------------------------------------

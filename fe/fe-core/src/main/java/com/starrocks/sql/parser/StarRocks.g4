@@ -1404,7 +1404,7 @@ showColddownStatement
     ;
 
 manualColddownStatement
-    : MANUAL COLDDOWN PARTITION partition=identifier WITH JOB name=identifier
+    : MANUAL COLDDOWN PARTITION partition=identifier WITH JOB name=identifier properties?
     ;
 
 // ------------------------------------------- Plugin Statement --------------------------------------------------------

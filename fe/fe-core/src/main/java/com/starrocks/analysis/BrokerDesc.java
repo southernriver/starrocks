@@ -22,6 +22,7 @@ import com.starrocks.common.io.Text;
 import com.starrocks.common.io.Writable;
 import com.starrocks.common.util.PrintableMap;
 import com.starrocks.sql.ast.LoadStmt;
+import org.apache.commons.lang3.StringUtils;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -46,7 +47,7 @@ public class BrokerDesc implements Writable {
     }
 
     public BrokerDesc(String name, Map<String, String> properties) {
-        this.hasBroker = true;
+        this.hasBroker = !StringUtils.isEmpty(name);
         this.name = name;
         this.properties = properties;
         if (this.properties == null) {

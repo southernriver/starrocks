@@ -66,6 +66,7 @@ public class OutFileClause implements ParseNode {
     public static final String PARQUET_USE_DICT = "use_dictionary";
     public static final String PARQUET_MAX_ROW_GROUP_SIZE = "max_row_group_bytes";
 
+    public static final long DEFAULT_MAX_FILE_SIZE_ROWS = 5000000;
     public static final long DEFAULT_MAX_FILE_SIZE_BYTES = 1024 * 1024 * 1024L; // 1GB
     public static final long MIN_FILE_SIZE_BYTES = 5 * 1024 * 1024L; // 5MB
     public static final long MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024 * 1024L; // 2GB
