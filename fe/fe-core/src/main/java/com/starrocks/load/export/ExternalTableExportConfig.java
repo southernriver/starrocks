@@ -22,6 +22,7 @@ import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Config;
 import com.starrocks.common.ErrorCode;
 import com.starrocks.common.ErrorReport;
+import com.starrocks.common.Pair;
 import com.starrocks.common.UserException;
 import com.starrocks.connector.ConnectorMetadata;
 import com.starrocks.connector.exception.StarRocksConnectorException;
@@ -57,6 +58,7 @@ import java.net.URLDecoder;
 import java.security.PrivilegedExceptionAction;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -64,6 +66,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.Future;
 import java.util.function.Function;
 
 public class ExternalTableExportConfig {
@@ -398,7 +401,7 @@ public class ExternalTableExportConfig {
     private void prepareForIceberg(IcebergTable icebergTable, String partition, String targetPartitionName) {
         path = icebergTable.getTableLocation() + "/data" + targetPartitionName;
         beforeFinishFunction = job -> {
-            Set<String> files = job.getExportedFiles();
+            List<String> files = new ArrayList<>(job.getExportedFiles());
             if (files.isEmpty()) {
                 throw new StarRocksConnectorException("no data in partition: %s", partition);
             }
@@ -415,27 +418,37 @@ public class ExternalTableExportConfig {
                 String msg = String.format("failed to get FileSystem from path %s", path);
                 throw new StarRocksConnectorException(msg, e);
             }
+            List<Future<Pair<Metrics, Long>>> futures = Lists.newArrayListWithExpectedSize(files.size());
             for (String filePath : files) {
                 HadoopInputFile inputFile = HadoopInputFile.fromLocation(filePath, fileSystem.getDFSFileSystem());
-                Metrics metrics = null;
-                try {
-                    if ("orc".equalsIgnoreCase(job.getFileFormat())) {
-                        metrics = OrcMetrics.fromInputFile(inputFile, MetricsConfig.getDefault(), nameMapping);
-                    } else if ("parquet".equalsIgnoreCase(job.getFileFormat())) {
-                        metrics = ParquetUtil.fileMetrics(inputFile, MetricsConfig.getDefault(), nameMapping);
+                futures.add(job.getIoExec().submit(() -> {
+                    for (int i = 0; i < ExportExportingTask.RETRY_NUM; ++i) {
+                        try {
+                            Metrics metrics = null;
+                            if ("orc".equalsIgnoreCase(job.getFileFormat())) {
+                                metrics = OrcMetrics.fromInputFile(inputFile, MetricsConfig.getDefault(), nameMapping);
+                            } else if ("parquet".equalsIgnoreCase(job.getFileFormat())) {
+                                metrics = ParquetUtil.fileMetrics(inputFile, MetricsConfig.getDefault(), nameMapping);
+                            }
+                            return Pair.create(metrics, inputFile.getLength());
+                        } catch (Throwable t) {
+                            LOG.warn(String.format("failed to build metrics from path: %s at try %d", inputFile, i), t);
+                        }
                     }
-                } catch (Throwable e) {
-                    LOG.error("failed to open reader for " + filePath, e);
-                    throw new StarRocksConnectorException("failed to open reader for " + filePath, e);
-                }
+                    throw new AnalysisException(String.format("failed to build metrics from path: %s", inputFile));
+                }));
+            }
+            for (int i = 0; i < files.size(); i++) {
+                String filePath = files.get(i);
                 try {
+                    Pair<Metrics, Long> pair = futures.get(i).get();
                     PartitionKey partitionKey = new PartitionKey(partitionSpec, table.schema());
                     fillFromPath(partitionSpec, removeSlash(targetPartitionName), partitionKey);
                     DataFile file = DataFiles.builder(partitionSpec)
                             .withPath(filePath)
                             .withFormat(FileFormat.fromFileName(filePath))
-                            .withMetrics(metrics)
-                            .withFileSizeInBytes(inputFile.getLength())
+                            .withMetrics(pair.first)
+                            .withFileSizeInBytes(pair.second)
                             .withPartition(partitionKey)
                             .build();
                     replacePartitions.addFile(file);
@@ -444,20 +457,24 @@ public class ExternalTableExportConfig {
                     throw new StarRocksConnectorException("failed to add file to iceberg " + filePath, e);
                 }
             }
-            try {
-                if (fileSystem.getUgi() != null) {
-                    fileSystem.getUgi().doAs((PrivilegedExceptionAction<Void>) () -> {
+            for (int i = 0; i < ExportExportingTask.RETRY_NUM; ++i) {
+                try {
+                    if (fileSystem.getUgi() != null) {
+                        fileSystem.getUgi().doAs((PrivilegedExceptionAction<Void>) () -> {
+                            replacePartitions.commit();
+                            return null;
+                        });
+                    } else {
                         replacePartitions.commit();
-                        return null;
-                    });
-                } else {
-                    replacePartitions.commit();
+                    }
+                    LOG.info("commit iceberg partition replace {} from {} to iceberg table {}.{} success", partition,
+                            olapTableName.toString(), icebergTable.getDb(), icebergTable.getName());
+                    return null;
+                } catch (Exception e) {
+                    LOG.error("commit iceberg partition replace " + partition + " failed at try " + i, e);
                 }
-            } catch (Exception e) {
-                LOG.error("commit iceberg partition replace " + partition + "failed", e);
-                throw new StarRocksConnectorException("commit iceberg partition replace " + partition + "failed", e);
             }
-            return null;
+            throw new StarRocksConnectorException("commit iceberg partition replace " + partition + "failed");
         };
     }
 

@@ -48,11 +48,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 public class ExportExportingTask extends PriorityLeaderTask {
     private static final Logger LOG = LogManager.getLogger(ExportExportingTask.class);
-    private static final int RETRY_NUM = 2;
+    public static final int RETRY_NUM = 2;
 
     protected final ExportJob job;
 
@@ -221,6 +223,7 @@ public class ExportExportingTask extends PriorityLeaderTask {
     private Status moveTmpFiles() {
         Set<String> exportedTempFiles = job.getExportedTempFiles();
         String exportPath = job.getExportPath();
+        List<Future<Status>> futures = Lists.newArrayListWithExpectedSize(exportedTempFiles.size());
         int fileIndex = 0;
         for (String exportedTempFile : exportedTempFiles) {
             // move exportPath/__starrocks_tmp/file to exportPath/file
@@ -235,12 +238,26 @@ public class ExportExportingTask extends PriorityLeaderTask {
             exportedFile = exportPath +
                     exportedFile.substring(0, exportedFile.lastIndexOf(".")) + "_" + fileIndex + format;
 
-            String failMsg = moveFile(job, exportedTempFile, exportedFile);
-            if (failMsg != null) {
-                return new Status(TStatusCode.INTERNAL_ERROR, failMsg);
-            }
-            job.addExportedFile(exportedFile);
+            String finalExportedFile = exportedFile;
+            futures.add(job.getIoExec().submit(() -> {
+                String failMsg = moveFile(job, exportedTempFile, finalExportedFile);
+                if (failMsg != null) {
+                    return new Status(TStatusCode.INTERNAL_ERROR, failMsg);
+                }
+                job.addExportedFile(finalExportedFile);
+                return null;
+            }));
             fileIndex++;
+        }
+        try {
+            for (Future<Status> statusFuture : futures) {
+                Status status = statusFuture.get();
+                if (status != null && !status.ok()) {
+                    return status;
+                }
+            }
+        } catch (ExecutionException | InterruptedException e) {
+            return new Status(TStatusCode.INTERNAL_ERROR, e.getMessage());
         }
 
         job.clearExportedTempFiles();

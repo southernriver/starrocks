@@ -26,6 +26,7 @@ import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.starrocks.analysis.Analyzer;
 import com.starrocks.analysis.BaseTableRef;
 import com.starrocks.analysis.BrokerDesc;
@@ -106,6 +107,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
@@ -119,6 +122,8 @@ import java.util.function.Function;
 // <prefix>_<query-id>_<task-number>_<instance-number>_<file-number>.csv
 public class ExportJob implements Writable {
     private static final Logger LOG = LogManager.getLogger(ExportJob.class);
+    private static final ExecutorService EXECUTOR_SERVICE = Executors.newCachedThreadPool(
+            new ThreadFactoryBuilder().setDaemon(true).setNameFormat("export-io").build());
     // descriptor used to register all column and table need
     private final DescriptorTable desc;
     private final Set<String> exportedTempFiles = Sets.newConcurrentHashSet();
@@ -247,6 +252,10 @@ public class ExportJob implements Writable {
         }
 
         this.sql = stmt.toSql();
+    }
+
+    public ExecutorService getIoExec() {
+        return EXECUTOR_SERVICE;
     }
 
     private void genExecFragment(ExportStmt stmt) throws UserException {

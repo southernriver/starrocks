@@ -648,7 +648,9 @@ public final class MetricRepo {
         collectIcebergRoutineLoadProcessMetrics(visitor);
 
         // colddown metrics
-        collectColddownMetrics(visitor);
+        if (GlobalStateMgr.getCurrentState().isLeader()) {
+            collectColddownMetrics(visitor);
+        }
 
         // node info
         visitor.getNodeInfo();
