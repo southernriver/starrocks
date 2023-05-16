@@ -306,6 +306,8 @@ CONF_mInt64(min_compaction_failure_interval_sec, "120"); // 2 min
 
 CONF_mInt64(min_cumulative_compaction_failure_interval_sec, "30"); // 30s
 
+CONF_mInt64(max_rowset_bytes_for_size_tiered_compaction, "10737418240"); // 10G
+
 // Too many compaction tasks may run out of memory.
 // This config is to limit the max concurrency of running compaction tasks.
 // -1 means no limit, and the max concurrency will be:

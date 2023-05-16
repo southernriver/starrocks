@@ -228,10 +228,25 @@ Status SizeTieredCompactionPolicy::_pick_rowsets_to_size_tiered_compact(bool for
                     continue;
                 }
             }
-        } else if ((!force_base_compaction ||
-                    (!transient_rowsets.empty() && transient_rowsets[0]->start_version() != 0)) &&
-                   level_size > config::size_tiered_min_level_size && rowset_size < level_size &&
-                   level_size / rowset_size > (level_multiple - 1)) {
+        } else if (!force_base_compaction && rowset_size >= config::max_rowset_bytes_for_size_tiered_compaction) {
+            // meet a rowset larger than config::max_rowset_bytes_for_size_tiered_compaction
+            if (!transient_rowsets.empty()) {
+                auto level = std::make_unique<SizeTieredLevel>(
+                        transient_rowsets, segment_num, level_size, total_size,
+                        _cal_compaction_score(segment_num, level_size, total_size, keys_type, reached_max_version));
+                priority_levels.emplace(level.get());
+                order_levels.emplace_back(std::move(level));
+            }
+            segment_num = 0;
+            transient_rowsets.clear();
+            total_size = 0;
+            level_size = -1;
+            prev_end_version = rowset->end_version();
+            continue;
+        } else if (!force_base_compaction &&
+                   ((level_size > config::size_tiered_min_level_size && rowset_size < level_size &&
+                     level_size / rowset_size > (level_multiple - 1)) ||
+                    total_size >= config::max_rowset_bytes_for_size_tiered_compaction)) {
             if (!transient_rowsets.empty()) {
                 auto level = std::make_unique<SizeTieredLevel>(
                         transient_rowsets, segment_num, level_size, total_size,
