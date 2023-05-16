@@ -285,6 +285,8 @@ protected:
         return out.str();
     }
 
+    bool _enable_hive_mode = false;
+
 private:
     // Create a new vectorized expr
     static Status create_vectorized_expr(ObjectPool* pool, const TExprNode& texpr_node, Expr** expr);

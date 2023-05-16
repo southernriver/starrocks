@@ -351,6 +351,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String SQL_QUOTE_SHOW_CREATE = "sql_quote_show_create";
 
+    public static final String ENABLE_HIVE_MODE = "enable_hive_mode";
+
     public static final List<String> DEPRECATED_VARIABLES = ImmutableList.<String>builder()
             .add(CODEGEN_LEVEL)
             .add(ENABLE_SPILLING)
@@ -870,6 +872,9 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VariableMgr.VarAttr(name = HDFS_BACKEND_SELECTOR_SCAN_RANGE_SHUFFLE, flag = VariableMgr.INVISIBLE)
     private boolean hdfsBackendSelectorScanRangeShuffle = false;
+
+    @VariableMgr.VarAttr(name = ENABLE_HIVE_MODE)
+    private boolean enableHiveMode = false;
 
     public void setFullSortMaxBufferedRows(long v) {
         fullSortMaxBufferedRows = v;
@@ -1649,6 +1654,10 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
         return hdfsBackendSelectorScanRangeShuffle;
     }
 
+    public void setHiveMode(boolean enableHiveMode) {
+        this.enableHiveMode = enableHiveMode;
+    }
+
     // Serialize to thrift object
     // used for rest api
     public TQueryOptions toThrift() {
@@ -1726,6 +1735,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
         tResult.setUse_scan_block_cache(useScanBlockCache);
         tResult.setEnable_populate_block_cache(enablePopulateBlockCache);
         tResult.setHudi_mor_force_jni_reader(hudiMORForceJNIReader);
+        tResult.setEnable_hive_mode(enableHiveMode);
         return tResult;
     }
 

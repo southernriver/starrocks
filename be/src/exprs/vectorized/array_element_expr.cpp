@@ -33,7 +33,12 @@ public:
         DCHECK_EQ(num_rows, arg1->size());
         DCHECK_EQ(num_rows + 1, array_column->offsets_column()->size());
 
-        const int32_t* subscripts = down_cast<Int32Column*>(get_data_column(arg1.get()))->get_data().data();
+        int32_t* subscripts = down_cast<Int32Column*>(get_data_column(arg1.get()))->get_data().data();
+		if (_enable_hive_mode) {
+			for (size_t i = 0; i < num_rows; i++) {
+				subscripts[i] += 1;
+			}
+		}
         const uint32_t* offsets = array_column->offsets_column()->get_data().data();
 
         std::vector<uint8_t> null_flags;
