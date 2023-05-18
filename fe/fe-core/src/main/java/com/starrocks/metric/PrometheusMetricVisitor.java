@@ -189,11 +189,13 @@ public class PrometheusMetricVisitor extends MetricVisitor {
         sb.append(TYPE).append(fullName).append(" ").append("summary\n");
 
         Snapshot snapshot = histogram.getSnapshot();
+        sb.append(fullName).append("{quantile=\"0.50\"} ").append(snapshot.getMedian()).append("\n");
         sb.append(fullName).append("{quantile=\"0.75\"} ").append(snapshot.get75thPercentile()).append("\n");
         sb.append(fullName).append("{quantile=\"0.95\"} ").append(snapshot.get95thPercentile()).append("\n");
         sb.append(fullName).append("{quantile=\"0.98\"} ").append(snapshot.get98thPercentile()).append("\n");
         sb.append(fullName).append("{quantile=\"0.99\"} ").append(snapshot.get99thPercentile()).append("\n");
         sb.append(fullName).append("{quantile=\"0.999\"} ").append(snapshot.get999thPercentile()).append("\n");
+        sb.append(fullName).append("_mean ").append(snapshot.getMean()).append("\n");
         sb.append(fullName).append("_sum ").append(histogram.getCount() * snapshot.getMean()).append("\n");
         sb.append(fullName).append("_count ").append(histogram.getCount()).append("\n");
         return;
