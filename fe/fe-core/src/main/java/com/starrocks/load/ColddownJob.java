@@ -60,6 +60,7 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -322,6 +323,15 @@ public class ColddownJob implements Writable {
         }
         if (!isReplay) {
             GlobalStateMgr.getCurrentState().getEditLog().logColddownUpdateState(id, newState);
+        }
+        return true;
+    }
+
+    public synchronized boolean updateProperties(Map<String, String> properties, boolean isReplay) {
+        this.properties.putAll(properties);
+        if (!isReplay) {
+            GlobalStateMgr.getCurrentState().getEditLog()
+                    .logColddownAlterProperties(new AlterProperties(id, properties));
         }
         return true;
     }
@@ -725,6 +735,49 @@ public class ColddownJob implements Writable {
         public void readFields(DataInput in) throws IOException {
             jobId = in.readLong();
             state = JobState.valueOf(Text.readString(in));
+        }
+    }
+
+    public static class AlterProperties implements Writable {
+        long jobId;
+        Map<String, String> properties;
+
+        public AlterProperties() {
+            this.jobId = -1;
+            this.properties = new HashMap<>();
+        }
+
+        public AlterProperties(long jobId, Map<String, String> properties) {
+            this.jobId = jobId;
+            this.properties = properties;
+        }
+
+        public long getJobId() {
+            return jobId;
+        }
+
+        public Map<String, String> getProperties() {
+            return properties;
+        }
+
+        @Override
+        public void write(DataOutput out) throws IOException {
+            out.writeLong(jobId);
+            out.writeInt(properties.size());
+            for (Map.Entry<String, String> property : properties.entrySet()) {
+                Text.writeString(out, property.getKey());
+                Text.writeString(out, property.getValue());
+            }
+        }
+
+        public void readFields(DataInput in) throws IOException {
+            jobId = in.readLong();
+            int count = in.readInt();
+            for (int i = 0; i < count; i++) {
+                String propertyKey = Text.readString(in);
+                String propertyValue = Text.readString(in);
+                this.properties.put(propertyKey, propertyValue);
+            }
         }
     }
 }

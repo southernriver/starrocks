@@ -290,4 +290,5 @@ public class OperationType {
     public static final short OP_COLDDOWN_CREATE = 11140;
     public static final short OP_COLDDOWN_UPDATE_STATE = 11141;
     public static final short OP_COLDDOWN_ADD_PARTITION_INFO = 11142;
+    public static final short OP_COLDDOWN_ALTER = 11143;
 }

@@ -47,6 +47,7 @@ import com.starrocks.mysql.privilege.Privilege;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.analyzer.SemanticException;
+import com.starrocks.sql.ast.AlterColddownStmt;
 import com.starrocks.sql.ast.CancelColddownStmt;
 import com.starrocks.sql.ast.CreateColddownStmt;
 import com.starrocks.sql.ast.ManualColddownStmt;
@@ -192,12 +193,39 @@ public class ColddownMgr {
     }
 
     public void cancelColddownJob(CancelColddownStmt stmt) throws UserException {
-        String dbName = stmt.getDbName();
+        ColddownJob matchedJob = findJob(stmt.getDbName(), stmt.getJobName());
+        matchedJob.cancel(ExportFailMsg.CancelType.USER_CANCEL, "user cancel");
+    }
+
+    public void manualColddownPartition(ManualColddownStmt stmt) throws UserException {
+        ColddownJob matchedJob = findJob(stmt.getDbName(), stmt.getJobName());
+
+        try {
+            Map<String, String> newProperties = matchedJob.getProperties();
+            if (!stmt.getProperties().isEmpty()) {
+                newProperties = new HashMap<>(matchedJob.getProperties());
+                newProperties.putAll(stmt.getProperties());
+            }
+            if (!matchedJob.submitColddownPartition(stmt.getPartition(), newProperties)) {
+                throw new UserException("this partition has no change or is exporting now or has no data, ignore");
+            }
+        } catch (UserException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new UserException(e);
+        }
+    }
+
+    public void alterColddownJob(AlterColddownStmt stmt) throws UserException {
+        ColddownJob matchedJob = findJob(stmt.getDbName(), stmt.getJobName());
+        matchedJob.updateProperties(stmt.getProperties(), false);
+    }
+
+    private ColddownJob findJob(String dbName, String name) throws DdlException, AnalysisException {
         Database db = GlobalStateMgr.getCurrentState().getDb(dbName);
         MetaUtils.checkDbNullAndReport(db, dbName);
         long dbId = db.getId();
 
-        String name = stmt.getJobName();
         ColddownJob matchedJob = null;
         readLock();
         try {
@@ -216,45 +244,8 @@ public class ColddownMgr {
         if (matchedJob == null) {
             throw new AnalysisException("Colddown job [" + name + "] is not found in db " + db.getOriginName());
         }
-
-        // check auth
-        TableName tableName = matchedJob.getTableName();
-        if (!GlobalStateMgr.getCurrentState().getAuth().checkTblPriv(ConnectContext.get(),
-                tableName.getDb(), tableName.getTbl(),
-                PrivPredicate.SELECT)) {
-            ErrorReport.reportDdlException(ErrorCode.ERR_SPECIFIC_ACCESS_DENIED_ERROR, Privilege.SELECT_PRIV);
-        }
-
-        matchedJob.cancel(ExportFailMsg.CancelType.USER_CANCEL, "user cancel");
-    }
-
-    public void manualColddownPartition(ManualColddownStmt stmt) throws UserException {
-        String dbName = stmt.getDbName();
-        Database db = GlobalStateMgr.getCurrentState().getDb(dbName);
-        MetaUtils.checkDbNullAndReport(db, dbName);
-        long dbId = db.getId();
-
-        ColddownJob matchedJob = null;
-        readLock();
-        try {
-            for (ColddownJob job : idToJob.values()) {
-                if (job.getDbId() == dbId && stmt.getJobName().equals(job.getName())) {
-                    matchedJob = job;
-                    if (!job.isFinalState()) {
-                        break;
-                    }
-                }
-            }
-        } finally {
-            readUnlock();
-        }
-        if (matchedJob == null) {
-            throw new AnalysisException(
-                    "Colddown job [" + stmt.getJobName() + "] is not found in db " + db.getOriginName());
-        }
         if (matchedJob.isFinalState()) {
-            throw new AnalysisException(
-                    "Colddown job [" + stmt.getJobName() + "] is cancelled");
+            throw new AnalysisException("Colddown job [" + name + "] is cancelled");
         }
 
         // check auth
@@ -265,20 +256,7 @@ public class ColddownMgr {
             ErrorReport.reportDdlException(ErrorCode.ERR_SPECIFIC_ACCESS_DENIED_ERROR, Privilege.SELECT_PRIV);
         }
 
-        try {
-            Map<String, String> newProperties = matchedJob.getProperties();
-            if (!stmt.getProperties().isEmpty()) {
-                newProperties = new HashMap<>(matchedJob.getProperties());
-                newProperties.putAll(stmt.getProperties());
-            }
-            if (!matchedJob.submitColddownPartition(stmt.getPartition(), newProperties)) {
-                throw new UserException("this partition has no change or is exporting now or has no data, ignore");
-            }
-        } catch (UserException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new UserException(e);
-        }
+        return matchedJob;
     }
 
     public List<ColddownJob> getColddownJobs(ColddownJob.JobState state) {
@@ -597,6 +575,23 @@ public class ColddownMgr {
             if (isJobExpired(job, System.currentTimeMillis())) {
                 LOG.info("remove expired job: {}", job);
                 idToJob.remove(jobId);
+            }
+        } finally {
+            writeUnlock();
+        }
+    }
+
+    public void replayAlterProperties(ColddownJob.AlterProperties alterProperties) {
+        writeLock();
+        try {
+            ColddownJob job = idToJob.get(alterProperties.jobId);
+            if (job == null) {
+                return;
+            }
+            job.updateProperties(alterProperties.properties, true);
+            if (isJobExpired(job, System.currentTimeMillis())) {
+                LOG.info("remove expired job: {}", job);
+                idToJob.remove(alterProperties.jobId);
             }
         } finally {
             writeUnlock();

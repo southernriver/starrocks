@@ -8,6 +8,7 @@ import com.starrocks.common.ErrorCode;
 import com.starrocks.common.ErrorReport;
 import com.starrocks.load.ColddownJob;
 import com.starrocks.qe.ConnectContext;
+import com.starrocks.sql.ast.AlterColddownStmt;
 import com.starrocks.sql.ast.CancelColddownStmt;
 import com.starrocks.sql.ast.CreateColddownStmt;
 import com.starrocks.sql.ast.ManualColddownStmt;
@@ -84,6 +85,13 @@ public class ColddownStmtAnalyzer {
 
         @Override
         public Void visitManualColddownStatement(ManualColddownStmt statement, ConnectContext context) {
+            // analyze dbName
+            statement.setDbName(analyzeDbName(statement.getDbName(), context));
+            return null;
+        }
+
+        @Override
+        public Void visitAlterColddownStatement(AlterColddownStmt statement, ConnectContext context) {
             // analyze dbName
             statement.setDbName(analyzeDbName(statement.getDbName(), context));
             return null;

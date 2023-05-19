@@ -655,6 +655,10 @@ public abstract class AstVisitor<R, C> {
         return visitStatement(statement, context);
     }
 
+    public R visitAlterColddownStatement(AlterColddownStmt statement, C context) {
+        return visitStatement(statement, context);
+    }
+
     // --------------------------------------- Plugin Statement --------------------------------------------------------
 
     public R visitInstallPluginStatement(InstallPluginStmt statement, C context) {

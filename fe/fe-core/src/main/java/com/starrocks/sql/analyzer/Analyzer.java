@@ -15,6 +15,7 @@ import com.starrocks.sql.ast.AdminSetReplicaStatusStmt;
 import com.starrocks.sql.ast.AdminShowConfigStmt;
 import com.starrocks.sql.ast.AdminShowReplicaDistributionStmt;
 import com.starrocks.sql.ast.AdminShowReplicaStatusStmt;
+import com.starrocks.sql.ast.AlterColddownStmt;
 import com.starrocks.sql.ast.AlterDatabaseQuotaStmt;
 import com.starrocks.sql.ast.AlterDatabaseRenameStatement;
 import com.starrocks.sql.ast.AlterLoadStmt;
@@ -742,6 +743,12 @@ public class Analyzer {
 
         @Override
         public Void visitManualColddownStatement(ManualColddownStmt statement, ConnectContext context) {
+            ColddownStmtAnalyzer.analyze(statement, context);
+            return null;
+        }
+
+        @Override
+        public Void visitAlterColddownStatement(AlterColddownStmt statement, ConnectContext context) {
             ColddownStmtAnalyzer.analyze(statement, context);
             return null;
         }

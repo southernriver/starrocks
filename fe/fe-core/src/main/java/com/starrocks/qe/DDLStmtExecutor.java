@@ -20,6 +20,7 @@ import com.starrocks.sql.ast.AdminCheckTabletsStmt;
 import com.starrocks.sql.ast.AdminRepairTableStmt;
 import com.starrocks.sql.ast.AdminSetConfigStmt;
 import com.starrocks.sql.ast.AdminSetReplicaStatusStmt;
+import com.starrocks.sql.ast.AlterColddownStmt;
 import com.starrocks.sql.ast.AlterDatabaseQuotaStmt;
 import com.starrocks.sql.ast.AlterDatabaseRenameStatement;
 import com.starrocks.sql.ast.AlterLoadStmt;
@@ -724,6 +725,14 @@ public class DDLStmtExecutor {
         public ShowResultSet visitCancelColddownStatement(CancelColddownStmt stmt, ConnectContext context) {
             ErrorReport.wrapWithRuntimeException(() -> {
                 context.getGlobalStateMgr().getColddownMgr().cancelColddownJob(stmt);
+            });
+            return null;
+        }
+
+        @Override
+        public ShowResultSet visitAlterColddownStatement(AlterColddownStmt stmt, ConnectContext context) {
+            ErrorReport.wrapWithRuntimeException(() -> {
+                context.getGlobalStateMgr().getColddownMgr().alterColddownJob(stmt);
             });
             return null;
         }

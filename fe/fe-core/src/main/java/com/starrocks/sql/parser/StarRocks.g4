@@ -220,6 +220,7 @@ statement
     | cancelColddownStatement
     | showColddownStatement
     | manualColddownStatement
+    | alterColddownStatement
 
     // Plugin Statement
     | installPluginStatement
@@ -1405,6 +1406,11 @@ showColddownStatement
 
 manualColddownStatement
     : MANUAL COLDDOWN PARTITION partition=identifier WITH JOB name=identifier properties?
+    ;
+
+alterColddownStatement
+    : ALTER COLDDOWN JOB name=identifier
+        properties
     ;
 
 // ------------------------------------------- Plugin Statement --------------------------------------------------------

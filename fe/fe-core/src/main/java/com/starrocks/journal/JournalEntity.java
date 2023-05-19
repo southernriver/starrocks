@@ -334,6 +334,11 @@ public class JournalEntity implements Writable {
                 ((PartitionColddownInfo) data).readFields(in);
                 isRead = true;
                 break;
+            case OperationType.OP_COLDDOWN_ALTER:
+                data = new ColddownJob.AlterProperties();
+                ((ColddownJob.AlterProperties) data).readFields(in);
+                isRead = true;
+                break;
             case OperationType.OP_FINISH_DELETE:
                 data = new DeleteInfo();
                 ((DeleteInfo) data).readFields(in);

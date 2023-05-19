@@ -101,6 +101,7 @@ import com.starrocks.sql.ast.AdminShowConfigStmt;
 import com.starrocks.sql.ast.AdminShowReplicaDistributionStmt;
 import com.starrocks.sql.ast.AdminShowReplicaStatusStmt;
 import com.starrocks.sql.ast.AlterClause;
+import com.starrocks.sql.ast.AlterColddownStmt;
 import com.starrocks.sql.ast.AlterDatabaseQuotaStmt;
 import com.starrocks.sql.ast.AlterDatabaseRenameStatement;
 import com.starrocks.sql.ast.AlterLoadErrorUrlClause;
@@ -2657,6 +2658,15 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
         String name = ((Identifier) visit(context.name)).getValue();
         Map<String, String> properties = getProperties(context.properties());
         return new ManualColddownStmt(partition, name, properties);
+    }
+
+    @Override
+    public ParseNode visitAlterColddownStatement(StarRocksParser.AlterColddownStatementContext context) {
+        String name = ((Identifier) visit(context.name)).getValue();
+
+        // properties
+        Map<String, String> properties = getProperties(context.properties());
+        return new AlterColddownStmt(name, properties);
     }
 
     // ------------------------------------------------- Plugin Statement --------------------------------------------------------

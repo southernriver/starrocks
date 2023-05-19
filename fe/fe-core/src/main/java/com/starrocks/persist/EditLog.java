@@ -957,6 +957,12 @@ public class EditLog {
                     colddownMgr.replayCreatePartitionColddownInfo(op2);
                     break;
                 }
+                case OperationType.OP_COLDDOWN_ALTER: {
+                    ColddownJob.AlterProperties alter = (ColddownJob.AlterProperties) journal.getData();
+                    ColddownMgr colddownMgr = globalStateMgr.getColddownMgr();
+                    colddownMgr.replayAlterProperties(alter);
+                    break;
+                }
                 default: {
                     if (Config.ignore_unknown_log_id) {
                         LOG.warn("UNKNOWN Operation Type {}", opCode);
@@ -1344,6 +1350,10 @@ public class EditLog {
 
     public void logColddownAddPartitionInfo(PartitionColddownInfo partitionColddownInfo) {
         logEdit(OperationType.OP_COLDDOWN_ADD_PARTITION_INFO, partitionColddownInfo);
+    }
+
+    public void logColddownAlterProperties(ColddownJob.AlterProperties properties) {
+        logEdit(OperationType.OP_COLDDOWN_ALTER, properties);
     }
 
     public void logUpdateClusterAndBackendState(BackendIdsUpdateInfo info) {
