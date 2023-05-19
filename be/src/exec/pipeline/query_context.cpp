@@ -8,6 +8,7 @@
 #include "exec/pipeline/fragment_context.h"
 #include "exec/pipeline/pipeline_fwd.h"
 #include "exec/workgroup/work_group.h"
+#include "gutil/stl_util.h"
 #include "runtime/client_cache.h"
 #include "runtime/current_thread.h"
 #include "runtime/data_stream_mgr.h"
@@ -43,6 +44,10 @@ QueryContext::~QueryContext() {
         SCOPED_THREAD_LOCAL_MEM_TRACKER_SETTER(_mem_tracker.get());
         _fragment_mgr.reset();
     }
+
+    // clear the detailed table-level statistics
+    STLClearObject(&_total_scan_stats_items);
+    STLClearObject(&_delta_scan_stats_items);
 
     // Accounting memory usage during QueryContext's destruction should not use query-level MemTracker, but its released
     // in the mid of QueryContext destruction, so use process-level memory tracker
@@ -135,7 +140,9 @@ std::shared_ptr<QueryStatistics> QueryContext::intermediate_query_statistic() {
     if (_is_result_sink) {
         return query_statistic;
     }
-    query_statistic->add_scan_stats(_delta_scan_rows_num.exchange(0), _delta_scan_bytes.exchange(0));
+    for (const auto& stats_item : get_and_clean_delta_scan_stats_items()) {
+        query_statistic->add_stats_item(stats_item);
+    }
     query_statistic->add_cpu_costs(_delta_cpu_cost_ns.exchange(0));
     query_statistic->add_mem_costs(mem_cost_bytes());
     _sub_plan_query_statistics_recvr->aggregate(query_statistic.get());
@@ -145,7 +152,9 @@ std::shared_ptr<QueryStatistics> QueryContext::intermediate_query_statistic() {
 std::shared_ptr<QueryStatistics> QueryContext::final_query_statistic() {
     DCHECK(_is_result_sink) << "must be the result sink";
     auto res = std::make_shared<QueryStatistics>();
-    res->add_scan_stats(_total_scan_rows_num, _total_scan_bytes);
+    for (const auto& stats_item : get_total_scan_stats_items()) {
+        res->add_stats_item(stats_item);
+    }
     res->add_cpu_costs(_total_cpu_cost_ns);
     res->add_mem_costs(mem_cost_bytes());
 
@@ -161,7 +170,7 @@ QueryContextManager::QueryContextManager(size_t log2_num_slots)
           _second_chance_maps(_num_slots) {}
 
 Status QueryContextManager::init() {
-    // regist query context metrics
+    // register query context metrics
     auto metrics = StarRocksMetrics::instance()->metrics();
     _query_ctx_cnt = std::make_unique<UIntGauge>(MetricUnit::NOUNIT);
     metrics->register_metric(_metric_name, _query_ctx_cnt.get());
@@ -208,7 +217,7 @@ size_t QueryContextManager::_slot_idx(const TUniqueId& query_id) {
 }
 
 QueryContextManager::~QueryContextManager() {
-    // unregist metrics
+    // unregister metrics
     auto metrics = StarRocksMetrics::instance()->metrics();
     metrics->deregister_hook(_metric_name);
     _query_ctx_cnt.reset();

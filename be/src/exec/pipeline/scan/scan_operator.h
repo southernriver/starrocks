@@ -55,6 +55,8 @@ public:
     virtual void do_close(RuntimeState* state) = 0;
     virtual ChunkSourcePtr create_chunk_source(MorselPtr morsel, int32_t chunk_source_index) = 0;
 
+    QueryStatisticsItemPB generate_scan_stats_item();
+
     int64_t get_last_scan_rows_num() { return _last_scan_rows_num.exchange(0); }
     int64_t get_last_scan_bytes() { return _last_scan_bytes.exchange(0); }
 
@@ -95,6 +97,7 @@ private:
 
     void _merge_chunk_source_profiles(RuntimeState* state);
     size_t _buffer_unplug_threshold() const;
+    void _set_scan_table_id(RuntimeState* state);
 
     // emit EOS chunk when we receive the last chunk of the tablet.
     std::tuple<int64_t, bool> _should_emit_eos(const ChunkPtr& chunk);
@@ -143,6 +146,7 @@ private:
     workgroup::WorkGroupPtr _workgroup = nullptr;
     std::atomic_int64_t _last_scan_rows_num = 0;
     std::atomic_int64_t _last_scan_bytes = 0;
+    TableId _scan_table_id = -1;
 
     query_cache::LaneArbiterPtr _lane_arbiter = nullptr;
     query_cache::CacheOperatorPtr _cache_operator = nullptr;
