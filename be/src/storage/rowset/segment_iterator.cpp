@@ -427,7 +427,7 @@ Status SegmentIterator::_init_column_iterators(const Schema& schema) {
                 check_dict_enc = has_predicate;
             }
 
-            RETURN_IF_ERROR(_segment->new_column_iterator(cid, &_column_iterators[cid]));
+            RETURN_IF_ERROR(_segment->new_column_iterator(cid, &_column_iterators[cid], _opts.use_page_cache));
 
             _obj_pool.add(_column_iterators[cid]);
             ColumnIteratorOptions iter_opts;
@@ -500,7 +500,7 @@ Status SegmentIterator::_get_row_ranges_by_key_ranges() {
         return Status::OK();
     }
 
-    RETURN_IF_ERROR(_segment->load_index());
+    RETURN_IF_ERROR(_segment->load_index(_opts.use_page_cache));
     for (const SeekRange& range : _opts.ranges) {
         rowid_t lower_rowid = 0;
         rowid_t upper_rowid = num_rows();
@@ -531,7 +531,7 @@ Status SegmentIterator::_get_row_ranges_by_short_key_ranges() {
         return Status::OK();
     }
 
-    RETURN_IF_ERROR(_segment->load_index());
+    RETURN_IF_ERROR(_segment->load_index(_opts.use_page_cache));
     for (const auto& short_key_range : _opts.short_key_ranges) {
         rowid_t lower_rowid = 0;
         rowid_t upper_rowid = num_rows();
@@ -1477,7 +1477,8 @@ Status SegmentIterator::_init_bitmap_index_iterators() {
     for (const auto& pair : _opts.predicates) {
         ColumnId cid = pair.first;
         if (_bitmap_index_iterators[cid] == nullptr) {
-            RETURN_IF_ERROR(_segment->new_bitmap_index_iterator(cid, &_bitmap_index_iterators[cid]));
+            RETURN_IF_ERROR(_segment->new_bitmap_index_iterator(cid, &_bitmap_index_iterators[cid],
+                                                                _opts.use_page_cache));
             _has_bitmap_index |= (_bitmap_index_iterators[cid] != nullptr);
         }
     }

@@ -102,9 +102,9 @@ public:
     uint64_t id() const { return _segment_id; }
 
     // TODO: remove this method, create `ColumnIterator` via `ColumnReader`.
-    Status new_column_iterator(uint32_t cid, ColumnIterator** iter);
+    Status new_column_iterator(uint32_t cid, ColumnIterator** iter, bool use_page_cache);
 
-    Status new_bitmap_index_iterator(uint32_t cid, BitmapIndexIterator** iter);
+    Status new_bitmap_index_iterator(uint32_t cid, BitmapIndexIterator** iter, bool use_page_cache);
 
     size_t num_short_keys() const { return _tablet_schema->num_short_key_columns(); }
 
@@ -146,7 +146,12 @@ public:
 
     // Load and decode short key index.
     // May be called multiple times, subsequent calls will no op.
-    Status load_index();
+    Status load_index(bool use_page_cache);
+
+    Status load_index() {
+        return load_index(!config::disable_storage_page_cache);
+    }
+
     bool has_loaded_index() const;
 
     const ShortKeyIndexDecoder* decoder() const { return _sk_index_decoder.get(); }
@@ -179,7 +184,7 @@ private:
         std::shared_ptr<const TabletSchema> _schema;
     };
 
-    Status _load_index();
+    Status _load_index(bool use_page_cache);
 
     void _reset();
 

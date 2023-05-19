@@ -390,6 +390,14 @@ bool RuntimeState::enable_query_statistic() const {
     return _query_options.__isset.enable_pipeline_query_statistic && _query_options.enable_pipeline_query_statistic;
 }
 
+bool RuntimeState::disable_column_pool() const {
+    return _query_options.__isset.disable_column_pool && _query_options.disable_column_pool;
+}
+
+bool RuntimeState::disable_storage_page_cache() const {
+    return _query_options.__isset.disable_storage_page_cache && _query_options.disable_storage_page_cache;
+}
+
 std::shared_ptr<QueryStatistics> RuntimeState::intermediate_query_statistic() {
     if (!enable_query_statistic()) {
         return nullptr;

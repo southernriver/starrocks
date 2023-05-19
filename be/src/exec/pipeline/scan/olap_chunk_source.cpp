@@ -148,7 +148,7 @@ Status OlapChunkSource::_init_reader_params(const std::vector<std::unique_ptr<Ol
     _params.skip_aggregation = skip_aggregation;
     _params.profile = _runtime_profile;
     _params.runtime_state = _runtime_state;
-    _params.use_page_cache = !config::disable_storage_page_cache;
+    _params.use_page_cache = !config::disable_storage_page_cache && !_runtime_state->disable_storage_page_cache();
     if (thrift_olap_scan_node.__isset.sorted_by_keys_per_tablet) {
         _params.sorted_by_keys_per_tablet = thrift_olap_scan_node.sorted_by_keys_per_tablet;
     }
@@ -287,7 +287,8 @@ Status OlapChunkSource::_init_olap_reader(RuntimeState* runtime_state) {
 }
 
 Status OlapChunkSource::_read_chunk(RuntimeState* state, ChunkPtr* chunk) {
-    chunk->reset(ChunkHelper::new_chunk_pooled(_prj_iter->output_schema(), _runtime_state->chunk_size(), true));
+    chunk->reset(ChunkHelper::new_chunk_pooled(_prj_iter->output_schema(), _runtime_state->chunk_size(),
+                                               !_runtime_state->disable_column_pool()));
     return _read_chunk_from_storage(_runtime_state, (*chunk).get());
 }
 

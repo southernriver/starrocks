@@ -3456,9 +3456,10 @@ Status TabletUpdates::get_column_values(std::vector<uint32_t>& column_ids, bool 
         iter_opts.stats = &stats;
         ASSIGN_OR_RETURN(auto read_file, fs->new_random_access_file((*segment)->file_name()));
         iter_opts.read_file = read_file.get();
+        auto use_page_cache = !config::disable_storage_page_cache;
         for (auto i = 0; i < column_ids.size(); ++i) {
             ColumnIterator* col_iter_raw_ptr = nullptr;
-            RETURN_IF_ERROR((*segment)->new_column_iterator(column_ids[i], &col_iter_raw_ptr));
+            RETURN_IF_ERROR((*segment)->new_column_iterator(column_ids[i], &col_iter_raw_ptr, use_page_cache));
             std::unique_ptr<ColumnIterator> col_iter(col_iter_raw_ptr);
             RETURN_IF_ERROR(col_iter->init(iter_opts));
             RETURN_IF_ERROR(col_iter->fetch_values_by_rowid(rowids.data(), rowids.size(), (*columns)[i].get()));

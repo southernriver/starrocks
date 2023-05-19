@@ -6,6 +6,7 @@
 
 #include "column/vectorized_fwd.h"
 #include "runtime/descriptors.h"
+#include "runtime/runtime_state.h"
 #include "storage/olap_common.h"
 #include "storage/rowset/column_iterator.h"
 #include "storage/rowset/segment.h"
@@ -48,6 +49,7 @@ struct SegmentMetaCollecterParams {
     std::vector<bool> read_page;
     std::vector<FieldType> field_type;
     int32_t max_cid;
+    bool use_page_cache;
 };
 
 // MetaReader will implements

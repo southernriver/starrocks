@@ -97,7 +97,7 @@ public:
 
     // Caller should free returned iterator after unused.
     // TODO: StatusOr<std::unique_ptr<ColumnIterator>> new_bitmap_index_iterator()
-    Status new_bitmap_index_iterator(BitmapIndexIterator** iterator);
+    Status new_bitmap_index_iterator(BitmapIndexIterator** iterator, bool use_page_cache);
 
     // Seek to the first entry in the column.
     Status seek_to_first(OrdinalPageIndexIterator* iter);
@@ -130,7 +130,7 @@ public:
     Status zone_map_filter(const std::vector<const ::starrocks::vectorized::ColumnPredicate*>& p,
                            const ::starrocks::vectorized::ColumnPredicate* del_predicate,
                            std::unordered_set<uint32_t>* del_partial_filtered_pages,
-                           vectorized::SparseRange* row_ranges);
+                           vectorized::SparseRange* row_ranges, bool use_page_cache);
 
     // segment-level zone map filter.
     // Return false to filter out this segment.
@@ -139,9 +139,9 @@ public:
 
     // prerequisite: at least one predicate in |predicates| support bloom filter.
     Status bloom_filter(const std::vector<const ::starrocks::vectorized::ColumnPredicate*>& p,
-                        vectorized::SparseRange* ranges);
+                        vectorized::SparseRange* ranges, bool use_page_cache);
 
-    Status load_ordinal_index();
+    Status load_ordinal_index(bool use_page_cache);
 
     uint32_t num_rows() const { return _segment->num_rows(); }
 
@@ -162,10 +162,10 @@ private:
 
     Status _init(ColumnMetaPB* meta);
 
-    Status _load_zonemap_index();
-    Status _load_ordinal_index();
-    Status _load_bitmap_index();
-    Status _load_bloom_filter_index();
+    Status _load_zonemap_index(bool use_page_cache);
+    Status _load_ordinal_index(bool use_page_cache);
+    Status _load_bitmap_index(bool use_page_cache);
+    Status _load_bloom_filter_index(bool use_page_cache);
 
     Status _parse_zone_map(const ZoneMapPB& zm, vectorized::ZoneMapDetail* detail) const;
 

@@ -318,6 +318,8 @@ public:
     bool enable_pipeline_engine() const { return _enable_pipeline_engine; }
 
     bool enable_query_statistic() const;
+    bool disable_column_pool() const;
+    bool disable_storage_page_cache() const;
     std::shared_ptr<QueryStatistics> intermediate_query_statistic();
     std::shared_ptr<QueryStatisticsRecvr> query_recv();
 

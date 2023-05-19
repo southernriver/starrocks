@@ -223,6 +223,9 @@ struct TQueryOptions {
   87: optional i32 connector_io_tasks_per_scan_operator = 16;
   88: optional double runtime_filter_early_return_selectivity = 0.05;
   89: optional bool enable_hive_mode = false;
+
+  98: optional bool disable_column_pool = false;
+  99: optional bool disable_storage_page_cache = false;
 }
 
 

@@ -476,6 +476,14 @@ public class Coordinator {
         this.queryOptions.setQuery_timeout(timeout);
     }
 
+    public void setDisableStoragePageCache(boolean disableStoragePageCache) {
+        this.queryOptions.setDisable_storage_page_cache(disableStoragePageCache);
+    }
+
+    public void setDisableColumnPool(boolean disableColumnPool) {
+        this.queryOptions.setDisable_column_pool(disableColumnPool);
+    }
+
     public void addReplicateScanId(Integer scanId) {
         replicateScanIds.add(scanId);
     }

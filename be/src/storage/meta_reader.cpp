@@ -71,6 +71,7 @@ Status MetaReader::_init_params(const MetaReaderParams& read_params) {
 
 Status MetaReader::_build_collect_context(const MetaReaderParams& read_params) {
     _collect_context.seg_collecter_params.max_cid = 0;
+    _collect_context.seg_collecter_params.use_page_cache = !_params.runtime_state->disable_storage_page_cache();
     for (const auto& it : *(read_params.id_to_names)) {
         std::string col_name = "";
         std::string collect_field = "";
@@ -253,7 +254,7 @@ Status SegmentMetaCollecter::_init_return_column_iterators() {
         if (_params->read_page[i]) {
             auto cid = _params->cids[i];
             if (_column_iterators[cid] == nullptr) {
-                RETURN_IF_ERROR(_segment->new_column_iterator(cid, &_column_iterators[cid]));
+                RETURN_IF_ERROR(_segment->new_column_iterator(cid, &_column_iterators[cid], _params->use_page_cache));
                 _obj_pool.add(_column_iterators[cid]);
 
                 ColumnIteratorOptions iter_opts;

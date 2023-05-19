@@ -216,7 +216,8 @@ void LakeDataSource::close(RuntimeState* state) {
 }
 
 Status LakeDataSource::get_next(RuntimeState* state, vectorized::ChunkPtr* chunk) {
-    chunk->reset(ChunkHelper::new_chunk_pooled(_prj_iter->output_schema(), _runtime_state->chunk_size(), true));
+    chunk->reset(ChunkHelper::new_chunk_pooled(_prj_iter->output_schema(), _runtime_state->chunk_size(),
+                                               !_runtime_state->disable_column_pool()));
     auto* chunk_ptr = chunk->get();
 
     SCOPED_TIMER(_scan_timer);
@@ -338,7 +339,7 @@ Status LakeDataSource::init_reader_params(const std::vector<OlapScanRange*>& key
     _params.skip_aggregation = skip_aggregation;
     _params.profile = _runtime_profile;
     _params.runtime_state = _runtime_state;
-    _params.use_page_cache = !config::disable_storage_page_cache;
+    _params.use_page_cache = !config::disable_storage_page_cache && !_runtime_state->disable_storage_page_cache();
     decide_chunk_size();
 
     PredicateParser parser(*_tablet_schema);

@@ -517,6 +517,8 @@ public class ExportJob implements Writable {
                     id, queryId, desc, Lists.newArrayList(fragment), Lists.newArrayList(scanNode),
                     TimeUtils.DEFAULT_TIME_ZONE, stmt.getExportStartTime(), Maps.newHashMap());
             coord.setExecMemoryLimit(getMemLimit());
+            coord.setDisableStoragePageCache(true);
+            coord.setDisableColumnPool(true);
             this.coordList.add(coord);
             LOG.info("split export job to tasks. job id: {}, job query id: {}, task idx: {}, task query id: {}",
                     id, DebugUtil.printId(this.queryId), i, DebugUtil.printId(queryId));

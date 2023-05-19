@@ -241,11 +241,11 @@ StatusOr<ChunkIteratorPtr> Segment::new_iterator(const vectorized::Schema& schem
     }
 }
 
-Status Segment::load_index() {
-    auto res = success_once(_load_index_once, [this] {
+Status Segment::load_index(bool use_page_cache) {
+    auto res = success_once(_load_index_once, [this, &use_page_cache] {
         SCOPED_THREAD_LOCAL_CHECK_MEM_LIMIT_SETTER(false);
 
-        Status st = _load_index();
+        Status st = _load_index(use_page_cache);
         if (st.ok()) {
             MEM_TRACKER_SAFE_CONSUME(ExecEnv::GetInstance()->short_key_index_mem_tracker(),
                                      _short_key_index_mem_usage());
@@ -257,12 +257,12 @@ Status Segment::load_index() {
     return res.status();
 }
 
-Status Segment::_load_index() {
+Status Segment::_load_index(bool use_page_cache) {
     // read and parse short key index page
     ASSIGN_OR_RETURN(auto read_file, _fs->new_random_access_file(_fname));
 
     PageReadOptions opts;
-    opts.use_page_cache = !config::disable_storage_page_cache;
+    opts.use_page_cache = !config::disable_storage_page_cache && use_page_cache;
     opts.read_file = read_file.get();
     opts.page_pointer = _short_key_index_page;
     opts.codec = nullptr; // short key index page uses NO_COMPRESSION for now
@@ -340,7 +340,7 @@ void Segment::_prepare_adapter_info() {
     }
 }
 
-Status Segment::new_column_iterator(uint32_t cid, ColumnIterator** iter) {
+Status Segment::new_column_iterator(uint32_t cid, ColumnIterator** iter, bool use_page_cache) {
     if (_column_readers[cid] == nullptr) {
         const TabletColumn& tablet_column = _tablet_schema->column(cid);
         if (!tablet_column.has_default_value() && !tablet_column.is_nullable()) {
@@ -352,6 +352,7 @@ Status Segment::new_column_iterator(uint32_t cid, ColumnIterator** iter) {
                 tablet_column.has_default_value(), tablet_column.default_value(), tablet_column.is_nullable(),
                 type_info, tablet_column.length(), num_rows()));
         ColumnIteratorOptions iter_opts;
+        iter_opts.use_page_cache = use_page_cache;
         RETURN_IF_ERROR(default_value_iter->init(iter_opts));
         *iter = default_value_iter.release();
         return Status::OK();
@@ -359,9 +360,9 @@ Status Segment::new_column_iterator(uint32_t cid, ColumnIterator** iter) {
     return _column_readers[cid]->new_iterator(iter);
 }
 
-Status Segment::new_bitmap_index_iterator(uint32_t cid, BitmapIndexIterator** iter) {
+Status Segment::new_bitmap_index_iterator(uint32_t cid, BitmapIndexIterator** iter, bool use_page_cache) {
     if (_column_readers[cid] != nullptr && _column_readers[cid]->has_bitmap_index()) {
-        return _column_readers[cid]->new_bitmap_index_iterator(iter);
+        return _column_readers[cid]->new_bitmap_index_iterator(iter, use_page_cache);
     }
     return Status::OK();
 }
