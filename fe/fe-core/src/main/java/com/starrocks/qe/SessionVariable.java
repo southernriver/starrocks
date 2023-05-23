@@ -676,7 +676,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     private boolean enableRewriteGroupingSetsToUnionAll = false;
 
     @VariableMgr.VarAttr(name = ENABLE_ICEBRG_METADATA_ALLUXIO_CACHE)
-    private boolean enableIcebergMetadataAlluxioCache = true;
+    private boolean enableIcebergMetadataAlluxioCache = false;
 
     // value should be 0~4
     // 0 represents automatic selection, and 1, 2, 3, and 4 represent forced selection of AGG of
