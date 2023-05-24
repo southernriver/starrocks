@@ -304,7 +304,7 @@ public class Coordinator {
         ConnectContext connectContext = new ConnectContext();
         connectContext.setQualifiedUser(Auth.ROOT_USER);
         connectContext.setCurrentUserIdentity(UserIdentity.ROOT);
-        connectContext.getSessionVariable().setEnablePipelineEngine(true);
+        connectContext.getSessionVariable().setEnablePipelineEngine(false);
         connectContext.getSessionVariable().setPipelineDop(0);
         this.connectContext = connectContext;
         this.descTable = descTable.toThrift();

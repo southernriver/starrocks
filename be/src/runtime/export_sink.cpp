@@ -33,6 +33,7 @@
 #include "runtime/exec_env.h"
 #include "runtime/runtime_state.h"
 #include "util/runtime_profile.h"
+#include "util/starrocks_metrics.h"
 #include "util/time.h"
 
 namespace starrocks {
@@ -49,6 +50,22 @@ ExportSink::ExportSink(ObjectPool* pool, const RowDescriptor& row_desc, const st
 Status ExportSink::init(const TDataSink& t_sink) {
     RETURN_IF_ERROR(DataSink::init(t_sink));
     _t_export_sink = t_sink.export_sink;
+    if (_t_export_sink.__isset.file_options && _t_export_sink.file_options.__isset.parquet_max_group_bytes) {
+        _parquet_options.row_group_max_size = _t_export_sink.file_options.parquet_max_group_bytes;
+    }
+    if (_t_export_sink.__isset.file_options && _t_export_sink.file_options.__isset.use_dict) {
+        _parquet_options.use_dict = _t_export_sink.file_options.use_dict;
+    }
+    if (_t_export_sink.__isset.file_options && _t_export_sink.file_options.__isset.compression_type) {
+        _parquet_options.compression_type = _t_export_sink.file_options.compression_type;
+    }
+    if (_t_export_sink.__isset.file_options && _t_export_sink.file_options.__isset.max_file_size_bytes) {
+        max_file_size_bytes = _t_export_sink.file_options.max_file_size_bytes;
+    }
+    if (_t_export_sink.__isset.file_options && _t_export_sink.file_options.__isset.max_file_size_rows) {
+        max_file_size_rows = _t_export_sink.file_options.max_file_size_rows;
+    }
+    timer.start();
 
     // From the thrift expressions create the real exprs.
     RETURN_IF_ERROR(Expr::create_expr_trees(_pool, _t_output_expr, &_output_expr_ctxs));
@@ -91,15 +108,25 @@ Status ExportSink::close(RuntimeState* state, Status exec_status) {
     if (_closed) {
         return Status::OK();
     }
+    timer.stop();
     Expr::close(_output_expr_ctxs, state);
+    Status st = Status::OK();
     if (_file_builder != nullptr) {
-        Status st = _file_builder->finish();
+        st = _file_builder->finish();
+        if (st.ok()) {
+            _number_written_bytes += _file_builder->file_size();
+        }
         _file_builder.reset();
-        _closed = true;
-        return st;
     }
     _closed = true;
-    return Status::OK();
+    state->update_num_rows_load_from_sink(_number_written_rows);
+    state->update_num_bytes_load_from_sink(_number_written_bytes);
+    StarRocksMetrics::instance()->exported_rows_total.increment(_number_written_rows);
+    StarRocksMetrics::instance()->exported_bytes_total.increment(_number_written_bytes);
+    COUNTER_SET(_rows_written_counter, _number_written_rows);
+    COUNTER_SET(_bytes_written_counter, _number_written_bytes);
+    COUNTER_UPDATE(_write_timer, timer.elapsed_time());
+    return st;
 }
 
 Status ExportSink::open_file_writer(int timeout_ms) {
@@ -135,10 +162,30 @@ Status ExportSink::open_file_writer(int timeout_ms) {
         return Status::NotSupported(strings::Substitute("Unsupported file type $0", file_type));
     }
 
-    _file_builder = std::make_unique<PlainTextBuilder>(
-            PlainTextBuilderOptions{.column_terminated_by = _t_export_sink.column_separator,
-                                    .line_terminated_by = _t_export_sink.row_delimiter},
-            std::move(output_file), _output_expr_ctxs);
+    const auto& file_format = string(_t_export_sink.file_format);
+    if (file_format == "csv") {
+        _file_builder = std::make_unique<PlainTextBuilder>(
+                PlainTextBuilderOptions{.column_terminated_by = _t_export_sink.column_separator,
+                                        .line_terminated_by = _t_export_sink.row_delimiter},
+                std::move(output_file), _output_expr_ctxs);
+    } else if (file_format == "parquet") {
+        std::vector<TypeDescriptor> output_types;
+        for (const auto& type : _t_export_sink.file_output_types) {
+            output_types.push_back(TypeDescriptor::from_thrift(type));
+        }
+        _file_builder = std::make_unique<ParquetBuilder>(
+                std::move(output_file), _output_expr_ctxs,
+                _parquet_options, _t_export_sink.file_column_names, output_types);
+    } else if (file_format == "orc") {
+        std::vector<TypeDescriptor> output_types;
+        for (const auto& type : _t_export_sink.file_output_types) {
+            output_types.push_back(TypeDescriptor::from_thrift(type));
+        }
+        _file_builder = std::make_unique<ORCBuilder>(_orc_options, std::move(output_file), _output_expr_ctxs, nullptr,
+                                                     _t_export_sink.file_column_names, output_types);
+    } else {
+        return Status::NotSupported("unsupported file format " + file_format);
+    }
 
     _state->add_export_output_file(file_path);
     return Status::OK();
@@ -153,17 +200,37 @@ Status ExportSink::gen_file_name(std::string* file_name) {
     std::stringstream file_name_ss;
     // now file-number is 0.
     // <file-name-prefix>_<file-number>.csv.<timestamp>
-    file_name_ss << _t_export_sink.file_name_prefix << "0.csv." << UnixMillis();
+    file_name_ss << _t_export_sink.file_name_prefix << "0" << "." << _t_export_sink.file_format << "." << UnixMillis();
     *file_name = file_name_ss.str();
     return Status::OK();
 }
 
 Status ExportSink::send_chunk(RuntimeState* state, vectorized::Chunk* chunk) {
+    size_t chunkNumRows = chunk->num_rows();
+    if (chunk->is_empty()) {
+        return Status::OK();
+    }
+    int query_timeout = state->query_options().query_timeout;
+    int timeout_ms = query_timeout > 3600 ? 3600000 : query_timeout * 1000;
+    if (_file_builder == nullptr) {
+        RETURN_IF_ERROR(open_file_writer(timeout_ms - timer.elapsed_time() / MICROS_PER_SEC));
+    }
     Status status = _file_builder->add_chunk(chunk);
     if (!status.ok()) {
         Status status;
         close(state, status);
+        return status;
     }
+    _number_written_rows += chunkNumRows;
+    if ((max_file_size_rows > 0 && num_rows >= max_file_size_rows) ||
+        (max_file_size_bytes > 0 && _file_builder->file_size() >= max_file_size_bytes)) {
+        RETURN_IF_ERROR(_file_builder->finish());
+        _number_written_bytes += _file_builder->file_size();
+        RETURN_IF_ERROR(open_file_writer(timeout_ms - timer.elapsed_time() / MICROS_PER_SEC));
+        num_rows = 0;
+    }
+
+    num_rows += chunkNumRows;
     return status;
 }
 

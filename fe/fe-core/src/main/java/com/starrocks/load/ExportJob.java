@@ -392,6 +392,7 @@ public class ExportJob implements Writable {
                 break;
         }
         fragment.setOutputExprs(createOutputExprs());
+        fragment.setPipelineDop(1);
 
         scanNode.setFragmentId(fragment.getFragmentId());
         LoadScanNode.initWhereExpr(scanNode, whereExpr, analyzer);

@@ -24,6 +24,8 @@
 #include <vector>
 
 #include "exec/data_sink.h"
+#include "exec/orc_builder.h"
+#include "exec/parquet_builder.h"
 #include "formats/csv/converter.h"
 #include "formats/csv/output_stream_file.h"
 #include "fs/fs.h"
@@ -82,7 +84,15 @@ private:
     RuntimeProfile::Counter* _rows_written_counter;
     RuntimeProfile::Counter* _write_timer;
 
+    MonotonicStopWatch timer;
     std::unique_ptr<FileBuilder> _file_builder;
+    ParquetBuilderOptions _parquet_options;
+    ORCBuilderOptions _orc_options;
+    size_t num_rows;
+    int64_t max_file_size_rows = -1;
+    int64_t max_file_size_bytes = -1;
+    int64_t _number_written_rows = 0;
+    int64_t _number_written_bytes = 0;
     bool _closed = false;
 };
 
