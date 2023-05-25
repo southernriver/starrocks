@@ -402,7 +402,7 @@ private:
             size_t offset = offsets[i];
             size_t array_size = offsets[i + 1] - offsets[i];
             if constexpr (nullable) {
-                if (null_data[offset]) {
+                if (null_data[i]) {
                     continue;
                 }
             }
