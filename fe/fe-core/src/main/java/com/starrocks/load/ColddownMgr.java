@@ -27,6 +27,7 @@ import com.google.gson.Gson;
 import com.starrocks.analysis.TableName;
 import com.starrocks.catalog.CatalogRecycleBin;
 import com.starrocks.catalog.Database;
+import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.Table;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Config;
@@ -39,6 +40,7 @@ import com.starrocks.common.Pair;
 import com.starrocks.common.UserException;
 import com.starrocks.common.util.ListComparator;
 import com.starrocks.common.util.OrderByPair;
+import com.starrocks.common.util.PropertyAnalyzer;
 import com.starrocks.common.util.TimeUtils;
 import com.starrocks.fs.hdfs.HdfsFsManager;
 import com.starrocks.load.export.ExportTargetType;
@@ -156,7 +158,29 @@ public class ColddownMgr {
         if (exportTargetType != ExportTargetType.EXTERNAL_TABLE) {
             return;
         }
-        // TODO: wait hot cold query pr to be merged
+        if (job.getColumnNames() != null || !job.getWhereSql().isEmpty()) {
+            return;
+        }
+        // ColddownJob itself will ensure table is OlapTable
+        OlapTable table = (OlapTable) MetaUtils.getTable(job.getDbId(), job.getTableId());
+        String coldTable = table.getTableProperty() == null ? null :
+                table.getTableProperty().getProperties().get(PropertyAnalyzer.PROPERTIES_COLD_TABLE_INFO);
+        if (coldTable != null && !coldTable.equals(job.getTargetTable())) {
+            throw new UserException(
+                    PropertyAnalyzer.PROPERTIES_COLD_TABLE_INFO + " has been set in table properties and it is " +
+                            coldTable + " which is different to " + job.getTargetTable());
+        }
+        if (coldTable == null) {
+            Database db = MetaUtils.getDatabase(job.getDbId());
+            db.writeLock();
+            try {
+                Map<String, String> prop = new HashMap<>();
+                prop.put(PropertyAnalyzer.PROPERTIES_COLD_TABLE_INFO, job.getTargetTable());
+                GlobalStateMgr.getCurrentState().modifyColdTableInfoProperty(db, table, prop);
+            } finally {
+                db.writeUnlock();
+            }
+        }
     }
 
     public void addPartitionColddownInfo(PartitionColddownInfo partitionColddownInfo) {
