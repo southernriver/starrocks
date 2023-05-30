@@ -2,15 +2,37 @@
 
 package com.starrocks.sql.ast;
 
+import com.google.common.base.Strings;
 import com.starrocks.analysis.BrokerDesc;
 import com.starrocks.analysis.Expr;
+import com.starrocks.analysis.TableName;
 import com.starrocks.analysis.TableRef;
+import com.starrocks.catalog.InternalCatalog;
 import com.starrocks.catalog.Table;
+import com.starrocks.common.Config;
+import com.starrocks.common.ErrorCode;
+import com.starrocks.common.ErrorReport;
+import com.starrocks.common.UserException;
 import com.starrocks.common.util.PrintableMap;
+import com.starrocks.connector.ConnectorMetadata;
+import com.starrocks.connector.iceberg.IcebergMetadata;
+import com.starrocks.fs.HdfsUtil;
+import com.starrocks.fs.hdfs.HdfsFs;
 import com.starrocks.load.export.ExternalTableExportConfig;
+import com.starrocks.server.CatalogMgr;
+import com.starrocks.server.GlobalStateMgr;
+import com.starrocks.sql.analyzer.AnalyzerUtils;
+import com.starrocks.sql.analyzer.SemanticException;
+import org.apache.iceberg.TableProperties;
+import org.apache.iceberg.hadoop.Util;
 
+import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+
+import static com.starrocks.load.export.ExternalTableExportConfig.EXTERNAL_TABLE;
 
 // Colddown statement, colddown data to dirs by broker.
 //
@@ -39,7 +61,76 @@ public class CreateColddownStmt extends ExportStmt {
 
     @Override
     protected void checkExternalTable(ExternalTableExportConfig externalTableExportConfig, Table table) {
-        externalTableExportConfig.verifyExternalTable();
+        Table externalTable = externalTableExportConfig.verifyExternalTable();
+        if (externalTable != null) {
+            return;
+        }
+        createExternalTable(table);
+    }
+
+    private void createExternalTable(Table table) {
+        TableName extTableName = AnalyzerUtils.stringToTableName(getTargetProperties().get(EXTERNAL_TABLE));
+        String extCatalogName = extTableName.getCatalog();
+        String extDbName = extTableName.getDb();
+        if (extCatalogName == null) {
+            extCatalogName = InternalCatalog.DEFAULT_INTERNAL_CATALOG_NAME;
+            if (Strings.isNullOrEmpty(extDbName)) {
+                extDbName = getTblName().getDb();
+            }
+        }
+        if (!shouldCreateExternalTable(extCatalogName)) {
+            ErrorReport.reportSemanticException(ErrorCode.ERR_BAD_TABLE_ERROR,
+                    getTargetProperties().get(EXTERNAL_TABLE));
+            return;
+        }
+        ConnectorMetadata connectorMetadata = GlobalStateMgr.getCurrentState().getMetadataMgr()
+                .getOptionalMetadata(extCatalogName).get();
+        try {
+            Map<String, String> properties = new HashMap<>();
+            getProperties().forEach((key, value) -> {
+                if (key.startsWith("colddown_") || key.startsWith("max_file_") || key.equals("timeout")) {
+                    return;
+                }
+                properties.put(key, value);
+            });
+            if (!Config.enable_check_tdw_pri) {
+                properties.put(TableProperties.ENGINE_HIVE_ENABLED, "true");
+                properties.put("external.table.purge", "true");
+            }
+            properties.put("uuid", UUID.randomUUID().toString());
+
+            String tableLocation = ((IcebergMetadata) connectorMetadata).getTableLocation(extDbName,
+                    extTableName.getTbl(), properties);
+            HdfsFs fileSystem = HdfsUtil.getFileSystem(tableLocation, getBrokerDesc());
+            String finalExtDbName = extDbName;
+            Util.doAsWithUGI(fileSystem.getUgi(), () -> {
+                ((IcebergMetadata) connectorMetadata).createTable(finalExtDbName, extTableName.getTbl(),
+                        table.getColumns(), table.getPartitionColumnNames(), properties);
+                return null;
+            });
+        } catch (IOException | UserException e) {
+            throw new SemanticException(e.getMessage(), e);
+        }
+    }
+
+    private boolean shouldCreateExternalTable(String extCatalogName) {
+        if (!isAutomaticallyCreateTargetTable() || !CatalogMgr.isExternalCatalog(extCatalogName)) {
+            return false;
+        }
+        String catalogType = GlobalStateMgr.getCurrentState().getCatalogMgr().getCatalogType(extCatalogName);
+        if (catalogType == null) {
+            throw new SemanticException("catalog " + extCatalogName + " not exist!");
+        }
+        // currently, try to create table only when it is iceberg catalog
+        return catalogType.equals("iceberg");
+    }
+
+    private boolean isAutomaticallyCreateTargetTable() {
+        if (getTargetProperties().containsKey("automatically_create_target_table")) {
+            return Boolean.parseBoolean(getTargetProperties().get("automatically_create_target_table"));
+        } else {
+            return true;
+        }
     }
 
     @Override

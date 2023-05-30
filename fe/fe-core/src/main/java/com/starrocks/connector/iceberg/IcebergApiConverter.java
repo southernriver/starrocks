@@ -101,6 +101,8 @@ public class IcebergApiConverter {
         switch (primitiveType) {
             case BOOLEAN:
                 return Types.BooleanType.get();
+            case TINYINT:
+            case SMALLINT:
             case INT:
                 return Types.IntegerType.get();
             case BIGINT:
@@ -120,8 +122,10 @@ public class IcebergApiConverter {
             case DECIMAL64:
             case DECIMAL128:
                 return Types.DecimalType.of(type.getPrecision(), (((ScalarType) type).getScalarScale()));
+            case LARGEINT:
+                return Types.DecimalType.of(38, 0);
             default:
-                throw new StarRocksConnectorException("Unsupported column type %s", primitiveType);
+                throw new StarRocksConnectorException("Unsupported primitive column type %s", primitiveType);
         }
     }
 

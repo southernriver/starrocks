@@ -93,7 +93,14 @@ public class IcebergHiveCatalog extends BaseMetastoreCatalog implements IcebergC
         Preconditions.checkState(tableId != null);
         try {
             TableOperations ops = this.newTableOps(tableId);
-            return new BaseTable(ops, fullTableName(this.name(), tableId));
+            BaseTable table = new BaseTable(ops, fullTableName(this.name(), tableId));
+            if (table.operations().current() == null) {
+                throw new StarRocksConnectorException(String.format(
+                        "Failed to load Iceberg table with id: %s", tableId));
+            }
+            return table;
+        } catch (StarRocksConnectorException e) {
+            throw e;
         } catch (Exception e) {
             throw new StarRocksConnectorException(String.format(
                     "Failed to load Iceberg table with id: %s", tableId), e);

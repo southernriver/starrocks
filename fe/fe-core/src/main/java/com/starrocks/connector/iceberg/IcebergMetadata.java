@@ -48,7 +48,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import static com.starrocks.connector.PartitionUtil.convertIcebergPartitionToPartitionName;
-import static com.starrocks.connector.iceberg.IcebergApiConverter.getTableLocation;
 import static com.starrocks.connector.iceberg.IcebergApiConverter.parsePartitionFields;
 import static com.starrocks.connector.iceberg.IcebergApiConverter.toIcebergApiSchema;
 import static com.starrocks.connector.iceberg.IcebergCatalogType.GLUE_CATALOG;
@@ -99,21 +98,30 @@ public class IcebergMetadata implements ConnectorMetadata {
         String dbName = stmt.getDbName();
         String tableName = stmt.getTableName();
 
-        Schema schema = toIcebergApiSchema(stmt.getColumns());
         PartitionDesc partitionDesc = stmt.getPartitionDesc();
         List<String> partitionColNames = partitionDesc == null ? Lists.newArrayList() :
                 ((ListPartitionDesc) partitionDesc).getPartitionColNames();
-        PartitionSpec partitionSpec = parsePartitionFields(schema, partitionColNames);
         Map<String, String> properties = stmt.getProperties() == null ? new HashMap<>() : stmt.getProperties();
-        String tableLocation = getTableLocation(properties)
-                .orElseGet(() -> icebergCatalog.defaultTableLocation(dbName, tableName));
+        createTable(dbName, tableName, stmt.getColumns(), partitionColNames, properties);
+        return true;
+    }
+
+    public void createTable(String dbName, String tableName, List<Column> columns, List<String> partitionColNames,
+                               Map<String, String> properties) throws DdlException {
+        Schema schema = toIcebergApiSchema(columns);
+        PartitionSpec partitionSpec = parsePartitionFields(schema, partitionColNames);
+        String tableLocation = getTableLocation(dbName, tableName, properties);
         Map<String, String> createTableProperties = IcebergApiConverter.rebuildCreateTableProperties(properties);
 
         Transaction transaction = icebergCatalog.newCreateTableTransaction(
                 dbName, tableName, schema, partitionSpec, tableLocation, createTableProperties);
 
         transaction.commitTransaction();
-        return true;
+    }
+
+    public String getTableLocation(String dbName, String tableName, Map<String, String> properties) {
+        return IcebergApiConverter.getTableLocation(properties)
+                .orElseGet(() -> icebergCatalog.defaultTableLocation(dbName, tableName));
     }
 
     @Override

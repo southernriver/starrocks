@@ -95,6 +95,9 @@ public class ExternalTableExportConfig {
 
     public void analyzeProperties(Table table, String partition) {
         Table externalTable = verifyExternalTable();
+        if (externalTable == null) {
+            ErrorReport.reportSemanticException(ErrorCode.ERR_BAD_TABLE_ERROR, targetProperties.get(EXTERNAL_TABLE));
+        }
         targetTableType = externalTable.getType();
         exportTypes = new LinkedHashMap<>();
         for (Column column : externalTable.getBaseSchema()) {
@@ -126,15 +129,10 @@ public class ExternalTableExportConfig {
                 extDbName = olapTableName.getDb();
             }
         }
-        Table table;
         try {
-            table = GlobalStateMgr.getCurrentState().getMetadataMgr()
+            return GlobalStateMgr.getCurrentState().getMetadataMgr()
                     .getTableWithPrivileges(extCatalogName, extDbName, extTableName.getTbl(),
                             Arrays.asList("select", "update"));
-            if (table == null) {
-                ErrorReport.reportSemanticException(ErrorCode.ERR_BAD_TABLE_ERROR, extTableName);
-            }
-            return table;
         } catch (AnalysisException e) {
             throw new SemanticException(e.getMessage());
         }
@@ -298,7 +296,8 @@ public class ExternalTableExportConfig {
             case MINUTE:
                 return primitiveType.isIntegerType() ? "%Y%m%d%H%i" : "%Y-%m-%d-%H-%i";
             case HOUR:
-                return primitiveType.isIntegerType() ? "%Y%m%d%H" : "%Y-%m-%d-%H";
+                return primitiveType.isIntegerType() ? "%Y%m%d%H" :
+                        primitiveType == PrimitiveType.DATETIME ? "%Y-%m-%dT%H%3A00Z" : "%Y-%m-%d-%H";
             case DAY:
                 return primitiveType.isIntegerType() || primitiveType.isCharFamily() ? "%Y%m%d" : "%Y-%m-%d";
             case MONTH:
