@@ -282,6 +282,7 @@ CONF_mInt64(max_base_compaction_num_singleton_deltas, "100");
 CONF_Int32(base_compaction_num_threads_per_disk, "1");
 CONF_mDouble(base_cumulative_delta_ratio, "0.3");
 CONF_mInt64(base_compaction_interval_seconds_since_last_operation, "86400");
+CONF_mInt64(base_compaction_wait_time_seconds_since_last_rowset, "7200");
 
 // cumulative compaction policy: max delta file's size unit:B
 CONF_mInt32(cumulative_compaction_check_interval_seconds, "1");

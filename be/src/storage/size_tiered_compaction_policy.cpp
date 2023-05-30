@@ -112,7 +112,9 @@ Status SizeTieredCompactionPolicy::_pick_rowsets_to_size_tiered_compact(bool for
     }
 
     if (time(nullptr) - candidate_rowsets[0]->creation_time() >
-        config::base_compaction_interval_seconds_since_last_operation) {
+                config::base_compaction_interval_seconds_since_last_operation &&
+        time(nullptr) - candidate_rowsets.back()->creation_time() >
+                config::base_compaction_wait_time_seconds_since_last_rowset) {
         force_base_compaction = true;
     }
 
