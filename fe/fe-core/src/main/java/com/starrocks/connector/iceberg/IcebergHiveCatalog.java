@@ -11,9 +11,11 @@ import com.starrocks.connector.HdfsEnvironment;
 import com.starrocks.connector.iceberg.hive.CachedClientPool;
 import com.starrocks.connector.iceberg.hive.HiveTableOperations;
 import com.starrocks.connector.iceberg.io.IcebergCachingFileIO;
+import com.starrocks.connector.iceberg.io.IcebergFileIOWithUgi;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.iceberg.BaseMetastoreCatalog;
 import org.apache.iceberg.BaseTable;
 import org.apache.iceberg.CatalogProperties;
@@ -81,6 +83,17 @@ public class IcebergHiveCatalog extends BaseMetastoreCatalog implements IcebergC
     }
 
     @Override
+    public Table loadTableWithUgi(TableIdentifier tableId, UserGroupInformation ugi) throws StarRocksIcebergException {
+        try {
+            TableOperations ops = newTableOps(tableId, conf, new IcebergFileIOWithUgi(fileIO, ugi));
+            return new BaseTable(ops, fullTableName(this.name(), tableId));
+        } catch (Exception e) {
+            throw new StarRocksIcebergException(String.format(
+                    "Failed to load Iceberg table with id: %s", tableId), e);
+        }
+    }
+
+    @Override
     public Table loadTable(TableIdentifier tableId, String tableLocation,
                            Map<String, String> properties) throws StarRocksIcebergException {
         Preconditions.checkState(tableId != null);
@@ -137,6 +150,10 @@ public class IcebergHiveCatalog extends BaseMetastoreCatalog implements IcebergC
 
     @Override
     public TableOperations newTableOps(TableIdentifier tableIdentifier) {
+        return newTableOps(tableIdentifier, conf, fileIO);
+    }
+
+    private TableOperations newTableOps(TableIdentifier tableIdentifier, Configuration conf, FileIO fileIO) {
         String dbName = tableIdentifier.namespace().level(0);
         String tableName = tableIdentifier.name();
         return new HiveTableOperations(conf, clients, fileIO, name, dbName, tableName);

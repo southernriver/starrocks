@@ -25,8 +25,10 @@ import com.starrocks.thrift.TColumn;
 import com.starrocks.thrift.TIcebergTable;
 import com.starrocks.thrift.TTableDescriptor;
 import com.starrocks.thrift.TTableType;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.iceberg.BaseTable;
 import org.apache.iceberg.PartitionField;
+import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.types.Type;
 import org.apache.iceberg.types.Types;
 import org.apache.logging.log4j.LogManager;
@@ -192,6 +194,12 @@ public class IcebergTable extends Table {
             LOG.error("Load iceberg table failure!", e);
         }
         return icbTbl;
+    }
+
+    public org.apache.iceberg.Table getIcebergTableWithUgi(UserGroupInformation ugi) {
+        IcebergCatalog catalog = IcebergUtil.getIcebergCatalog(this);
+        TableIdentifier tableId = IcebergUtil.getIcebergTableIdentifier(this);
+        return catalog.loadTableWithUgi(tableId, ugi);
     }
 
     private void setGlueCatalogProperties() {

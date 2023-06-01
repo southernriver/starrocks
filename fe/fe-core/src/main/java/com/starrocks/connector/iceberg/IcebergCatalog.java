@@ -4,6 +4,8 @@ package com.starrocks.connector.iceberg;
 
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.IcebergTable;
+import org.apache.commons.lang.NotImplementedException;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.TableIdentifier;
@@ -29,6 +31,13 @@ public interface IcebergCatalog {
      * Loads a native Iceberg table based on the information in 'feTable'.
      */
     Table loadTable(TableIdentifier tableIdentifier) throws StarRocksIcebergException;
+
+    /**
+     * this method is a work around way to fix iceberg passing ugi problem, it can be removed when this problem is fixed
+     */
+    default Table loadTableWithUgi(TableIdentifier tableIdentifier, UserGroupInformation ugi) {
+        throw new NotImplementedException();
+    }
 
     /**
      * Loads a native Iceberg table based on 'tableId' or 'tableLocation'.

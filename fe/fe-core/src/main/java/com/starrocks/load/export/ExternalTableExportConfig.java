@@ -45,6 +45,7 @@ import org.apache.iceberg.PartitionKey;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.ReplacePartitions;
 import org.apache.iceberg.hadoop.HadoopInputFile;
+import org.apache.iceberg.hadoop.Util;
 import org.apache.iceberg.mapping.MappingUtil;
 import org.apache.iceberg.mapping.NameMapping;
 import org.apache.iceberg.orc.OrcMetrics;
@@ -55,7 +56,6 @@ import org.apache.logging.log4j.Logger;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
-import java.security.PrivilegedExceptionAction;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -405,19 +405,20 @@ public class ExternalTableExportConfig {
             if (files.isEmpty()) {
                 throw new StarRocksConnectorException("no data in partition: %s", partition);
             }
-            org.apache.iceberg.Table table = icebergTable.getIcebergTable();
-            PartitionSpec partitionSpec = table.spec();
-            NameMapping nameMapping = MappingUtil.create(table.schema());
 
+            org.apache.iceberg.Table table;
             HdfsFs fileSystem;
             ReplacePartitions replacePartitions;
             try {
                 fileSystem = HdfsUtil.getFileSystem(path, brokerDesc);
+                table = icebergTable.getIcebergTableWithUgi(fileSystem.getUgi());
                 replacePartitions = table.newReplacePartitions();
             } catch (UserException e) {
                 String msg = String.format("failed to get FileSystem from path %s", path);
                 throw new StarRocksConnectorException(msg, e);
             }
+            PartitionSpec partitionSpec = table.spec();
+            NameMapping nameMapping = MappingUtil.create(table.schema());
             List<Future<Pair<Metrics, Long>>> futures = Lists.newArrayListWithExpectedSize(files.size());
             for (String filePath : files) {
                 HadoopInputFile inputFile = HadoopInputFile.fromLocation(filePath, fileSystem.getDFSFileSystem());
@@ -459,14 +460,10 @@ public class ExternalTableExportConfig {
             }
             for (int i = 0; i < ExportExportingTask.RETRY_NUM; ++i) {
                 try {
-                    if (fileSystem.getUgi() != null) {
-                        fileSystem.getUgi().doAs((PrivilegedExceptionAction<Void>) () -> {
-                            replacePartitions.commit();
-                            return null;
-                        });
-                    } else {
+                    Util.doAsWithUGI(fileSystem.getUgi(), () -> {
                         replacePartitions.commit();
-                    }
+                        return null;
+                    });
                     LOG.info("commit iceberg partition replace {} from {} to iceberg table {}.{} success", partition,
                             olapTableName.toString(), icebergTable.getDb(), icebergTable.getName());
                     return null;
@@ -474,7 +471,7 @@ public class ExternalTableExportConfig {
                     LOG.error("commit iceberg partition replace " + partition + " failed at try " + i, e);
                 }
             }
-            throw new StarRocksConnectorException("commit iceberg partition replace " + partition + "failed");
+            throw new StarRocksConnectorException("commit iceberg partition replace " + partition + " failed");
         };
     }
 
