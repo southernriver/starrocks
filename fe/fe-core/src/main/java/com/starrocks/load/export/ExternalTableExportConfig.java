@@ -512,7 +512,7 @@ public class ExternalTableExportConfig {
                 }
                 LocalDateTime timestamp = LocalDateTime.parse(timestampStr);
                 // need long value
-                data.set(i, timestamp.toInstant(ZoneOffset.UTC).toEpochMilli() * 1000);
+                data.set(i, timestamp.atZone(ZoneOffset.systemDefault()).toInstant().toEpochMilli() * 1000);
             } else {
                 data.set(i, Conversions.fromPartitionString(type, parts[1]));
             }

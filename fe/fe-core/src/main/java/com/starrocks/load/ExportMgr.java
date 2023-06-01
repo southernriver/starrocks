@@ -64,7 +64,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
 
 public class ExportMgr {
-    private static final Logger LOG = LogManager.getLogger(ExportJob.class);
+    private static final Logger LOG = LogManager.getLogger(ExportMgr.class);
 
     // lock for export job
     // lock is private and must use after db lock
@@ -263,6 +263,7 @@ public class ExportMgr {
                 infoMap.put("mem limit", job.getMemLimit());
                 infoMap.put("max_file_size", job.getMaxFileSize());
                 infoMap.put("max_file_row", job.getMaxFileRow());
+                infoMap.put("exported_row", job.getExportedRowCount());
                 infoMap.put("coord num", job.getCoordList().size());
                 infoMap.put("tablet num", job.getTabletLocations() == null ? -1 : job.getTabletLocations().size());
                 jobInfo.add(new Gson().toJson(infoMap));

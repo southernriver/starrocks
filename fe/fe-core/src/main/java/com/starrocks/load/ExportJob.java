@@ -873,7 +873,7 @@ public class ExportJob implements Writable {
     }
 
     public long getExportedRowCount() {
-        return exportedRowCount.get();
+        return exportedRowCount == null ? 0 : exportedRowCount.get();
     }
 
     public synchronized void finish() {

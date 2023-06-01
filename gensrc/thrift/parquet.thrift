@@ -21,6 +21,7 @@
  * File format description for the parquet file format
  */
 namespace cpp tparquet
+namespace java org.apache.parquet.format
 
 /**
  * Types supported by Parquet.  These types are intended to be used in combination

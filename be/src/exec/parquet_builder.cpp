@@ -176,7 +176,7 @@ void ParquetBuildHelper::build_file_data_type(parquet::Type::type& parquet_data_
     }
     case TYPE_DATETIME: {
         parquet_data_type = parquet::Type::INT64;
-        parquet_converted_type = parquet::ConvertedType::TIMESTAMP_MILLIS;
+        parquet_converted_type = parquet::ConvertedType::TIMESTAMP_MICROS;
         break;
     }
     case TYPE_LARGEINT: {
@@ -422,7 +422,7 @@ Status ParquetBuilder::add_chunk(vectorized::Chunk* chunk) {
                 int64_t offset = TimezoneUtils::to_utc_offset(ctz);
                 for (size_t row_id = 0; row_id < num_rows; row_id++) {
                     res[row_id] = (down_cast<const vectorized::TimestampColumn*>(data_column)->get_data()[row_id]
-                                           .to_unix_second() - offset) * 1000;
+                                           .to_unix_second() - offset) * 1000000;
                 }
                 col_writer->WriteBatch(num_rows, nullable ? def_level.data() : nullptr, nullptr,
                                        reinterpret_cast<const int64_t*>(res.data()));

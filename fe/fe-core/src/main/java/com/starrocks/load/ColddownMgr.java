@@ -72,7 +72,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
 
 public class ColddownMgr {
-    private static final Logger LOG = LogManager.getLogger(ColddownJob.class);
+    private static final Logger LOG = LogManager.getLogger(ColddownMgr.class);
 
     // lock for colddown job
     // lock is private and must use after db lock
