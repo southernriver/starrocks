@@ -761,6 +761,18 @@ public final class MetricRepo {
             totalBytes.increase(job.getTotalExportedBytes());
             visitor.visit(totalBytes);
 
+            LongCounterMetric totalSuccessRows = new LongCounterMetric("colddown_success_exported_rows",
+                    MetricUnit.ROWS, "colddown success exported rows");
+            addColddownJobLabel(totalSuccessRows, job);
+            totalSuccessRows.increase(job.getTotalSuccessExportedRows());
+            visitor.visit(totalSuccessRows);
+
+            LongCounterMetric totalSuccessBytes = new LongCounterMetric("colddown_success_exported_bytes",
+                    MetricUnit.BYTES, "colddown success exported bytes");
+            addColddownJobLabel(totalSuccessBytes, job);
+            totalSuccessBytes.increase(job.getTotalSuccessExportedBytes());
+            visitor.visit(totalSuccessBytes);
+
             LongCounterMetric totalSuccessExports = new LongCounterMetric("colddown_success_exports", MetricUnit.ROWS,
                     "colddown success exported jobs");
             addColddownJobLabel(totalSuccessExports, job);

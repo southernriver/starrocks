@@ -104,6 +104,9 @@ public class ColddownScheduler extends LeaderDaemon {
         startTime = calendar.get(Calendar.HOUR_OF_DAY);
         calendar.setTime(endDate);
         endTime = calendar.get(Calendar.HOUR_OF_DAY);
+        if (endTime == 0) {
+            endTime = 24;
+        }
     }
 
     private boolean initWorkTime() {

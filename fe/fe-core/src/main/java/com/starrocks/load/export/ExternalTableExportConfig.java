@@ -300,7 +300,7 @@ public class ExternalTableExportConfig {
             case HOUR:
                 return primitiveType.isIntegerType() ? "%Y%m%d%H" : "%Y-%m-%d-%H";
             case DAY:
-                return primitiveType.isIntegerType() ? "%Y%m%d" : "%Y-%m-%d";
+                return primitiveType.isIntegerType() || primitiveType.isCharFamily() ? "%Y%m%d" : "%Y-%m-%d";
             case MONTH:
                 return primitiveType.isIntegerType() ? "%Y%m" : "%Y-%m";
             default:

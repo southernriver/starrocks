@@ -333,6 +333,19 @@ void ParquetBuilder::_generate_rg_writer() {
     }                                                                                                             \
     _buffered_values_estimate[i] = col_writer->EstimatedBufferedValueBytes();
 
+#define DISPATCH_PARQUET_DATE_NUMERIC_STRING_WRITER(COLUMN_TYPE)                                                  \
+    auto* dateColumn = down_cast<vectorized::FixedLengthColumn<COLUMN_TYPE>*>(data_column);                       \
+    ParquetBuilder::_generate_rg_writer();                                                                        \
+    parquet::ByteArrayWriter* col_writer = static_cast<parquet::ByteArrayWriter*>(_rg_writer->column(i));         \
+    for (size_t row_id = 0; row_id < num_rows; row_id++) {                                                        \
+        string bytes = std::to_string(dateColumn->get_data()[row_id].to_date_literal());                          \
+        parquet::ByteArray value;                                                                                 \
+        value.ptr = reinterpret_cast<const uint8_t*>(bytes.data());                                               \
+        value.len = bytes.size();                                                                                 \
+        col_writer->WriteBatch(1, nullable ? &def_level[row_id] : nullptr, nullptr, &value);                      \
+    }                                                                                                             \
+    _buffered_values_estimate[i] = col_writer->EstimatedBufferedValueBytes();
+
 Status ParquetBuilder::add_chunk(vectorized::Chunk* chunk) {
     if (!chunk->has_rows()) {
         return Status::OK();
@@ -357,7 +370,7 @@ Status ParquetBuilder::add_chunk(vectorized::Chunk* chunk) {
         }
 
         const auto srType = _output_expr_ctxs[i]->root()->type().type;
-        const auto& outType = _output_types[i].type;
+        const auto& outType = _output_types[i];
         switch (srType) {
         case TYPE_BOOLEAN: {
             DISPATCH_PARQUET_NUMERIC_WRITER(BoolWriter, vectorized::BooleanColumn, bool)
@@ -386,11 +399,17 @@ Status ParquetBuilder::add_chunk(vectorized::Chunk* chunk) {
         }
         case TYPE_DATE: {
             ParquetBuilder::_generate_rg_writer();
-            if (outType == TYPE_VARCHAR || outType == TYPE_CHAR) {
-                DISPATCH_PARQUET_DATETIME_COMPLEX_WRITER(vectorized::DateValue);
-            } else if (outType == TYPE_BIGINT) {
+            if (outType.type == TYPE_VARCHAR || outType.type == TYPE_CHAR) {
+                if (outType.len == 8) {
+                    // yyyyMMdd
+                    DISPATCH_PARQUET_DATE_NUMERIC_STRING_WRITER(vectorized::DateValue);
+                } else {
+                    // yyyy-MM-dd
+                    DISPATCH_PARQUET_DATETIME_COMPLEX_WRITER(vectorized::DateValue);
+                }
+            } else if (outType.type == TYPE_BIGINT) {
                 DISPATCH_PARQUET_DATE_NUMERIC_WRITER(Int64Writer, int64_t);
-            } else if (outType == TYPE_INT) {
+            } else if (outType.type == TYPE_INT) {
                 DISPATCH_PARQUET_DATE_NUMERIC_WRITER(Int32Writer, int32_t);
             } else {
                 auto* col_writer = static_cast<parquet::Int32Writer*>(_rg_writer->column(i));
@@ -408,14 +427,14 @@ Status ParquetBuilder::add_chunk(vectorized::Chunk* chunk) {
         }
         case TYPE_DATETIME: {
             ParquetBuilder::_generate_rg_writer();
-            if (outType == TYPE_VARCHAR || outType == TYPE_CHAR) {
+            if (outType.type == TYPE_VARCHAR || outType.type == TYPE_CHAR) {
                 DISPATCH_PARQUET_DATETIME_COMPLEX_WRITER(vectorized::TimestampValue);
-            } else if (outType == TYPE_BIGINT) {
+            } else if (outType.type == TYPE_BIGINT) {
                 DISPATCH_PARQUET_DATETIME_INT64_WRITER(Int64Writer, int64_t);
-            } else if (outType == TYPE_INT) {
+            } else if (outType.type == TYPE_INT) {
                 DISPATCH_PARQUET_DATETIME_INT32_WRITER(Int32Writer, int32_t);
             } else {
-                parquet::Int64Writer* col_writer = static_cast<parquet::Int64Writer*>(_rg_writer->column(i));
+                auto* col_writer = static_cast<parquet::Int64Writer*>(_rg_writer->column(i));
                 std::vector<uint64_t> res(num_rows);
                 cctz::time_zone ctz;
                 TimezoneUtils::find_cctz_time_zone(TimezoneUtils::default_time_zone, ctz);

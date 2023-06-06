@@ -52,6 +52,8 @@ void fillDateValue(vectorized::Column* dataColumn, orc::ColumnVectorBatch* batch
 void fillDateValue(vectorized::Column* dataColumn, orc::ColumnVectorBatch* batch, size_t row, size_t batchIdx);
 void fillDateValueAsDateLiteral(vectorized::Column* dataColumn, orc::ColumnVectorBatch* batch, size_t row,
                                 size_t batchIdx);
+void fillDateValueAsDateLiteralString(vectorized::Column* dataColumn, orc::ColumnVectorBatch* batch, size_t row,
+                                size_t batchIdx);
 void fillDateValueAsDateString(vectorized::Column* dataColumn, orc::ColumnVectorBatch* batch, size_t row,
                                size_t batchIdx);
 
@@ -302,7 +304,13 @@ Status ORCBuilder::add_chunk(vectorized::Chunk* chunk) {
                         break;
                     case TYPE_DATE:
                         if (outType.type == TYPE_VARCHAR || outType.type == TYPE_CHAR) {
-                            fillDateValueAsDateString(dataColumn, curBatch, row, batchIdx);
+                            if (outType.len == 8) {
+                                // yyyyMMdd
+                                fillDateValueAsDateLiteralString(dataColumn, curBatch, row, batchIdx);
+                            } else {
+                                // yyyy-MM-dd
+                                fillDateValueAsDateString(dataColumn, curBatch, row, batchIdx);
+                            }
                         } else if (outType.type == TYPE_BIGINT || outType.type == TYPE_INT) {
                             fillDateValueAsDateLiteral(dataColumn, curBatch, row, batchIdx);
                         } else {
@@ -453,6 +461,17 @@ void fillDateValueAsDateLiteral(vectorized::Column* dataColumn, orc::ColumnVecto
     auto* dateColumn = down_cast<vectorized::FixedLengthColumn<vectorized::DateValue>*>(dataColumn);
     int32_t dateLiteral = dateColumn->get_data()[row].to_date_literal();
     longBatch->data[batchIdx] = static_cast<int64_t>(dateLiteral);
+}
+
+void fillDateValueAsDateLiteralString(vectorized::Column* dataColumn, orc::ColumnVectorBatch* batch, size_t row,
+                                size_t batchIdx) {
+    auto* stringBatch = down_cast<orc::StringVectorBatch*>(batch);
+    auto* dateColumn = down_cast<vectorized::FixedLengthColumn<vectorized::DateValue>*>(dataColumn);
+    int32_t dateLiteral = dateColumn->get_data()[row].to_date_literal();
+    string bytes = std::to_string(dateLiteral);
+    char* dataPtr = bytes.data();
+    stringBatch->data[batchIdx] = dataPtr;
+    stringBatch->length[batchIdx] = bytes.size();
 }
 
 void fillDateValueAsDateString(vectorized::Column* dataColumn, orc::ColumnVectorBatch* batch, size_t row,

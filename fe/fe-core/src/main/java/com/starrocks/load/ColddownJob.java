@@ -89,6 +89,8 @@ public class ColddownJob implements Writable {
     private Map<Long, Pair<ExportJob, Boolean>> runningExportJobs;
     private AtomicLong totalExportedRows;
     private AtomicLong totalExportedBytes;
+    private AtomicLong totalSuccessExportedRows;
+    private AtomicLong totalSuccessExportedBytes;
     private long totalSuccessExportJobs;
     private long totalFailedExportJobs;
 
@@ -163,6 +165,8 @@ public class ColddownJob implements Writable {
         this.runningExportJobs = Maps.newConcurrentMap();
         this.totalExportedRows = new AtomicLong();
         this.totalExportedBytes = new AtomicLong();
+        this.totalSuccessExportedRows = new AtomicLong();
+        this.totalSuccessExportedBytes = new AtomicLong();
     }
 
     public long getId() {
@@ -286,6 +290,14 @@ public class ColddownJob implements Writable {
 
     public long getTotalExportedBytes() {
         return totalExportedBytes.get();
+    }
+
+    public long getTotalSuccessExportedRows() {
+        return totalSuccessExportedRows.get();
+    }
+
+    public long getTotalSuccessExportedBytes() {
+        return totalSuccessExportedBytes.get();
     }
 
     public long getTotalSuccessExportJobs() {
@@ -426,6 +438,10 @@ public class ColddownJob implements Writable {
                     job.getExportedRowCount());
             totalSuccessExportJobs += success ? 1 : 0;
             totalFailedExportJobs += success ? 0 : 1;
+            if (success) {
+                totalSuccessExportedRows.addAndGet(job.getExportedRowCount());
+                totalSuccessExportedBytes.addAndGet(job.getExportedBytesCount());
+            }
             it.remove();
         }
     }
@@ -680,6 +696,8 @@ public class ColddownJob implements Writable {
             this.runningExportJobs = Maps.newConcurrentMap();
             this.totalExportedRows = new AtomicLong();
             this.totalExportedBytes = new AtomicLong();
+            this.totalSuccessExportedRows = new AtomicLong();
+            this.totalSuccessExportedBytes = new AtomicLong();
         }
     }
 

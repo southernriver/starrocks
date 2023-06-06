@@ -102,6 +102,7 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -171,6 +172,7 @@ public class ExportJob implements Writable {
     private Map<String, Type> exportTypes;
     private Function<ExportJob, Void> beforeFinishFunction;
     private AtomicLong exportedRowCount;
+    private AtomicLong exportedBytesCount;
     private AtomicLong totalExportedRowCount;
     private AtomicLong totalExportedBytesCount;
 
@@ -234,6 +236,7 @@ public class ExportJob implements Writable {
         this.exportTypes = stmt.getExportTypes();
         this.beforeFinishFunction = stmt.getBeforeFinishFunction();
         this.exportedRowCount = new AtomicLong();
+        this.exportedBytesCount = new AtomicLong();
         this.totalExportedRowCount = new AtomicLong();
         this.totalExportedBytesCount = new AtomicLong();
 
@@ -468,6 +471,7 @@ public class ExportJob implements Writable {
     private List<Type> createExportTypes() throws AnalysisException {
         List<Type> exportTypesList = Lists.newArrayListWithExpectedSize(exportTupleDesc.getSlots().size());
         if (exportTypes != null && !exportTypes.isEmpty()) {
+            Set<String> partitionColumns = new HashSet<>(exportTable.getPartitionColumnNames());
             for (int i = 0; i < exportTupleDesc.getSlots().size(); i++) {
                 String exportColumn = exportColumnNames.get(i);
                 Type exportType = exportTypes.get(exportColumn);
@@ -483,8 +487,8 @@ public class ExportJob implements Writable {
                     exportType = slotDesc.getColumn().getType();
                 }
                 if (srType.getPrimitiveType() == PrimitiveType.DATE && exportType.getPrimitiveType().isCharFamily()) {
-                    // yyyy-MM-dd
-                    exportType = ScalarType.createVarcharType(10);
+                    // yyyy-MM-dd or yyyyMMdd if it is partition column
+                    exportType = ScalarType.createVarcharType(partitionColumns.contains(exportColumn) ? 8 : 10);
                 }
                 if (srType.getPrimitiveType() == PrimitiveType.DATETIME &&
                         exportType.getPrimitiveType().isCharFamily()) {
@@ -639,6 +643,7 @@ public class ExportJob implements Writable {
     }
 
     public void increaseExportedBytesCount(long bytes) {
+        this.exportedBytesCount.addAndGet(bytes);
         this.totalExportedBytesCount.addAndGet(bytes);
     }
 
@@ -874,6 +879,10 @@ public class ExportJob implements Writable {
 
     public long getExportedRowCount() {
         return exportedRowCount == null ? 0 : exportedRowCount.get();
+    }
+
+    public long getExportedBytesCount() {
+        return exportedBytesCount == null ? 0 : exportedBytesCount.get();
     }
 
     public synchronized void finish() {
