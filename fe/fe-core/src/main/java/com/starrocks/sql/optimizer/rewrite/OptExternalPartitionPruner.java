@@ -122,9 +122,9 @@ public class OptExternalPartitionPruner {
         return logicalScanOperator;
     }
 
-    private static void initPartitionInfo(LogicalScanOperator operator, OptimizerContext context,
-                                          Map<ColumnRefOperator, TreeMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap,
-                                          Map<ColumnRefOperator, Set<Long>> columnToNullPartitions)
+    public static void initPartitionInfo(LogicalScanOperator operator, OptimizerContext context,
+                                         Map<ColumnRefOperator, TreeMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap,
+                                         Map<ColumnRefOperator, Set<Long>> columnToNullPartitions)
             throws AnalysisException {
         Table table = operator.getTable();
         // RemoteScanPartitionPruneRule may be run multiple times, such like after MaterializedViewRewriter rewrite，
@@ -181,8 +181,8 @@ public class OptExternalPartitionPruner {
                 table.getName(), columnToPartitionValuesMap, columnToNullPartitions);
     }
 
-    private static void classifyConjuncts(LogicalScanOperator operator,
-                                          Map<ColumnRefOperator, TreeMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap)
+    public static void classifyConjuncts(LogicalScanOperator operator,
+                                         Map<ColumnRefOperator, TreeMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap)
             throws AnalysisException {
         for (ScalarOperator scalarOperator : Utils.extractConjuncts(operator.getPredicate())) {
             List<ColumnRefOperator> columnRefOperatorList = Utils.extractColumnRef(scalarOperator);

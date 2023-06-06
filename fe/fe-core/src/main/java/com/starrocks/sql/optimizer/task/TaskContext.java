@@ -17,6 +17,7 @@ public class TaskContext {
     private ColumnRefSet requiredColumns;
     private double upperBoundCost;
     private List<LogicalOlapScanOperator> allScanOperators;
+    private boolean isHybridScanIncluded = false;
 
     public TaskContext(OptimizerContext context,
                        PhysicalPropertySet physicalPropertySet,
@@ -59,5 +60,13 @@ public class TaskContext {
 
     public List<LogicalOlapScanOperator> getAllScanOperators() {
         return allScanOperators;
+    }
+
+    public void setIsHybridScanIncluded(boolean isHybridScanIncluded) {
+        this.isHybridScanIncluded = isHybridScanIncluded;
+    }
+
+    public boolean isHybridScanIncluded() {
+        return isHybridScanIncluded;
     }
 }

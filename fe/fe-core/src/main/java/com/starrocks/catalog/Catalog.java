@@ -41,19 +41,15 @@ public class Catalog implements Writable {
     public String getName() {
         return name;
     }
-
     public String getType() {
         return config.get(CATALOG_TYPE);
     }
-
     public Map<String, String> getConfig() {
         return config;
     }
-
     public String getComment() {
         return comment;
     }
-
     public void getProcNodeData(BaseProcResult result) {
         result.addRow(Lists.newArrayList(this.getName(), config.get(CATALOG_TYPE), this.getComment()));
     }

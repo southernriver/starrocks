@@ -716,6 +716,7 @@ public class EditLog {
                 case OperationType.OP_MODIFY_IN_MEMORY:
                 case OperationType.OP_SET_FORBIT_GLOBAL_DICT:
                 case OperationType.OP_MODIFY_REPLICATION_NUM:
+                case OperationType.OP_MODIFY_TABLE_PROPERTY:
                 case OperationType.OP_MODIFY_WRITE_QUORUM:
                 case OperationType.OP_MODIFY_REPLICATED_STORAGE:
                 case OperationType.OP_MODIFY_ENABLE_PERSISTENT_INDEX:
@@ -1567,6 +1568,10 @@ public class EditLog {
 
     public void logRemoveAnalyzeJob(AnalyzeJob job) {
         logEdit(OperationType.OP_REMOVE_ANALYZER_JOB, job);
+    }
+
+    public void logModifyTableProperty(ModifyTablePropertyOperationLog info) {
+        logEdit(OperationType.OP_MODIFY_TABLE_PROPERTY, info);
     }
 
     public void logAddAnalyzeStatus(AnalyzeStatus status) {

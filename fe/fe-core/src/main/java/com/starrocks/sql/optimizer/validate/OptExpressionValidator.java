@@ -104,14 +104,16 @@ public class OptExpressionValidator extends OptExpressionVisitor<OptExpression, 
                 ErrorReport.reportValidateException(ErrorCode.ERR_PLAN_VALIDATE_ERROR,
                         ErrorType.INTERNAL_ERROR, optExpression, "input cols size not equal with output cols size");
             }
-            for (int i = 0; i < resultCols.size(); i++) {
+
+            // Comment the following codes when apply hot cold query from 2.1 to 2.5, will fix it later
+            /* for (int i = 0; i < resultCols.size(); i++) {
                 Type outputType = resultCols.get(i).getType();
                 Type inputType = childCols.get(i).getType();
                 if (outputType.getPrimitiveType() != inputType.getPrimitiveType()) {
                     ErrorReport.reportValidateException(ErrorCode.ERR_PLAN_VALIDATE_ERROR,
                             ErrorType.INTERNAL_ERROR, optExpression, "input cols type not equal with output cols type");
                 }
-            }
+            } */
         }
         validateChildOpt(optExpression);
         return optExpression;

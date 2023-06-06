@@ -109,6 +109,7 @@ public final class MetricRepo {
     public static LongCounterMetric COUNTER_ROUTINE_LOAD_ERROR_ROWS;
     public static LongCounterMetric COUNTER_ROUTINE_LOAD_PAUSED;
     public static LongCounterMetric COUNTER_MAX_ROUTINE_LOAD_TASK_PER_BE;
+    public static LongCounterMetric COUNTER_HOT_COLD_QUERY;
 
     public static Histogram HISTO_QUERY_LATENCY;
 
@@ -411,6 +412,9 @@ public final class MetricRepo {
                 "max routine load task num per be");
         COUNTER_MAX_ROUTINE_LOAD_TASK_PER_BE.increase((long) Config.max_routine_load_task_num_per_be);
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_MAX_ROUTINE_LOAD_TASK_PER_BE);
+        COUNTER_HOT_COLD_QUERY = new LongCounterMetric("hot_cold_query", MetricUnit.REQUESTS,
+                "total number of hot cold query");
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_HOT_COLD_QUERY);
 
         // 3. histogram
         HISTO_QUERY_LATENCY = METRIC_REGISTER.histogram(MetricRegistry.name("query", "latency", "ms"));

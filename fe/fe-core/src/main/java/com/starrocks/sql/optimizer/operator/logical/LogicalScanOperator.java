@@ -37,6 +37,9 @@ public abstract class LogicalScanOperator extends LogicalOperator {
     protected final ImmutableMap<Column, ColumnRefOperator> columnMetaToColRefMap;
     protected ImmutableMap<String, PartitionColumnFilter> columnFilters;
     protected Set<String> partitionColumns = Sets.newHashSet();
+    protected boolean isHybridScan = false;
+
+    private boolean hasSplited = false;
 
     public LogicalScanOperator(
             OperatorType type,
@@ -62,7 +65,17 @@ public abstract class LogicalScanOperator extends LogicalOperator {
     }
 
     public ColumnRefOperator getColumnReference(Column column) {
-        return columnMetaToColRefMap.get(column);
+        if (isHybridScan) {
+            for (Map.Entry<Column, ColumnRefOperator> entry : columnMetaToColRefMap.entrySet()) {
+                Column col = entry.getKey();
+                if (col.getName().equalsIgnoreCase(column.getName()) && col.getType().equals(column.getType())) {
+                    return entry.getValue();
+                }
+            }
+            return null;
+        } else {
+            return columnMetaToColRefMap.get(column);
+        }
     }
 
     public Map<Column, ColumnRefOperator> getColumnMetaToColRefMap() {
@@ -95,6 +108,10 @@ public abstract class LogicalScanOperator extends LogicalOperator {
             return new ColumnRefSet(projection.getOutputColumns());
         }
         return new ColumnRefSet(new ArrayList<>(colRefToColumnMetaMap.keySet()));
+    }
+
+    public void setHybridScan(boolean hybridScan) {
+        isHybridScan = hybridScan;
     }
 
     @Override
@@ -170,5 +187,13 @@ public abstract class LogicalScanOperator extends LogicalOperator {
             this.table = table;
             return (B) this;
         }
+    }
+
+    public boolean isSplited() {
+        return hasSplited;
+    }
+
+    public void setSplit(boolean isSplit) {
+        hasSplited = isSplit;
     }
 }

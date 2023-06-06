@@ -431,6 +431,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     @VariableMgr.VarAttr(name = ENABLE_SHARED_SCAN)
     private boolean enableSharedScan = false;
 
+    public static final String ENABLE_HOT_COLD_QUERY = "enable_hot_cold_query";
+
     // max memory used on every backend.
     public static final long DEFAULT_EXEC_MEM_LIMIT = 2147483648L;
     @VariableMgr.VarAttr(name = EXEC_MEM_LIMIT)
@@ -705,6 +707,9 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VariableMgr.VarAttr(name = ENABLE_GLOBAL_RUNTIME_FILTER)
     private boolean enableGlobalRuntimeFilter = true;
+
+    @VariableMgr.VarAttr(name = ENABLE_HOT_COLD_QUERY)
+    private boolean enableHotColdQuery = false;
 
     // Parameters to determine the usage of runtime filter
     // Either the build_max or probe_min equal to 0 would force use the filter,
@@ -1459,6 +1464,10 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public boolean isSingleNodeExecPlan() {
         return singleNodeExecPlan;
+    }
+
+    public boolean isEnableHotColdQuery() {
+        return enableHotColdQuery;
     }
 
     public double getCboCTERuseRatio() {

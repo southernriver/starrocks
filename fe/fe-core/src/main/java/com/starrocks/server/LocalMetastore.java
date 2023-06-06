@@ -97,6 +97,7 @@ import com.starrocks.common.NotImplementedException;
 import com.starrocks.common.Pair;
 import com.starrocks.common.Status;
 import com.starrocks.common.UserException;
+import com.starrocks.common.util.DateUtils;
 import com.starrocks.common.util.DynamicPartitionUtil;
 import com.starrocks.common.util.PropertyAnalyzer;
 import com.starrocks.common.util.TimeUtils;
@@ -2117,6 +2118,41 @@ public class LocalMetastore implements ConnectorMetadata {
             throw new DdlException(e.getMessage());
         }
 
+        // analyze hot cold query info
+        boolean isColdTableSet =
+                properties != null && properties.containsKey(PropertyAnalyzer.PROPERTIES_COLD_TABLE_INFO);
+        if (isColdTableSet) {
+            String coldTableInfo = PropertyAnalyzer.analyzeColdTableInfo(properties);
+            Preconditions.checkState(
+                    coldTableInfo.split("\\.").length == PropertyAnalyzer.PROPERTIE_COLD_TABLE_INFO_LENGTH);
+            olapTable.setColdTableInfo(coldTableInfo);
+        }
+
+        // analyze hot cold column map info
+        try {
+            boolean isColMapSet =
+                    properties != null && properties.containsKey(PropertyAnalyzer.PROPERTIES_HOT_COLD_COLUMN_MAP);
+            if (isColMapSet) {
+                String colMapInfo = PropertyAnalyzer.analyzeHotColdColumnMap(properties);
+                olapTable.setHotColdColumnMap(colMapInfo);
+            }
+        } catch (AnalysisException e) {
+            throw new DdlException(e.getMessage());
+        }
+
+        // analyze cold partition format info
+        try {
+            boolean isPartitionFormatSet =
+                    properties != null &&
+                            properties.containsKey(PropertyAnalyzer.PROPERTIES_COLD_TABLE_PARTITION_FORMAT);
+            if (isPartitionFormatSet) {
+                String partitionFormat = PropertyAnalyzer.analyzeColdTablePartitionFormat(properties);
+                olapTable.setColdTablePartitionFormat(partitionFormat);
+            }
+        } catch (AnalysisException e) {
+            throw new DdlException(e.getMessage());
+        }
+
         // set in memory
         boolean isInMemory =
                 PropertyAnalyzer.analyzeBooleanProp(properties, PropertyAnalyzer.PROPERTIES_INMEMORY, false);
@@ -3977,6 +4013,83 @@ public class LocalMetastore implements ConnectorMetadata {
                 new ModifyTablePropertyOperationLog(db.getId(), table.getId(), properties);
         editLog.logModifyEnablePersistentIndex(info);
 
+    }
+
+    public void modifyColdTableInfoProperty(Database db, OlapTable table, Map<String, String> properties)
+            throws DdlException {
+        Preconditions.checkArgument(db.isWriteLockHeldByCurrentThread());
+
+        String coldTableInfoStr = PropertyAnalyzer.analyzeColdTableInfo(properties);
+        if (coldTableInfoStr != null) {
+            Preconditions.checkState(
+                    coldTableInfoStr.split("\\.").length == PropertyAnalyzer.PROPERTIE_COLD_TABLE_INFO_LENGTH);
+            // cold table info was removed in analyzeColdTableInfo(), put it back
+            properties.put(PropertyAnalyzer.PROPERTIES_COLD_TABLE_INFO, coldTableInfoStr);
+            TableProperty tableProperty = table.getTableProperty();
+            if (tableProperty == null) {
+                tableProperty = new TableProperty(properties);
+                table.setTableProperty(tableProperty);
+            } else {
+                tableProperty.modifyTableProperties(properties);
+            }
+
+            // log
+            ModifyTablePropertyOperationLog info =
+                    new ModifyTablePropertyOperationLog(db.getId(), table.getId(), properties);
+            editLog.logModifyTableProperty(info);
+        } else {
+            throw new DdlException("No cold table info found in properties: " + properties);
+        }
+    }
+
+    public void modifyHotColdColumnMapProperty(Database db, OlapTable table, Map<String, String> properties)
+            throws DdlException {
+        Preconditions.checkArgument(db.isWriteLockHeldByCurrentThread());
+
+        String colMapInfo = properties.getOrDefault(PropertyAnalyzer.PROPERTIES_HOT_COLD_COLUMN_MAP, "");
+        if (!colMapInfo.isEmpty() && colMapInfo.matches(PropertyAnalyzer.HOT_COLD_COLUMN_MAP_REGEX)) {
+            TableProperty tableProperty = table.getTableProperty();
+            if (tableProperty == null) {
+                tableProperty = new TableProperty(properties);
+                table.setTableProperty(tableProperty);
+            } else {
+                tableProperty.modifyTableProperties(properties);
+            }
+
+            // log
+            ModifyTablePropertyOperationLog info =
+                    new ModifyTablePropertyOperationLog(db.getId(), table.getId(), properties);
+            editLog.logModifyTableProperty(info);
+        } else {
+            throw new DdlException("Invalid hot_cold_column_map: " + colMapInfo);
+        }
+    }
+
+    public void modifyColdTablePartitionFormat(Database db, OlapTable table, Map<String, String> properties)
+            throws DdlException {
+        Preconditions.checkArgument(db.isWriteLockHeldByCurrentThread());
+
+        String partitionFormat =
+                properties.getOrDefault(PropertyAnalyzer.PROPERTIES_COLD_TABLE_PARTITION_FORMAT, "").toLowerCase();
+        try {
+            DateUtils.probeFormat(partitionFormat);
+            properties.put(PropertyAnalyzer.PROPERTIES_COLD_TABLE_PARTITION_FORMAT, partitionFormat);
+
+            TableProperty tableProperty = table.getTableProperty();
+            if (tableProperty == null) {
+                tableProperty = new TableProperty(properties);
+                table.setTableProperty(tableProperty);
+            } else {
+                tableProperty.modifyTableProperties(properties);
+            }
+
+            // log
+            ModifyTablePropertyOperationLog info =
+                    new ModifyTablePropertyOperationLog(db.getId(), table.getId(), properties);
+            editLog.logModifyTableProperty(info);
+        } catch (AnalysisException e) {
+            throw new DdlException("Invalid cold table partition format: " + partitionFormat);
+        }
     }
 
     // The caller need to hold the db write lock

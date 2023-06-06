@@ -43,6 +43,8 @@ import com.starrocks.thrift.TWriteQuorumType;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -205,13 +207,13 @@ public class TableProperty implements Writable, GsonPostProcessable {
     public TableProperty buildAutoRefreshPartitionsLimit() {
         autoRefreshPartitionsLimit =
                 Integer.parseInt(properties.getOrDefault(PropertyAnalyzer.PROPERTIES_AUTO_REFRESH_PARTITIONS_LIMIT,
-                String.valueOf(INVALID)));
+                        String.valueOf(INVALID)));
         return this;
     }
 
     public TableProperty buildPartitionRefreshNumber() {
         partitionRefreshNumber = Integer.parseInt(properties.getOrDefault(PropertyAnalyzer.PROPERTIES_PARTITION_REFRESH_NUMBER,
-                String.valueOf(INVALID)));
+                        String.valueOf(INVALID)));
         return this;
     }
 
@@ -235,7 +237,7 @@ public class TableProperty implements Writable, GsonPostProcessable {
     public TableProperty buildForceExternalTableQueryRewrite() {
         forceExternalTableQueryRewrite =
                 Boolean.parseBoolean(properties.getOrDefault(PropertyAnalyzer.PROPERTIES_FORCE_EXTERNAL_TABLE_QUERY_REWRITE,
-                        "false"));
+                                "false"));
         return this;
     }
 
@@ -382,6 +384,37 @@ public class TableProperty implements Writable, GsonPostProcessable {
 
     public void setHasForbitGlobalDict(boolean hasForbitGlobalDict) {
         this.hasForbitGlobalDict = hasForbitGlobalDict;
+    }
+
+    public List<String> getColdTableInfo() {
+        List<String> coldTableInfo = new ArrayList<>();
+        String coldTableInfoStr = properties.getOrDefault(PropertyAnalyzer.PROPERTIES_COLD_TABLE_INFO, "");
+        if (!coldTableInfoStr.isEmpty() && coldTableInfoStr.split("\\.").length ==
+                PropertyAnalyzer.PROPERTIE_COLD_TABLE_INFO_LENGTH) {
+            coldTableInfo = Arrays.asList(coldTableInfoStr.split("\\."));
+        }
+        return coldTableInfo;
+    }
+
+    public Map<String, String> getHotColdColumnMap() {
+        List<String> colMaps;
+        Map<String, String> hotColdColMaps = new HashMap<>();
+        String hotColdColumnMapStr = properties.getOrDefault(PropertyAnalyzer.PROPERTIES_HOT_COLD_COLUMN_MAP, "");
+        if (!hotColdColumnMapStr.isEmpty()) {
+            colMaps = Arrays.asList(hotColdColumnMapStr.split(","));
+            for (String colMap : colMaps) {
+                if (colMap.trim().split(":").length == 2) {
+                    String[] splits = colMap.trim().split(":");
+                    hotColdColMaps.put(splits[0].trim(), splits[1].trim());
+                }
+            }
+        }
+        return hotColdColMaps;
+    }
+
+    public String getColdTablePartitionFormat() {
+        return properties.getOrDefault(PropertyAnalyzer.PROPERTIES_COLD_TABLE_PARTITION_FORMAT,
+                PropertyAnalyzer.DEFAULT_COLD_TABLE_PARTITION_FORMAT);
     }
 
     public void setStorageInfo(StorageInfo storageInfo) {

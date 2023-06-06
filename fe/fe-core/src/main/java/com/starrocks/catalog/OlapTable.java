@@ -254,6 +254,11 @@ public class OlapTable extends Table implements GsonPostProcessable {
                 && tableProperty.getDynamicPartitionProperty().isExist();
     }
 
+    public boolean coldTableInfoExists() {
+        return tableProperty != null
+                && tableProperty.getColdTableInfo().size() == PropertyAnalyzer.PROPERTIE_COLD_TABLE_INFO_LENGTH;
+    }
+
     public void setBaseIndexId(long baseIndexId) {
         this.baseIndexId = baseIndexId;
     }
@@ -1672,6 +1677,48 @@ public class OlapTable extends Table implements GsonPostProcessable {
                 .modifyTableProperties(PropertyAnalyzer.PROPERTIES_WRITE_QUORUM,
                         writeQuorum);
         tableProperty.buildWriteQuorum();
+    }
+
+    public void setColdTableInfo(String coldTableInfo) {
+        if (tableProperty == null) {
+            tableProperty = new TableProperty(new HashMap<>());
+        }
+        tableProperty.modifyTableProperties(PropertyAnalyzer.PROPERTIES_COLD_TABLE_INFO, coldTableInfo);
+    }
+
+    public List<String> getColdTableInfo() {
+        if (tableProperty != null) {
+            return tableProperty.getColdTableInfo();
+        }
+        return Collections.emptyList();
+    }
+
+    public void setHotColdColumnMap(String hotColdColumnMap) {
+        if (tableProperty == null) {
+            tableProperty = new TableProperty(new HashMap<>());
+        }
+        tableProperty.modifyTableProperties(PropertyAnalyzer.PROPERTIES_HOT_COLD_COLUMN_MAP, hotColdColumnMap);
+    }
+
+    public Map<String, String> getHotColdColumnMap() {
+        if (tableProperty != null) {
+            return tableProperty.getHotColdColumnMap();
+        }
+        return Collections.emptyMap();
+    }
+
+    public void setColdTablePartitionFormat(String partitionFormat) {
+        if (tableProperty == null) {
+            tableProperty = new TableProperty(new HashMap<>());
+        }
+        tableProperty.modifyTableProperties(PropertyAnalyzer.PROPERTIES_COLD_TABLE_PARTITION_FORMAT, partitionFormat);
+    }
+
+    public String getColdTablePartitionFormat() {
+        if (tableProperty != null) {
+            return tableProperty.getColdTablePartitionFormat();
+        }
+        return PropertyAnalyzer.DEFAULT_COLD_TABLE_PARTITION_FORMAT;
     }
 
     public void setStorageMedium(TStorageMedium storageMedium) {

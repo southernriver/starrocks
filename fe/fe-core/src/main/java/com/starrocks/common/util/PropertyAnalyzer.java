@@ -35,6 +35,8 @@ import com.starrocks.catalog.Column;
 import com.starrocks.catalog.DataProperty;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.ForeignKeyConstraint;
+import com.starrocks.catalog.HiveTable;
+import com.starrocks.catalog.IcebergTable;
 import com.starrocks.catalog.InternalCatalog;
 import com.starrocks.catalog.KeysType;
 import com.starrocks.catalog.MaterializedView;
@@ -45,6 +47,7 @@ import com.starrocks.catalog.Type;
 import com.starrocks.catalog.UniqueConstraint;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Config;
+import com.starrocks.common.DdlException;
 import com.starrocks.common.Pair;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.analyzer.AnalyzerUtils;
@@ -124,12 +127,21 @@ public class PropertyAnalyzer {
     public static final String ABLE_LOW_CARD_DICT = "1";
     public static final String DISABLE_LOW_CARD_DICT = "0";
 
+    // hot cold query
+    public static final int PROPERTIE_COLD_TABLE_INFO_LENGTH = 3;
+    public static final String PROPERTIES_COLD_TABLE_INFO = "cold_table";
+    public static final String PROPERTIES_HOT_COLD_COLUMN_MAP = "hot_cold_column_map";
+    public static final String PROPERTIES_COLD_TABLE_PARTITION_FORMAT = "cold_table_partition_format";
+    public static final String HOT_COLD_COLUMN_MAP_REGEX =
+            "^\\w+(\\s)*:(\\s)*\\w+(\\s)*(,(\\s)*\\w+(\\s)*:(\\s)*\\w+)*$";
+    public static final String DEFAULT_COLD_TABLE_PARTITION_FORMAT = "yyyymmdd";
+
     public static final String PROPERTIES_ENABLE_STORAGE_CACHE = "enable_storage_cache";
     public static final String PROPERTIES_STORAGE_CACHE_TTL = "storage_cache_ttl";
     public static final String PROPERTIES_ALLOW_ASYNC_WRITE_BACK = "allow_async_write_back";
-    public static final String PROPERTIES_PARTITION_TTL_NUMBER  = "partition_ttl_number";
-    public static final String PROPERTIES_AUTO_REFRESH_PARTITIONS_LIMIT  = "auto_refresh_partitions_limit";
-    public static final String PROPERTIES_PARTITION_REFRESH_NUMBER  = "partition_refresh_number";
+    public static final String PROPERTIES_PARTITION_TTL_NUMBER = "partition_ttl_number";
+    public static final String PROPERTIES_AUTO_REFRESH_PARTITIONS_LIMIT = "auto_refresh_partitions_limit";
+    public static final String PROPERTIES_PARTITION_REFRESH_NUMBER = "partition_refresh_number";
     public static final String PROPERTIES_EXCLUDED_TRIGGER_TABLES = "excluded_trigger_tables";
     public static final String PROPERTIES_FORCE_EXTERNAL_TABLE_QUERY_REWRITE = "force_external_table_query_rewrite";
 
@@ -600,6 +612,69 @@ public class PropertyAnalyzer {
             properties.remove(PROPERTIES_TYPE);
         }
         return type;
+    }
+
+    public static String analyzeColdTableInfo(Map<String, String> properties)
+            throws DdlException {
+        String coldTableInfoStr = null;
+        if (properties != null && properties.containsKey(PROPERTIES_COLD_TABLE_INFO)) {
+            String tmpColdTableInfoStr = properties.get(PROPERTIES_COLD_TABLE_INFO);
+            String[] splitInfo = tmpColdTableInfoStr.split("\\.");
+            if (splitInfo.length != 2 && splitInfo.length != 3) {
+                throw new DdlException(
+                        "Invalid cold table: " + tmpColdTableInfoStr + ". Valid format: catalog.database.table.");
+            }
+            // Be careful when call this function
+            properties.remove(PROPERTIES_COLD_TABLE_INFO);
+
+            // Cold table check
+            List<String> coldTableInfo = Arrays.asList(splitInfo);
+            String coldCatalog = InternalCatalog.DEFAULT_INTERNAL_CATALOG_NAME;
+            String coldDb;
+            String coldTbl;
+            if (coldTableInfo.size() == 2) {
+                coldDb = coldTableInfo.get(0);
+                coldTbl = coldTableInfo.get(1);
+                coldTableInfoStr = coldCatalog + "." + tmpColdTableInfoStr;
+            } else {
+                coldCatalog = coldTableInfo.get(0);
+                coldDb = coldTableInfo.get(1);
+                coldTbl = coldTableInfo.get(2);
+                coldTableInfoStr = tmpColdTableInfoStr;
+            }
+
+            Table coldTable = GlobalStateMgr.getCurrentState().getMetadataMgr().getTable(coldCatalog, coldDb, coldTbl);
+            if (coldTable == null) {
+                throw new DdlException(
+                        "Cold table " + coldTableInfoStr + " doesn't exist or no access permission for this table.");
+            } else if (!(coldTable instanceof HiveTable) && !(coldTable instanceof IcebergTable)) {
+                throw new DdlException("Only Hive and Iceberg are supported as cold table.");
+            }
+        }
+        return coldTableInfoStr;
+    }
+
+    public static String analyzeHotColdColumnMap(Map<String, String> properties) throws AnalysisException {
+        String colMapInfo = new String();
+        if (properties != null && properties.containsKey(PROPERTIES_HOT_COLD_COLUMN_MAP)) {
+            colMapInfo = properties.get(PROPERTIES_HOT_COLD_COLUMN_MAP);
+            if (!colMapInfo.matches(HOT_COLD_COLUMN_MAP_REGEX)) {
+                throw new AnalysisException("Invalid hot_cold_column_map: " + colMapInfo);
+            }
+            properties.remove(PROPERTIES_HOT_COLD_COLUMN_MAP);
+        }
+        return colMapInfo;
+    }
+
+    public static String analyzeColdTablePartitionFormat(Map<String, String> properties) throws AnalysisException {
+        String partitionFormat = DEFAULT_COLD_TABLE_PARTITION_FORMAT;
+        if (properties != null && properties.containsKey(PROPERTIES_COLD_TABLE_PARTITION_FORMAT)) {
+            partitionFormat = properties.get(PROPERTIES_COLD_TABLE_PARTITION_FORMAT).toLowerCase();
+            DateUtils.probeFormat(partitionFormat);
+            properties.remove(PROPERTIES_COLD_TABLE_PARTITION_FORMAT);
+        }
+
+        return partitionFormat;
     }
 
     public static long analyzeLongProp(Map<String, String> properties, String propKey, long defaultVal)

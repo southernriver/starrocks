@@ -185,8 +185,13 @@ public class AlterTableStatementAnalyzer {
                     || properties.containsKey(PropertyAnalyzer.PROPERTIES_UNIQUE_CONSTRAINT)) {
                 clause.setNeedTableStable(false);
                 clause.setOpType(AlterOpType.MODIFY_TABLE_PROPERTY_SYNC);
+            } else if (properties.containsKey(PropertyAnalyzer.PROPERTIES_COLD_TABLE_INFO) ||
+                    properties.containsKey(PropertyAnalyzer.PROPERTIES_HOT_COLD_COLUMN_MAP) ||
+                    properties.containsKey(PropertyAnalyzer.PROPERTIES_COLD_TABLE_PARTITION_FORMAT)) {
+                // do nothing for now
             } else {
-                ErrorReport.reportSemanticException(ErrorCode.ERR_COMMON_ERROR, "Unknown table property: " + properties.keySet());
+                ErrorReport.reportSemanticException(ErrorCode.ERR_COMMON_ERROR,
+                        "Unknown table property: " + properties.keySet());
             }
             return null;
         }

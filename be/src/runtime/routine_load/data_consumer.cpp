@@ -30,11 +30,11 @@
 #include "gutil/strings/split.h"
 #include "runtime/small_file_mgr.h"
 #include "service/backend_options.h"
+#include "tubemq/tubemq_errcode.h"
 #include "util/defer_op.h"
 #include "util/monotime.h"
 #include "util/stopwatch.hpp"
 #include "util/uid_util.h"
-#include "tubemq/tubemq_errcode.h"
 
 namespace starrocks {
 
@@ -789,8 +789,7 @@ Status TubeDataConsumer::set_group_consume_target(StreamLoadContext* ctx) {
         std::set<std::string> topic_set;
         topic_set.insert(_topic);
         if (!_t_consumer_config.SetGroupConsumeTarget(err_info, _group_name, topic_set)) {
-            LOG(WARNING) << "PAUSE: failed to set group consume target: " << ctx->brief(true)
-                         << ", err: " << err_info;
+            LOG(WARNING) << "PAUSE: failed to set group consume target: " << ctx->brief(true) << ", err: " << err_info;
             return Status::InternalError("PAUSE: failed to set group consume target: " + err_info);
         }
     } else {
@@ -805,7 +804,7 @@ Status TubeDataConsumer::set_group_consume_target(StreamLoadContext* ctx) {
     }
 
     // Retry for 3 times if the error is "request timeout"
-    for (int i=0; i<3; i++) {
+    for (int i = 0; i < 3; i++) {
         if (_t_consumer.Start(err_info, _t_consumer_config)) {
             // Normal exit
             return Status::OK();
@@ -821,7 +820,8 @@ Status TubeDataConsumer::set_group_consume_target(StreamLoadContext* ctx) {
     return Status::InternalError("PAUSE: failed to start tube consumer: " + err_info);
 }
 
-Status TubeDataConsumer::group_consume(TimedBlockingQueue<tubemq::ConsumerResult*>* queue, int64_t max_running_time_ms) {
+Status TubeDataConsumer::group_consume(TimedBlockingQueue<tubemq::ConsumerResult*>* queue,
+                                       int64_t max_running_time_ms) {
     _last_visit_time = time(nullptr);
     int64_t left_time = max_running_time_ms;
     LOG(INFO) << "start tube consumer: " << _id << ", grp: " << _grp_id << ", max running time(ms): " << left_time;

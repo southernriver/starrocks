@@ -178,6 +178,10 @@ public class ConnectProcessor {
         if (ctx.getState().isQuery()) {
             MetricRepo.COUNTER_QUERY_ALL.increase(1L);
             ResourceGroupMetricMgr.increaseQuery(ctx, 1L);
+            if (ctx.getState().isHotColdQuery()) {
+                MetricRepo.COUNTER_HOT_COLD_QUERY.increase(1L);
+                ctx.getAuditEventBuilder().setIsHotColdQuery(true);
+            }
             if (ctx.getState().getStateType() == QueryState.MysqlStateType.ERR) {
                 // err query
                 MetricRepo.COUNTER_QUERY_ERR.increase(1L);

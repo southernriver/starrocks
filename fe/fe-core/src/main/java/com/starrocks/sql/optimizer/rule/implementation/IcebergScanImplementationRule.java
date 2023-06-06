@@ -33,6 +33,10 @@ public class IcebergScanImplementationRule extends ImplementationRule {
                     scan.getPredicate(),
                     scan.getProjection());
 
+            if (scan.getHybridScanTable() != null) {
+                physicalIcebergScan.setHybridScanTable(scan.getHybridScanTable());
+            }
+
             result = new OptExpression(physicalIcebergScan);
         }
         return Lists.newArrayList(result);

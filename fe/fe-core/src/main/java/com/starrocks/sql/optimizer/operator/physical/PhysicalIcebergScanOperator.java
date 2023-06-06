@@ -19,6 +19,8 @@ import java.util.Map;
 public class PhysicalIcebergScanOperator extends PhysicalScanOperator {
     private ScanOperatorPredicates predicates;
 
+    private Table hybridScanTable = null;
+
     public PhysicalIcebergScanOperator(Table table,
                                        Map<ColumnRefOperator, Column> columnRefMap,
                                        ScanOperatorPredicates predicates,
@@ -57,5 +59,13 @@ public class PhysicalIcebergScanOperator extends PhysicalScanOperator {
         predicates.getMinMaxConjuncts().forEach(d -> refs.union(d.getUsedColumns()));
         predicates.getMinMaxColumnRefMap().keySet().forEach(refs::union);
         return refs;
+    }
+
+    public void setHybridScanTable(Table hybridScanTable) {
+        this.hybridScanTable = hybridScanTable;
+    }
+
+    public Table getHybridScanTable() {
+        return hybridScanTable;
     }
 }

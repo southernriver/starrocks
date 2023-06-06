@@ -936,6 +936,10 @@ public class PlanFragmentBuilder {
                     new IcebergScanNode(context.getNextNodeId(), tupleDescriptor, "IcebergScanNode");
             icebergScanNode.computeStatistics(optExpression.getStatistics());
             try {
+                if (node.getHybridScanTable() != null) {
+                    icebergScanNode.setHybridScanTable(node.getHybridScanTable());
+                }
+
                 // set predicate
                 ScalarOperatorToExpr.FormatterContext formatterContext =
                         new ScalarOperatorToExpr.FormatterContext(context.getColRefToExpr());

@@ -26,6 +26,8 @@ import com.starrocks.connector.iceberg.IcebergConnector;
 import com.starrocks.connector.iceberg.IcebergUtil;
 import com.starrocks.connector.iceberg.ScalarOperatorToIcebergExpr;
 import com.starrocks.credential.CloudConfiguration;
+import com.starrocks.metric.TableMetricsEntity;
+import com.starrocks.metric.TableMetricsRegistry;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.analyzer.Field;
 import com.starrocks.sql.optimizer.base.ColumnRefFactory;
@@ -90,6 +92,8 @@ public class IcebergScanNode extends ScanNode {
     private CloudConfiguration cloudConfiguration = null;
 
     private final AtomicLong partitionIdGen = new AtomicLong(0L);
+
+    private Table hybridScanTable = null;
 
     public IcebergScanNode(PlanNodeId id, TupleDescriptor desc, String planNodeName) {
         super(id, desc, planNodeName);
@@ -205,6 +209,10 @@ public class IcebergScanNode extends ScanNode {
         }
     }
 
+    public void setHybridScanTable(Table hybridScanTable) {
+        this.hybridScanTable = hybridScanTable;
+    }
+
     @Override
     public void finalizeStats(Analyzer analyzer) throws UserException {
         if (isFinalized) {
@@ -259,6 +267,12 @@ public class IcebergScanNode extends ScanNode {
                 if (!partitionMap.containsKey(partition)) {
                     long partitionId = nextPartitionId();
                     partitionMap.put(partition, partitionId);
+                }
+
+                if (hybridScanTable != null) {
+                    TableMetricsEntity entity =
+                            TableMetricsRegistry.getInstance().getMetricsEntity(hybridScanTable.getId());
+                    entity.counterColdScanPartitionsTotal.increase((long) partitionMap.size());
                 }
 
                 TScanRangeLocations scanRangeLocations = new TScanRangeLocations();

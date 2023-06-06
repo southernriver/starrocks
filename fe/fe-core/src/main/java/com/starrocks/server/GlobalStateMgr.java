@@ -2325,8 +2325,26 @@ public class GlobalStateMgr {
                         .append("\" = \"");
                 sb.append(WriteQuorum.writeQuorumToName(olapTable.writeQuorum())).append("\"");
             }
-            // storage media
+
             Map<String, String> properties = olapTable.getTableProperty().getProperties();
+
+            // hot cold query info
+            if (properties.containsKey(PropertyAnalyzer.PROPERTIES_COLD_TABLE_INFO)) {
+                sb.append(",\n\"").append(PropertyAnalyzer.PROPERTIES_COLD_TABLE_INFO).append("\" = \"");
+                sb.append(properties.get(PropertyAnalyzer.PROPERTIES_COLD_TABLE_INFO)).append("\"");
+            }
+
+            // hot cold column map info
+            if (properties.containsKey(PropertyAnalyzer.PROPERTIES_HOT_COLD_COLUMN_MAP)) {
+                sb.append(",\n\"").append(PropertyAnalyzer.PROPERTIES_HOT_COLD_COLUMN_MAP).append("\" = \"");
+                sb.append(properties.get(PropertyAnalyzer.PROPERTIES_HOT_COLD_COLUMN_MAP)).append("\"");
+            }
+
+            // cold table partition format
+            if (properties.containsKey(PropertyAnalyzer.PROPERTIES_COLD_TABLE_PARTITION_FORMAT)) {
+                sb.append(",\n\"").append(PropertyAnalyzer.PROPERTIES_COLD_TABLE_PARTITION_FORMAT).append("\" = \"");
+                sb.append(properties.get(PropertyAnalyzer.PROPERTIES_COLD_TABLE_PARTITION_FORMAT)).append("\"");
+            }
 
             // unique constraint
             if (properties.containsKey(PropertyAnalyzer.PROPERTIES_UNIQUE_CONSTRAINT)
@@ -2384,6 +2402,7 @@ public class GlobalStateMgr {
                 sb.append(olapTable.getCompressionType()).append("\"");
             }
 
+            // storage media
             if (properties.containsKey(PropertyAnalyzer.PROPERTIES_STORAGE_MEDIUM)) {
                 sb.append(StatsConstants.TABLE_PROPERTY_SEPARATOR).append(PropertyAnalyzer.PROPERTIES_STORAGE_MEDIUM)
                         .append("\" = \"");
@@ -3116,12 +3135,28 @@ public class GlobalStateMgr {
         localMetastore.modifyTableDefaultReplicationNum(db, table, properties);
     }
 
+    public void modifyColdTableInfoProperty(Database db, OlapTable table, Map<String, String> properties)
+            throws DdlException {
+        localMetastore.modifyColdTableInfoProperty(db, table, properties);
+    }
+
+    public void modifyHotColdColumnMapProperty(Database db, OlapTable table, Map<String, String> properties)
+            throws DdlException {
+        localMetastore.modifyHotColdColumnMapProperty(db, table, properties);
+    }
+
+    public void modifyColdTablePartitionFormat(Database db, OlapTable table, Map<String, String> properties)
+            throws DdlException {
+        localMetastore.modifyColdTablePartitionFormat(db, table, properties);
+    }
+
     public void modifyTableMeta(Database db, OlapTable table, Map<String, String> properties,
                                 TTabletMetaType metaType) {
         localMetastore.modifyTableMeta(db, table, properties, metaType);
     }
 
-    public void modifyTableConstraint(Database db, String tableName, Map<String, String> properties) throws DdlException {
+    public void modifyTableConstraint(Database db, String tableName, Map<String, String> properties)
+            throws DdlException {
         localMetastore.modifyTableConstraint(db, tableName, properties);
     }
 

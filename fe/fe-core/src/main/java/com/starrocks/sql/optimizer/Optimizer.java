@@ -21,6 +21,7 @@ import com.starrocks.sql.optimizer.rule.RuleSetType;
 import com.starrocks.sql.optimizer.rule.join.ReorderJoinRule;
 import com.starrocks.sql.optimizer.rule.mv.MaterializedViewRule;
 import com.starrocks.sql.optimizer.rule.transformation.ApplyExceptionRule;
+import com.starrocks.sql.optimizer.rule.transformation.CastColForUnionRule;
 import com.starrocks.sql.optimizer.rule.transformation.GroupByCountDistinctRewriteRule;
 import com.starrocks.sql.optimizer.rule.transformation.MergeProjectWithChildRule;
 import com.starrocks.sql.optimizer.rule.transformation.MergeTwoAggRule;
@@ -35,6 +36,7 @@ import com.starrocks.sql.optimizer.rule.transformation.PushLimitAndFilterToCTEPr
 import com.starrocks.sql.optimizer.rule.transformation.RemoveAggregationFromAggTable;
 import com.starrocks.sql.optimizer.rule.transformation.RewriteGroupingSetsByCTERule;
 import com.starrocks.sql.optimizer.rule.transformation.SemiReorderRule;
+import com.starrocks.sql.optimizer.rule.transformation.SplitOlapScanIntoHybridScanRule;
 import com.starrocks.sql.optimizer.rule.transformation.materialization.MvUtils;
 import com.starrocks.sql.optimizer.rule.tree.AddDecodeNodeForDictStringRule;
 import com.starrocks.sql.optimizer.rule.tree.ExchangeSortToMergeRule;
@@ -137,6 +139,10 @@ public class Optimizer {
 
         // collect all olap scan operator
         collectAllScanOperators(memo, rootTaskContext);
+
+        if (rootTaskContext.isHybridScanIncluded()) {
+            connectContext.getState().setIsHotColdQuery(true);
+        }
 
         // Currently, we cache output columns in logic property.
         // We derive logic property Bottom Up firstly when new group added to memo,
@@ -285,6 +291,10 @@ public class Optimizer {
         ruleRewriteIterative(tree, rootTaskContext, RuleSetType.MULTI_DISTINCT_REWRITE);
         ruleRewriteIterative(tree, rootTaskContext, RuleSetType.PUSH_DOWN_PREDICATE);
 
+        if (context.getSessionVariable().isEnableHotColdQuery()) {
+            ruleRewriteOnlyOnce(tree, rootTaskContext, new SplitOlapScanIntoHybridScanRule());
+        }
+
         ruleRewriteOnlyOnce(tree, rootTaskContext, RuleSetType.PARTITION_PRUNE);
         ruleRewriteIterative(tree, rootTaskContext, RuleSetType.PRUNE_PROJECT);
 
@@ -306,6 +316,10 @@ public class Optimizer {
         ruleRewriteOnlyOnce(tree, rootTaskContext, new GroupByCountDistinctRewriteRule());
         ruleRewriteOnlyOnce(tree, rootTaskContext, RuleSetType.INTERSECT_REWRITE);
         ruleRewriteIterative(tree, rootTaskContext, new RemoveAggregationFromAggTable());
+        if (context.getSessionVariable().isEnableHotColdQuery()) {
+            ruleRewriteOnlyOnce(tree, rootTaskContext, RuleSetType.PUSH_DOWN_AGG_TO_UNION);
+            ruleRewriteOnlyOnce(tree, rootTaskContext, new CastColForUnionRule());
+        }
 
         if (isEnableSingleTableMVRewrite(rootTaskContext, sessionVariable, tree)) {
             // now add single table materialized view rewrite rules in rule based rewrite phase to boost optimization

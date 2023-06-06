@@ -15,7 +15,10 @@ public final class TableMetricsEntity {
     protected static final String TABLE_SCAN_ROWS_COMMENT = "total scanned rows of a table";
     protected static final String TABLE_SCAN_FINISHED = "table_scan_finished";
     protected static final String TABLE_SCAN_FINISHED_COMMENT = "total scanned times of a table";
-
+    protected static final String TABLE_HOT_SCAN_PARTITIONS = "table_hot_scan_partitions";
+    protected static final String TABLE_HOT_SCAN_PARTITIONS_COMMENT = "total partitions for hot scan of a table";
+    protected static final String TABLE_COLD_SCAN_PARTITIONS = "table_cold_scan_partitions";
+    protected static final String TABLE_COLD_SCAN_PARTITIONS_COMMENT = "total partitions for cold scan of a table";
     public static final String TABLE_LOAD_BYTES = "table_load_bytes";
     private static final String TABLE_LOAD_BYTES_COMMENT = "total loaded bytes of a table";
     public static final String TABLE_LOAD_ROWS = "table_load_rows";
@@ -32,6 +35,9 @@ public final class TableMetricsEntity {
     public LongCounterMetric counterScanBytesTotal;
     public LongCounterMetric counterScanRowsTotal;
     public LongCounterMetric counterScanFinishedTotal;
+
+    public LongCounterMetric counterHotScanPartitionsTotal;
+    public LongCounterMetric counterColdScanPartitionsTotal;
 
     public LongCounterMetric counterStreamLoadBytesTotal;
     public LongCounterMetric counterStreamLoadRowsTotal;
@@ -74,6 +80,12 @@ public final class TableMetricsEntity {
         counterScanFinishedTotal =
                 new LongCounterMetric(TABLE_SCAN_FINISHED, MetricUnit.REQUESTS, TABLE_SCAN_FINISHED_COMMENT);
         metrics.add(counterScanFinishedTotal);
+        counterHotScanPartitionsTotal = new LongCounterMetric(TABLE_HOT_SCAN_PARTITIONS, MetricUnit.OPERATIONS,
+                TABLE_HOT_SCAN_PARTITIONS_COMMENT);
+        metrics.add(counterHotScanPartitionsTotal);
+        counterColdScanPartitionsTotal = new LongCounterMetric(TABLE_COLD_SCAN_PARTITIONS, MetricUnit.OPERATIONS,
+                TABLE_COLD_SCAN_PARTITIONS_COMMENT);
+        metrics.add(counterColdScanPartitionsTotal);
 
         // load metrics
         counterStreamLoadBytesTotal =

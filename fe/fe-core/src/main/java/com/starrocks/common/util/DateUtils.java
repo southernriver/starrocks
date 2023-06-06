@@ -16,6 +16,7 @@ public class DateUtils {
     public static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     public static final DateTimeFormatter DATEKEY_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd");
     public static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    public static final DateTimeFormatter DATEKEY_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd HH:mm:ss");
     public static final DateTimeFormatter MINUTE_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmm");
     public static final DateTimeFormatter HOUR_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHH");
     public static final DateTimeFormatter YEAR_FORMATTER = DateTimeFormatter.ofPattern("yyyy");
@@ -36,6 +37,8 @@ public class DateUtils {
             return DateUtils.DATEKEY_FORMATTER;
         } else if (dateTimeStr.length() == 10) {
             return DateUtils.DATE_FORMATTER;
+        } else if (dateTimeStr.length() == 17) {
+            return DateUtils.DATEKEY_TIME_FORMATTER;
         } else if (dateTimeStr.length() == 19) {
             return DateUtils.DATE_TIME_FORMATTER;
         } else {
