@@ -77,6 +77,7 @@ public class ExportPendingTask extends PriorityLeaderTask {
             job.cancelInternal(ExportFailMsg.CancelType.RUN_FAIL, failMsg);
             return;
         }
+        long snapshotTime = System.currentTimeMillis();
 
         // make snapshots
         Status snapshotStatus = makeSnapshots();
@@ -84,6 +85,7 @@ public class ExportPendingTask extends PriorityLeaderTask {
             job.cancelInternal(ExportFailMsg.CancelType.RUN_FAIL, snapshotStatus.getErrorMsg());
             return;
         }
+        job.setSnapshotTimeMs(snapshotTime);
 
         if (job.updateState(ExportJob.JobState.EXPORTING)) {
             LOG.info("submit pending export job success. job: {}", job);
@@ -138,7 +140,7 @@ public class ExportPendingTask extends PriorityLeaderTask {
             LockTabletMetadataRequest request = new LockTabletMetadataRequest();
             request.tabletId = internalScanRange.getTablet_id();
             request.version = Long.parseLong(internalScanRange.getVersion());
-            request.expireTime = (job.getCreateTimeMs() / 1000) + job.getTimeoutSecond();
+            request.expireTime = (System.currentTimeMillis() / 1000) + job.getTimeoutSecond();
             lakeService.lockTabletMetadata(request);
         } catch (Throwable e) {
             return new Status(TStatusCode.CANCELLED, e.getMessage());

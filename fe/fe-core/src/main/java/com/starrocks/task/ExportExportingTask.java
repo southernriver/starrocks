@@ -23,6 +23,7 @@ package com.starrocks.task;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
+import com.starrocks.common.Config;
 import com.starrocks.common.MarkedCountDownLatch;
 import com.starrocks.common.Status;
 import com.starrocks.common.UserException;
@@ -78,7 +79,8 @@ public class ExportExportingTask extends PriorityLeaderTask {
         LOG.info("begin execute export job in exporting state. job: {}", job);
 
         // check timeout
-        if (getLeftTimeSecond(job) < 0) {
+        if ((job.getStartTimeMs() > 0 && getLeftTimeSecond(job) < 0) ||
+                ((System.currentTimeMillis() - job.getCreateTimeMs()) / 1000 > Config.export_task_max_running_second)) {
             job.cancelInternal(ExportFailMsg.CancelType.TIMEOUT, "timeout");
             return;
         }
@@ -109,18 +111,22 @@ public class ExportExportingTask extends PriorityLeaderTask {
             subTasks.add(subTask);
             subTasksDoneSignal.addMark(i, -1);
         }
-        for (ExportExportingSubTask subTask : subTasks) {
-            if (!submitSubTask(subTask)) {
-                job.cancelInternal(ExportFailMsg.CancelType.RUN_FAIL, "submit exporting task failed");
-                return;
+        // all subTasks in this job should be submitted together,
+        // otherwise many jobs can submit subTasks together and single job can take longer time than expected
+        synchronized (ExportChecker.getExportingSubTaskExecutor()) {
+            for (ExportExportingSubTask subTask : subTasks) {
+                if (!submitSubTask(subTask)) {
+                    job.cancelInternal(ExportFailMsg.CancelType.RUN_FAIL, "submit exporting task failed");
+                    return;
+                }
+                LOG.info("submit export sub task success. task idx: {}, task query id: {}",
+                        subTask.getTaskIdx(), subTask.getQueryId());
             }
-            LOG.info("submit export sub task success. task idx: {}, task query id: {}",
-                    subTask.getTaskIdx(), subTask.getQueryId());
         }
 
         boolean success = false;
         try {
-            success = subTasksDoneSignal.await(getLeftTimeSecond(job), TimeUnit.SECONDS);
+            success = subTasksDoneSignal.await(Config.export_task_max_running_second, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             LOG.warn("export sub task signal await error", e);
         }
@@ -186,7 +192,7 @@ public class ExportExportingTask extends PriorityLeaderTask {
     }
 
     private static int getLeftTimeSecond(ExportJob job) {
-        return (int) (job.getTimeoutSecond() - (System.currentTimeMillis() - job.getCreateTimeMs()) / 1000);
+        return (int) (job.getTimeoutSecond() - (System.currentTimeMillis() - job.getStartTimeMs()) / 1000);
     }
 
     private void initProfile() {
@@ -321,6 +327,7 @@ public class ExportExportingTask extends PriorityLeaderTask {
         @Override
         protected void exec() {
             LOG.info("begin execute sub task, task idx: {}, task query id: {}", taskIdx, getQueryId());
+            job.setStartTimeMs(System.currentTimeMillis());
 
             boolean success = false;
             String failMsg = null;
@@ -346,6 +353,7 @@ public class ExportExportingTask extends PriorityLeaderTask {
 
                 if (i < RETRY_NUM - 1) {
                     TUniqueId queryId = coord.getQueryId();
+                    job.getBackendTaskExecResult().put(queryId, coord.getBackendExecResult());
                     coord.clearExportStatus();
 
                     // generate one new queryId here, to avoid being rejected by BE,
@@ -390,6 +398,7 @@ public class ExportExportingTask extends PriorityLeaderTask {
 
             coord.setTimeout(leftTimeSecond);
             coord.exec();
+            job.getBackendTaskExecResult().put(coord.getQueryId(), coord.getBackendExecResult());
 
             if (coord.join(leftTimeSecond)) {
                 Status status = coord.getExecStatus();
@@ -411,6 +420,7 @@ public class ExportExportingTask extends PriorityLeaderTask {
             }
             job.increaseExportedRowCount(Long.parseLong(loadCounters.get(LoadEtlTask.DPP_NORMAL_ALL)));
             job.increaseExportedBytesCount(Long.parseLong(loadCounters.get(LoadJob.LOADED_BYTES)));
+            job.getBackendTaskExecResult().put(coord.getQueryId(), coord.getBackendExecResult());
             LOG.info("export sub task finish. task idx: {}, task query id: {}", taskIdx, getQueryId());
         }
 
@@ -427,6 +437,7 @@ public class ExportExportingTask extends PriorityLeaderTask {
             synchronized (subTasksDoneSignal) {
                 subTasksDoneSignal.countDownToZero(failStatus);
             }
+            job.getBackendTaskExecResult().put(coord.getQueryId(), coord.getBackendExecResult());
             LOG.warn("export sub task fail. task idx: {}, task query id: {}, err: {}",
                     taskIdx, getQueryId(), taskFailMsg);
         }

@@ -434,7 +434,7 @@ public class ColddownJob implements Writable {
             LOG.info("colddown job {} export to partition {} is {}", name, job.getPartitions().get(0),
                     job.getState());
             boolean success = job.getState() == ExportJob.JobState.FINISHED;
-            addInfoToPartition(entry.getKey(), job.getCreateTimeMs(), success, entry.getValue().second,
+            addInfoToPartition(entry.getKey(), job.getSnapshotTimeMs(), success, entry.getValue().second,
                     job.getExportedRowCount());
             totalSuccessExportJobs += success ? 1 : 0;
             totalFailedExportJobs += success ? 0 : 1;
@@ -446,10 +446,10 @@ public class ColddownJob implements Writable {
         }
     }
 
-    private void addInfoToPartition(long partitionId, long createTimeMs, boolean success, boolean triggeredByTtl,
+    private void addInfoToPartition(long partitionId, long snapshotTime, boolean success, boolean triggeredByTtl,
                                     long exportedRowCount) {
         PartitionColddownInfo info = new PartitionColddownInfo(dbId, tableId, partitionId, name, success,
-                triggeredByTtl, createTimeMs, exportedRowCount);
+                triggeredByTtl, snapshotTime, exportedRowCount);
         GlobalStateMgr.getCurrentState().getColddownMgr().addPartitionColddownInfo(info);
     }
 

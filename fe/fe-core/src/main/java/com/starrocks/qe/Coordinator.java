@@ -29,6 +29,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import com.google.gson.Gson;
 import com.starrocks.analysis.DescriptorTable;
 import com.starrocks.analysis.UserIdentity;
 import com.starrocks.catalog.FsBroker;
@@ -121,6 +122,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.thrift.TException;
+import org.joda.time.format.ISODateTimeFormat;
 
 import java.time.Instant;
 import java.time.ZoneId;
@@ -933,6 +935,7 @@ public class Coordinator {
                             code = TStatusCode.findByValue(result.status.statusCode);
                             if (result.status.errorMsgs != null && !result.status.errorMsgs.isEmpty()) {
                                 errMsg = result.status.errorMsgs.get(0);
+                                pair.first.errMsg = errMsg;
                             }
                         } catch (ExecutionException e) {
                             LOG.warn("catch a execute exception", e);
@@ -957,6 +960,7 @@ public class Coordinator {
                                 errorBackendExecState = pair.first;
                                 errorCode = code;
                                 errMessage = errMsg;
+                                errorBackendExecState.errorCode = code;
                             }
                             if (Objects.requireNonNull(code) == TStatusCode.TIMEOUT) {
                                 break;
@@ -2767,6 +2771,14 @@ public class Coordinator {
         return true;
     }
 
+    public List<BackendExecResult> getBackendExecResult() {
+        final List<BackendExecResult> result = Lists.newArrayList();
+        for (BackendExecState backendExecState : backendExecStates.values()) {
+            result.add(new BackendExecResult(backendExecState));
+        }
+        return result;
+    }
+
     public boolean isDone() {
         return profileDoneSignal.getCount() == 0;
     }
@@ -2895,6 +2907,10 @@ public class Coordinator {
         TNetworkAddress address;
         ComputeNode backend;
         long lastMissingHeartbeatTime = -1;
+        long startTime;
+        long finishTime = -1;
+        TStatusCode errorCode;
+        public String errMsg;
 
         public BackendExecState(PlanFragmentId fragmentId, TNetworkAddress host, int profileFragmentId,
                                 TExecPlanFragmentParams rpcParams,
@@ -2924,6 +2940,7 @@ public class Coordinator {
             this.profile.addInfoString("Address", String.format("%s:%s", address.hostname, address.port));
             this.hasCanceled = false;
             this.lastMissingHeartbeatTime = backend.getLastMissingHeartbeatTime();
+            this.startTime = System.currentTimeMillis();
         }
 
         // update profile.
@@ -2937,6 +2954,9 @@ public class Coordinator {
                 profile.update(params.profile);
             }
             this.done = params.done;
+            if (this.done) {
+                finishTime = System.currentTimeMillis();
+            }
             return true;
         }
 
@@ -2978,6 +2998,7 @@ public class Coordinator {
                 }
 
                 this.hasCanceled = true;
+                finishTime = System.currentTimeMillis();
             } catch (Exception e) {
                 LOG.warn("catch a exception", e);
                 return false;
@@ -3715,5 +3736,71 @@ public class Coordinator {
         return connectContext != null &&
                 connectContext.getSessionVariable().isEnablePipelineEngine() &&
                 fragments.stream().allMatch(PlanFragment::canUsePipeline);
+    }
+
+    public static class BackendExecResult {
+        private final TNetworkAddress address;
+        private final TStatusCode code;
+        private final String errMsg;
+        private final boolean done;
+        private final boolean hasCanceled;
+        private final long startTime;
+        private final long finishTime;
+
+        public BackendExecResult(BackendExecState backendExecState) {
+            this.address = backendExecState.address;
+            this.code = backendExecState.errorCode;
+            this.errMsg = backendExecState.errMsg;
+            this.done = backendExecState.done;
+            this.hasCanceled = backendExecState.hasCanceled;
+            this.startTime = backendExecState.startTime;
+            this.finishTime = backendExecState.finishTime;
+        }
+
+        public TNetworkAddress getAddress() {
+            return address;
+        }
+
+        public TStatusCode getCode() {
+            return code;
+        }
+
+        public String getErrMsg() {
+            return errMsg;
+        }
+
+        public boolean isDone() {
+            return done;
+        }
+
+        public boolean isHasCanceled() {
+            return hasCanceled;
+        }
+
+        public long getStartTime() {
+            return startTime;
+        }
+
+        public long getFinishTime() {
+            return finishTime;
+        }
+
+        public long getCost() {
+            return finishTime > 0 ? (finishTime - startTime) / 1000 : 0;
+        }
+
+        @Override
+        public String toString() {
+            Map<String, Object> taskInfo = new HashMap<>();
+            taskInfo.put("host", address.getHostname() + ":" + address.getPort());
+            taskInfo.put("code", code != null ? code.name() : "");
+            taskInfo.put("errMsg", errMsg != null ? errMsg : "");
+            taskInfo.put("isDone", done);
+            taskInfo.put("hasCanceled", hasCanceled);
+            taskInfo.put("startTime", ISODateTimeFormat.dateTime().print(startTime));
+            taskInfo.put("finishTime", ISODateTimeFormat.dateTime().print(finishTime));
+            taskInfo.put("cost", getCost());
+            return new Gson().toJson(taskInfo);
+        }
     }
 }

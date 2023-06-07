@@ -108,6 +108,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -159,6 +160,7 @@ public class ExportJob implements Writable {
     private JobState state;
     private long createTimeMs;
     private long startTimeMs;
+    private long snapshotTimeMs;
     private long finishTimeMs;
     private int progress;
     private ExportFailMsg failMsg;
@@ -175,6 +177,7 @@ public class ExportJob implements Writable {
     private AtomicLong exportedBytesCount;
     private AtomicLong totalExportedRowCount;
     private AtomicLong totalExportedBytesCount;
+    private Map<TUniqueId, List<Coordinator.BackendExecResult>> backendTaskExecResult;
 
     public ExportJob() {
         this.id = -1;
@@ -239,6 +242,7 @@ public class ExportJob implements Writable {
         this.exportedBytesCount = new AtomicLong();
         this.totalExportedRowCount = new AtomicLong();
         this.totalExportedBytesCount = new AtomicLong();
+        this.backendTaskExecResult = new ConcurrentHashMap<>();
 
         db.readLock();
         try {
@@ -655,6 +659,10 @@ public class ExportJob implements Writable {
         return startTimeMs;
     }
 
+    public long getSnapshotTimeMs() {
+        return snapshotTimeMs;
+    }
+
     public long getFinishTimeMs() {
         return finishTimeMs;
     }
@@ -701,6 +709,10 @@ public class ExportJob implements Writable {
         return tabletLocations;
     }
 
+    public Map<TUniqueId, List<Coordinator.BackendExecResult>> getBackendTaskExecResult() {
+        return backendTaskExecResult;
+    }
+
     public List<Pair<TNetworkAddress, String>> getSnapshotPaths() {
         return this.snapshotPaths;
     }
@@ -721,6 +733,17 @@ public class ExportJob implements Writable {
         return this.updateState(newState, false);
     }
 
+    public synchronized void setStartTimeMs(long startTimeMs) {
+        if (this.startTimeMs > 0) {
+            return;
+        }
+        this.startTimeMs = startTimeMs;
+    }
+
+    public void setSnapshotTimeMs(long snapshotTimeMs) {
+        this.snapshotTimeMs = snapshotTimeMs;
+    }
+
     public synchronized boolean updateState(JobState newState, boolean isReplay) {
         if (isExportDone()) {
             LOG.warn("export job state is finished or cancelled");
@@ -733,7 +756,6 @@ public class ExportJob implements Writable {
                 progress = 0;
                 break;
             case EXPORTING:
-                startTimeMs = System.currentTimeMillis();
                 break;
             case FINISHED:
             case CANCELLED:
@@ -797,6 +819,11 @@ public class ExportJob implements Writable {
 
             TInternalScanRange internalScanRange = scanRange.getInternal_scan_range();
             List<TScanRangeLocation> locations = tablet.getLocations();
+            long start = getStartTimeMs();
+            if (start == 0) {
+                // job is never started
+                start = getCreateTimeMs();
+            }
             for (TScanRangeLocation location : locations) {
                 TNetworkAddress address = location.getServer();
                 String host = address.getHostname();
@@ -810,7 +837,7 @@ public class ExportJob implements Writable {
                     UnlockTabletMetadataRequest request = new UnlockTabletMetadataRequest();
                     request.tabletId = internalScanRange.getTablet_id();
                     request.version = Long.parseLong(internalScanRange.getVersion());
-                    request.expireTime = (getCreateTimeMs() / 1000) + getTimeoutSecond();
+                    request.expireTime = (start / 1000) + getTimeoutSecond();
                     lakeService.unlockTabletMetadata(request);
                 } catch (Throwable e) {
                     LOG.error("Fail to release metadata lock, job id {}, tablet id {}, version {}", id,
@@ -895,6 +922,11 @@ public class ExportJob implements Writable {
 
         // try to remove exported temp files
         removeExportTempPath();
+        for (List<Coordinator.BackendExecResult> list : this.backendTaskExecResult.values()) {
+            for (Coordinator.BackendExecResult result : list) {
+                LOG.info("export job {} task detail: {}", this.queryId, result);
+            }
+        }
         LOG.info("export job finished. job: {}", this);
     }
 

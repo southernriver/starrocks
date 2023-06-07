@@ -156,6 +156,10 @@ public class ExportMgr {
         matchedJob.cancel(ExportFailMsg.CancelType.USER_CANCEL, "user cancel");
     }
 
+    public ExportJob getExportJob(long jobId) {
+        return idToJob.get(jobId);
+    }
+
     public List<ExportJob> getExportJobs(ExportJob.JobState state) {
         List<ExportJob> result = Lists.newArrayList();
         readLock();
@@ -251,6 +255,7 @@ public class ExportMgr {
                     partitions.add("*");
                 }
                 infoMap.put("db", job.getTableName().getDb());
+                infoMap.put("dbId", job.getDbId());
                 infoMap.put("tbl", job.getTableName().getTbl());
                 infoMap.put("partitions", partitions);
                 List<String> columns = job.getColumnNames() == null ? Lists.newArrayList("*") : job.getColumnNames();

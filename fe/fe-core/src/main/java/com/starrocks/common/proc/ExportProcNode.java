@@ -30,7 +30,7 @@ import com.starrocks.load.ExportMgr;
 import java.util.List;
 
 // TODO(lingbin): think if need a sub node to show unfinished instances
-public class ExportProcNode implements ProcNodeInterface {
+public class ExportProcNode implements ProcDirInterface {
     public static final ImmutableList<String> TITLE_NAMES = new ImmutableList.Builder<String>()
             .add("JobId").add("QueryId").add("State").add("Progress")
             .add("TableName").add("user").add("TaskInfo").add("Path")
@@ -70,5 +70,15 @@ public class ExportProcNode implements ProcNodeInterface {
         }
 
         throw new AnalysisException("Title name[" + columnName + "] does not exist");
+    }
+
+    @Override
+    public boolean register(String name, ProcNodeInterface node) {
+        return false;
+    }
+
+    @Override
+    public ProcNodeInterface lookup(String jobId) throws AnalysisException {
+        return new ExportDetailProcNode(exportMgr, jobId);
     }
 }

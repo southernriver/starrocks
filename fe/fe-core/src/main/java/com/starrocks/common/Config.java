@@ -865,11 +865,11 @@ public class Config extends ConfigBase {
     public static int export_checker_interval_second = 5;
     /**
      * Limitation of the concurrency of running export jobs.
-     * Default is 5.
+     * Default is 30.
      * 0 is unlimited
      */
     @ConfField(mutable = true)
-    public static int export_running_job_num_limit = 5;
+    public static int export_running_job_num_limit = 30;
     /**
      * Limitation of the pending TaskRun queue length.
      * Default is 500.
@@ -900,10 +900,15 @@ public class Config extends ConfigBase {
     @ConfField(mutable = true)
     public static long export_default_load_mem_per_task = 2147483648L; // 2GB
     /**
-     * Size of export task thread pool, default is 5.
+     * Size of export task thread pool, default is 30.
      */
     @ConfField
-    public static int export_task_pool_size = 5;
+    public static int export_task_pool_size = 30;
+    /**
+     * Max seconds that an export task job can run, default is 1 day.
+     */
+    @ConfField
+    public static int export_task_max_running_second = 86400;
     /**
      * Colddown check interval, default is 60 seconds.
      */
