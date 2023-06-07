@@ -129,7 +129,9 @@ public class MetricCalculator extends TimerTask {
             MetricRepo.GAUGE_QUERY_LATENCY_P999.setValue(0.0);
         }
 
-        if (Config.enable_routine_load_lag_metrics)  {
+        MetricRepo.updateRoutineLoadTimeLagMetrics();
+        MetricRepo.updateRoutineLoadRowNumLagMetrics();
+        if (Config.enable_routine_load_lag_metrics) {
             MetricRepo.updateRoutineLoadProcessMetrics();
         }
     }

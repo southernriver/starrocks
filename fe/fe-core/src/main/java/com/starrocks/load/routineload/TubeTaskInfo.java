@@ -37,6 +37,7 @@ import com.starrocks.thrift.TRoutineLoadTask;
 import com.starrocks.thrift.TTubeLoadInfo;
 import com.starrocks.thrift.TUniqueId;
 
+import java.util.Map;
 import java.util.UUID;
 
 public class TubeTaskInfo extends RoutineLoadTaskInfo {
@@ -73,7 +74,7 @@ public class TubeTaskInfo extends RoutineLoadTaskInfo {
     }
 
     @Override
-    public boolean isProgressKeepUp(RoutineLoadProgress progress) {
+    public boolean isProgressKeepUp(RoutineLoadProgress progress, Map<String, Long> consumeLagsRowNum) {
         return true;
     }
 

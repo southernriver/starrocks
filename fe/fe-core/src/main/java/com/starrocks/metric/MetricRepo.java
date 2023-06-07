@@ -135,6 +135,8 @@ public final class MetricRepo {
     public static GaugeMetricImpl<Long> GAUGE_STACKED_JOURNAL_NUM;
 
     public static List<GaugeMetricImpl<Long>> GAUGE_ROUTINE_LOAD_LAGS;
+    public static List<GaugeMetricImpl<Long>> GAUGE_ROUTINE_LOAD_TIME_LAGS;
+    public static List<GaugeMetricImpl<Long>> GAUGE_ROUTINE_LOAD_ROW_NUM_LAGS;
 
     private static final ScheduledThreadPoolExecutor METRIC_TIMER =
             ThreadPoolManager.newDaemonScheduledThreadPool(1, "Metric-Timer-Pool", true);
@@ -146,6 +148,8 @@ public final class MetricRepo {
         }
 
         GAUGE_ROUTINE_LOAD_LAGS = new ArrayList<>();
+        GAUGE_ROUTINE_LOAD_TIME_LAGS = new ArrayList<>();
+        GAUGE_ROUTINE_LOAD_ROW_NUM_LAGS = new ArrayList<>();
 
         // 1. gauge
         // load jobs
@@ -611,6 +615,66 @@ public final class MetricRepo {
         GAUGE_ROUTINE_LOAD_LAGS = routineLoadLags;
     }
 
+    public static void updateRoutineLoadTimeLagMetrics() {
+        List<RoutineLoadJob> jobs = GlobalStateMgr.getCurrentState().getRoutineLoadManager()
+                .getRoutineLoadJobByState(Sets.newHashSet(RoutineLoadJob.JobState.RUNNING));
+
+        List<RoutineLoadJob> targetJobs = jobs.stream()
+                .filter(job -> (!job.getConsumeLags().isEmpty()))
+                .collect(Collectors.toList());
+
+        if (targetJobs.size() <= 0) {
+            return;
+        }
+
+        List<GaugeMetricImpl<Long>> routineLoadLags = new ArrayList<>();
+        for (int i = 0; i < targetJobs.size(); i++) {
+            RoutineLoadJob kJob = targetJobs.get(i);
+            Map<String, Long> partitionToLagSeconds = kJob.getConsumeLags();
+            for (Map.Entry<String, Long> entry : partitionToLagSeconds.entrySet()) {
+                GaugeMetricImpl<Long> metric =
+                        new GaugeMetricImpl<>("routine_load_time_lag_of_partition", MetricUnit.NOUNIT,
+                                "routine load kafka time lag in seconds");
+                metric.addLabel(new MetricLabel("job_name", kJob.getName()));
+                metric.addLabel(new MetricLabel("partition", entry.getKey()));
+                metric.setValue(entry.getValue());
+                routineLoadLags.add(metric);
+            }
+        }
+
+        GAUGE_ROUTINE_LOAD_TIME_LAGS = routineLoadLags;
+    }
+
+    public static void updateRoutineLoadRowNumLagMetrics() {
+        List<RoutineLoadJob> jobs = GlobalStateMgr.getCurrentState().getRoutineLoadManager()
+                .getRoutineLoadJobByState(Sets.newHashSet(RoutineLoadJob.JobState.RUNNING));
+
+        List<RoutineLoadJob> targetJobs = jobs.stream()
+                .filter(job -> (!job.getConsumeLagsRowNum().isEmpty()))
+                .collect(Collectors.toList());
+
+        if (targetJobs.size() <= 0) {
+            return;
+        }
+
+        List<GaugeMetricImpl<Long>> routineLoadLags = new ArrayList<>();
+        for (int i = 0; i < targetJobs.size(); i++) {
+            RoutineLoadJob kJob = targetJobs.get(i);
+            Map<String, Long> partitionToLagRowNum = kJob.getConsumeLagsRowNum();
+            for (Map.Entry<String, Long> entry : partitionToLagRowNum.entrySet()) {
+                GaugeMetricImpl<Long> metric =
+                        new GaugeMetricImpl<>("routine_load_row_num_lag_of_partition", MetricUnit.NOUNIT,
+                                "routine load kafka lag for row number");
+                metric.addLabel(new MetricLabel("job_name", kJob.getName()));
+                metric.addLabel(new MetricLabel("partition", entry.getKey()));
+                metric.setValue(entry.getValue());
+                routineLoadLags.add(metric);
+            }
+        }
+
+        GAUGE_ROUTINE_LOAD_ROW_NUM_LAGS = routineLoadLags;
+    }
+
     public static synchronized String getMetric(MetricVisitor visitor, boolean collectTableMetrics,
                                                 boolean minifyTableMetrics) {
         if (!isInit) {
@@ -649,6 +713,8 @@ public final class MetricRepo {
         if (Config.enable_routine_load_lag_metrics) {
             collectKafkaRoutineLoadProcessMetrics(visitor);
         }
+        collectRoutineLoadRowNumMetrics(visitor);
+        collectRoutineLoadProcessMetrics(visitor);
         collectIcebergRoutineLoadProcessMetrics(visitor);
 
         // colddown metrics
@@ -720,6 +786,18 @@ public final class MetricRepo {
 
     private static void collectKafkaRoutineLoadProcessMetrics(MetricVisitor visitor) {
         for (GaugeMetricImpl<Long> metric : GAUGE_ROUTINE_LOAD_LAGS) {
+            visitor.visit(metric);
+        }
+    }
+
+    private static void collectRoutineLoadProcessMetrics(MetricVisitor visitor) {
+        for (GaugeMetricImpl<Long> metric : GAUGE_ROUTINE_LOAD_TIME_LAGS) {
+            visitor.visit(metric);
+        }
+    }
+
+    private static void collectRoutineLoadRowNumMetrics(MetricVisitor visitor) {
+        for (GaugeMetricImpl<Long> metric : GAUGE_ROUTINE_LOAD_ROW_NUM_LAGS) {
             visitor.visit(metric);
         }
     }

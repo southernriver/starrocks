@@ -171,9 +171,13 @@ Status KafkaDataConsumerGroup::start_all(StreamLoadContext* ctx) {
                 kafka_pipe->finish();
                 ctx->kafka_info->cmt_offset = std::move(cmt_offset);
                 ctx->receive_bytes = ctx->max_batch_size - left_bytes;
+                std::map<std::string, int64_t> res_lag;
+                for (auto& kv : _consume_lags) {
+                    res_lag[std::to_string(kv.first)] = kv.second;
+                }
                 ctx->rltask_statistics = RoutineLoadTaskStatistics(
                         ctx->max_interval_s * 1000 - left_time, _queue.total_get_wait_time() / 1000,
-                        _queue.total_put_wait_time() / 1000, received_rows, ctx->receive_bytes);
+                        _queue.total_put_wait_time() / 1000, received_rows, ctx->receive_bytes, res_lag);
                 return Status::OK();
             }
         }
@@ -205,6 +209,13 @@ Status KafkaDataConsumerGroup::start_all(StreamLoadContext* ctx) {
                     received_rows++;
                     left_bytes -= msg->len();
                     cmt_offset[msg->partition()] = msg->offset();
+                    if (_consume_lags.find(msg->partition()) == _consume_lags.end()) {
+                        auto msg_timestamp = std::chrono::time_point<std::chrono::system_clock>(
+                                std::chrono::milliseconds(msg->timestamp().timestamp));
+                        _consume_lags[msg->partition()] = std::chrono::duration_cast<std::chrono::seconds>(
+                                                                  std::chrono::system_clock::now() - msg_timestamp)
+                                                                  .count();
+                    }
                     VLOG(3) << "consume partition[" << msg->partition() << " - " << msg->offset() << "]";
                 } else {
                     // failed to append this msg, we must stop
@@ -372,7 +383,7 @@ Status PulsarDataConsumerGroup::start_all(StreamLoadContext* ctx) {
                 ctx->receive_bytes = ctx->max_batch_size - left_bytes;
                 ctx->rltask_statistics = RoutineLoadTaskStatistics(
                         ctx->max_interval_s * 1000 - left_time, _queue.total_get_wait_time() / 1000,
-                        _queue.total_put_wait_time() / 1000, received_rows, ctx->receive_bytes);
+                        _queue.total_put_wait_time() / 1000, received_rows, ctx->receive_bytes, _consume_lags);
                 get_backlog_nums(ctx);
                 return Status::OK();
             }
@@ -395,6 +406,13 @@ Status PulsarDataConsumerGroup::start_all(StreamLoadContext* ctx) {
                 received_rows++;
                 left_bytes -= len;
                 ack_offset[partition] = msg_id;
+                if (_consume_lags.find(partition) == _consume_lags.end()) {
+                    auto msg_timestamp = std::chrono::time_point<std::chrono::system_clock>(
+                            std::chrono::milliseconds(msg->getPublishTimestamp()));
+                    _consume_lags[partition] = std::chrono::duration_cast<std::chrono::seconds>(
+                                                       std::chrono::system_clock::now() - msg_timestamp)
+                                                       .count();
+                }
                 VLOG(3) << "consume partition" << partition << " - " << msg_id;
             } else {
                 // failed to append this msg, we must stop

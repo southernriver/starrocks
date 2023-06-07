@@ -26,6 +26,7 @@ import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -130,7 +131,7 @@ public class IcebergTaskInfo extends RoutineLoadTaskInfo {
     }
 
     @Override
-    public boolean isProgressKeepUp(RoutineLoadProgress progress) {
+    public boolean isProgressKeepUp(RoutineLoadProgress progress, Map<String, Long> consumeLagsRowNum) {
         return splitsQueue.isEmpty();
     }
 

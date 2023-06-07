@@ -84,6 +84,7 @@ private:
 private:
     // blocking queue to receive msgs from all consumers
     TimedBlockingQueue<RdKafka::Message*> _queue;
+    std::map<int32_t, int64_t> _consume_lags;
 };
 
 // for pulsar
@@ -108,6 +109,7 @@ private:
 private:
     // blocking queue to receive msgs from all consumers
     TimedBlockingQueue<pulsar::Message*> _queue;
+    std::map<std::string, int64_t> _consume_lags;
 };
 
 // for tube

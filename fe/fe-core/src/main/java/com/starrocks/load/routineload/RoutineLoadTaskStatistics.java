@@ -30,6 +30,7 @@ public class RoutineLoadTaskStatistics {
     private long blockingPutTime;
     private long receivedRows;
     private long receivedBytes;
+    private Map<String, Long> consumeLags = null;
 
     public RoutineLoadTaskStatistics(TRLTaskStatistics taskStatistics) {
         this.consumeTime = taskStatistics.consumeTime;
@@ -37,6 +38,13 @@ public class RoutineLoadTaskStatistics {
         this.blockingPutTime = taskStatistics.blockingPutTime;
         this.receivedRows = taskStatistics.receivedRows;
         this.receivedBytes = taskStatistics.receivedBytes;
+        if (taskStatistics.isSetConsumeLags()) {
+            this.consumeLags = taskStatistics.consumeLags;
+        }
+    }
+
+    public Map<String, Long> getConsumeLags() {
+        return consumeLags;
     }
 
     @Override

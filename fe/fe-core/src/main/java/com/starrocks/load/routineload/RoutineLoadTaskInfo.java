@@ -38,6 +38,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -192,7 +193,7 @@ public abstract class RoutineLoadTaskInfo {
 
     abstract boolean readyToExecute() throws UserException;
 
-    public abstract boolean isProgressKeepUp(RoutineLoadProgress progress);
+    public abstract boolean isProgressKeepUp(RoutineLoadProgress progress, Map<String, Long> consumeLagsRowNum);
 
     // begin the txn of this task
     // throw exception if unrecoverable errors happen.

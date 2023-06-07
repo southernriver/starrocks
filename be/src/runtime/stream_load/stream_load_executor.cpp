@@ -352,6 +352,8 @@ bool StreamLoadExecutor::collect_load_stat(StreamLoadContext* ctx, TTxnCommitAtt
         task_statistics.blockingPutTime = ctx->rltask_statistics.get_blocking_put_time();
         task_statistics.receivedRows = ctx->rltask_statistics.get_received_rows();
         task_statistics.receivedBytes = ctx->rltask_statistics.get_received_bytes();
+        task_statistics.consumeLags = ctx->rltask_statistics.get_consume_lags();
+        task_statistics.__isset.consumeLags = true;
         rl_attach.statistics = task_statistics;
         rl_attach.__isset.statistics = true;
 
