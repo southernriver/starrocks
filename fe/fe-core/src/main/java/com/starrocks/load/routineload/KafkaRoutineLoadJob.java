@@ -59,6 +59,7 @@ import com.starrocks.sql.ast.CreateRoutineLoadStmt;
 import com.starrocks.system.SystemInfoService;
 import com.starrocks.transaction.TransactionState;
 import com.starrocks.transaction.TransactionStatus;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -407,10 +408,33 @@ public class KafkaRoutineLoadJob extends RoutineLoadJob {
         KafkaRoutineLoadJob kafkaRoutineLoadJob = new KafkaRoutineLoadJob(id, stmt.getName(),
                 db.getId(), tableId, stmt.getKafkaBrokerList(), stmt.getKafkaTopic());
         kafkaRoutineLoadJob.setOptional(stmt);
+        recoverOffsetFromLastJob(stmt, kafkaRoutineLoadJob, db.getFullName());
         kafkaRoutineLoadJob.checkCustomProperties();
         kafkaRoutineLoadJob.checkCustomPartition(kafkaRoutineLoadJob.customKafkaPartitions);
 
         return kafkaRoutineLoadJob;
+    }
+
+    private static void recoverOffsetFromLastJob(CreateRoutineLoadStmt stmt, RoutineLoadJob job, String dbFullName)
+            throws DdlException, MetaNotFoundException {
+        if (!stmt.isRecoverOffsetsFromLastJob()) {
+            return;
+        }
+        String lastJobName = stmt.getJobThatRecoverOffsetsFrom();
+        if (StringUtils.isEmpty(lastJobName)) {
+            lastJobName = stmt.getName();
+        }
+        List<RoutineLoadJob> historyJobs = GlobalStateMgr.getCurrentState().getRoutineLoadManager()
+                .getJob(dbFullName, lastJobName, true);
+        if (historyJobs.isEmpty()) {
+            return;
+        }
+        historyJobs.sort((o1, o2) -> Long.compare(o2.getCreateTimestamp(), o1.getCreateTimestamp()));
+        RoutineLoadJob lastJob = historyJobs.get(0);
+        if (!lastJob.isFinal()) {
+            throw new DdlException("can't recover offsets from a job that is not stopped or canceled");
+        }
+        ((KafkaRoutineLoadJob) job).recoverOffsetFromLastJob(stmt, lastJob);
     }
 
     private void checkCustomPartition(List<Integer> customKafkaPartitions) throws UserException {
@@ -469,6 +493,18 @@ public class KafkaRoutineLoadJob extends RoutineLoadJob {
         }
 
         setDefaultKafkaGroupID();
+    }
+
+    private void recoverOffsetFromLastJob(CreateRoutineLoadStmt stmt, RoutineLoadJob lastJob) {
+        // do not recover offsets from last job if offsets are specified in stmt
+        if (!stmt.getKafkaPartitionOffsets().isEmpty()) {
+            return;
+        }
+        KafkaProgress lastJobProgress = (KafkaProgress) lastJob.getProgress();
+        for (Map.Entry<Integer, Long> partitionOffset : lastJobProgress.getPartitionIdToOffset().entrySet()) {
+            ((KafkaProgress) progress).addPartitionOffset(
+                    Pair.create(partitionOffset.getKey(), partitionOffset.getValue()));
+        }
     }
 
     // this is a unprotected method which is called in the initialization function
