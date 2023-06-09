@@ -22,16 +22,16 @@ package com.starrocks.load;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Range;
 import com.starrocks.analysis.BrokerDesc;
 import com.starrocks.analysis.Expr;
 import com.starrocks.analysis.TableName;
 import com.starrocks.analysis.TableRef;
+import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.DynamicPartitionProperty;
 import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.Partition;
-import com.starrocks.catalog.PartitionKey;
+import com.starrocks.catalog.RangePartitionInfo;
 import com.starrocks.catalog.Table;
 import com.starrocks.clone.DynamicPartitionScheduler;
 import com.starrocks.common.Config;
@@ -49,6 +49,7 @@ import com.starrocks.load.export.ExternalTableExportConfig;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.analyzer.ExportStmtAnalyzer;
 import com.starrocks.sql.ast.CreateColddownStmt;
+import com.starrocks.sql.ast.DropPartitionClause;
 import com.starrocks.sql.ast.ExportStmt;
 import com.starrocks.sql.ast.LoadStmt;
 import com.starrocks.sql.ast.PartitionNames;
@@ -66,6 +67,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
 public class ColddownJob implements Writable {
     private static final Logger LOG = LogManager.getLogger(ColddownJob.class);
@@ -482,18 +484,32 @@ public class ColddownJob implements Writable {
         }
     }
 
+    private List<Partition> getPartitionsForColddown(long dbId, OlapTable table) throws DdlException {
+        Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
+        if (db == null) {
+            return Collections.emptyList();
+        }
+        RangePartitionInfo rangePartitionInfo = (RangePartitionInfo) table.getPartitionInfo();
+        // it is ensured that there is only one partition column when create colddown job
+        Column partitionColumn = rangePartitionInfo.getPartitionColumns().get(0);
+        String format = DynamicPartitionUtil.getPartitionFormat(partitionColumn);
+        int lowerBoundOffset = getColddownPartitionEnd();
+        return DynamicPartitionScheduler.getDropPartitionClause(db, table, partitionColumn, format, lowerBoundOffset)
+                .stream()
+                .map(DropPartitionClause::getPartition)
+                .collect(Collectors.toList());
+    }
+
     private void colddownPartitions() throws Exception {
         OlapTable table = (OlapTable) MetaUtils.getTable(dbId, tableId);
-        List<Map.Entry<Long, Range<PartitionKey>>> partitions = DynamicPartitionScheduler.getSortedPartitionList(
-                table, -getColddownPartitionEnd());
+        List<Partition> partitions = getPartitionsForColddown(dbId, table);
         partitions = Lists.reverse(partitions);
         int rangeSize = getColddownPartitionEnd() - getColddownPartitionStart() + 1;
         // rangeSize can be negative due to integer overflow
         if (rangeSize > 0 && rangeSize < partitions.size()) {
             partitions = partitions.subList(0, rangeSize);
         }
-        for (Map.Entry<Long, Range<PartitionKey>> entry : partitions) {
-            Partition partition = table.getPartition(entry.getKey());
+        for (Partition partition : partitions) {
             submitColddownPartition(partition, false, true, false, properties);
         }
     }
@@ -532,7 +548,7 @@ public class ColddownJob implements Writable {
             return true;
         }
         if (partition.getVisibleVersion() == Partition.PARTITION_INIT_VERSION) {
-            LOG.debug("partition[{}]'s is init version. ignore", partition.getId());
+            LOG.debug("partition[{}]'s is init version. ignore", partition.getName());
             return false;
         }
         // check if this partition has changed since last colddown

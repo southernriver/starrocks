@@ -258,18 +258,19 @@ public class DynamicPartitionScheduler extends LeaderDaemon {
      * 1. get the range of [start, 0) as a reserved range.
      * 2. get DropPartitionClause of partitions which range are before this reserved range.
      */
-    private ArrayList<DropPartitionClause> getDropPartitionClause(Database db, OlapTable olapTable,
-                                                                  Column partitionColumn, String partitionFormat) {
+    public static ArrayList<DropPartitionClause> getDropPartitionClause(Database db, OlapTable olapTable,
+                                                                  Column partitionColumn, String partitionFormat,
+                                                                  int lowerBoundOffset) {
         ArrayList<DropPartitionClause> dropPartitionClauses = new ArrayList<>();
         DynamicPartitionProperty dynamicPartitionProperty = olapTable.getTableProperty().getDynamicPartitionProperty();
-        if (dynamicPartitionProperty.getStart() == DynamicPartitionProperty.MIN_START_OFFSET) {
+        if (lowerBoundOffset == DynamicPartitionProperty.MIN_START_OFFSET) {
             // not set start offset, so not drop any partition
             return dropPartitionClauses;
         }
 
         ZonedDateTime now = ZonedDateTime.now(dynamicPartitionProperty.getTimeZone().toZoneId());
         String lowerBorder = DynamicPartitionUtil.getPartitionRangeString(dynamicPartitionProperty, now,
-                dynamicPartitionProperty.getStart(), partitionFormat);
+                lowerBoundOffset, partitionFormat);
         String upperBorder =
                 DynamicPartitionUtil.getPartitionRangeString(dynamicPartitionProperty, now, 0, partitionFormat);
         PartitionValue lowerPartitionValue = new PartitionValue(lowerBorder);
@@ -370,7 +371,12 @@ public class DynamicPartitionScheduler extends LeaderDaemon {
                 if (!skipAddPartition) {
                     addPartitionClauses = getAddPartitionClause(db, olapTable, partitionColumn, partitionFormat);
                 }
-                dropPartitionClauses = getDropPartitionClause(db, olapTable, partitionColumn, partitionFormat);
+
+                DynamicPartitionProperty dynamicPartitionProperty =
+                        olapTable.getTableProperty().getDynamicPartitionProperty();
+                int lowerBoundOffset = dynamicPartitionProperty.getStart();
+                dropPartitionClauses =
+                        getDropPartitionClause(db, olapTable, partitionColumn, partitionFormat, lowerBoundOffset);
                 tableName = olapTable.getName();
             } finally {
                 db.readUnlock();
@@ -506,19 +512,6 @@ public class DynamicPartitionScheduler extends LeaderDaemon {
             throws AnalysisException {
 
         ArrayList<DropPartitionClause> dropPartitionClauses = new ArrayList<>();
-        List<Map.Entry<Long, Range<PartitionKey>>> candidatePartitionList =
-                getSortedPartitionList(olapTable, ttlNumber);
-
-        for (Map.Entry<Long, Range<PartitionKey>> entry : candidatePartitionList) {
-            Long checkDropPartitionId = entry.getKey();
-            String dropPartitionName = olapTable.getPartition(checkDropPartitionId).getName();
-            dropPartitionClauses.add(new DropPartitionClause(false, dropPartitionName, false, true));
-        }
-        return dropPartitionClauses;
-    }
-
-    public static List<Map.Entry<Long, Range<PartitionKey>>> getSortedPartitionList(OlapTable olapTable, int excludeList)
-            throws AnalysisException {
         RangePartitionInfo rangePartitionInfo = (RangePartitionInfo) (olapTable.getPartitionInfo());
         List<Column> partitionColumns = rangePartitionInfo.getPartitionColumns();
 
@@ -530,8 +523,7 @@ public class DynamicPartitionScheduler extends LeaderDaemon {
 
         if (partitionType.isDateType()) {
             LocalDateTime currentDateTime = LocalDateTime.now();
-            PartitionValue currentPartitionValue =
-                    new PartitionValue(currentDateTime.format(DateUtils.DATE_FORMATTER_UNIX));
+            PartitionValue currentPartitionValue = new PartitionValue(currentDateTime.format(DateUtils.DATE_FORMATTER_UNIX));
             PartitionKey currentPartitionKey = PartitionKey.createPartitionKey(
                     ImmutableList.of(currentPartitionValue), partitionColumns);
 
@@ -553,12 +545,17 @@ public class DynamicPartitionScheduler extends LeaderDaemon {
         candidatePartitionList.sort(Comparator.comparing(o -> o.getValue().upperEndpoint()));
 
         int allPartitionNumber = candidatePartitionList.size();
-        if (allPartitionNumber <= excludeList) {
-            return Collections.emptyList();
+        if (allPartitionNumber <= ttlNumber) {
+            return dropPartitionClauses;
         } else {
-            int subSize = allPartitionNumber - excludeList;
-            return candidatePartitionList.subList(0, subSize);
+            int dropSize = allPartitionNumber - ttlNumber;
+            for (int i = 0; i < dropSize; i++) {
+                Long checkDropPartitionId = candidatePartitionList.get(i).getKey();
+                String dropPartitionName = olapTable.getPartition(checkDropPartitionId).getName();
+                dropPartitionClauses.add(new DropPartitionClause(false, dropPartitionName, false, true));
+            }
         }
+        return dropPartitionClauses;
     }
 
     private void recordCreatePartitionFailedMsg(String dbName, String tableName, String msg) {
