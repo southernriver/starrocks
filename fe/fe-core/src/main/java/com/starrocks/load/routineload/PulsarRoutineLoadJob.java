@@ -199,11 +199,20 @@ public class PulsarRoutineLoadJob extends RoutineLoadJob {
             desireTaskConcurrentNum = Config.max_routine_load_task_concurrent_num;
         }
 
-        LOG.debug("current concurrent task number is min"
-                        + "(partition num: {}, desire task concurrent num: {}, alive be num: {}, config: {})",
-                partitionNum, desireTaskConcurrentNum, aliveBeNum, Config.max_routine_load_task_concurrent_num);
-        currentTaskConcurrentNum = Math.min(Math.min(partitionNum, Math.min(desireTaskConcurrentNum, aliveBeNum)),
-                Config.max_routine_load_task_concurrent_num);
+        if (isTaskNumExceedBeNum()) {
+            LOG.debug("current concurrent task number is min"
+                            + "(partition num: {}, desire task concurrent num: {}, config: {})",
+                    partitionNum, desireTaskConcurrentNum, Config.max_routine_load_task_concurrent_num);
+            currentTaskConcurrentNum = Math.min(Math.min(partitionNum, desireTaskConcurrentNum),
+                    Config.max_routine_load_task_concurrent_num);
+        } else {
+            LOG.debug("current concurrent task number is min"
+                            + "(partition num: {}, desire task concurrent num: {}, alive be num: {}, config: {})",
+                    partitionNum, desireTaskConcurrentNum, aliveBeNum, Config.max_routine_load_task_concurrent_num);
+            currentTaskConcurrentNum = Math.min(Math.min(partitionNum, Math.min(desireTaskConcurrentNum, aliveBeNum)),
+                    Config.max_routine_load_task_concurrent_num);
+        }
+
         return currentTaskConcurrentNum;
     }
 

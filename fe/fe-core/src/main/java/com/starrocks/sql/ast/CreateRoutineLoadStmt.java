@@ -148,6 +148,7 @@ public class CreateRoutineLoadStmt extends DdlStmt {
             .add(LoadStmt.STRICT_MODE)
             .add(LoadStmt.IGNORE_TAIL_COLUMNS)
             .add(LoadStmt.SKIP_UTF8_CHECK)
+            .add(LoadStmt.TASK_NUM_EXCEED_BE_NUM)
             .add(LoadStmt.TIMEZONE)
             .add(LoadStmt.PARTIAL_UPDATE)
             .add(LoadStmt.MERGE_CONDITION)
@@ -196,6 +197,7 @@ public class CreateRoutineLoadStmt extends DdlStmt {
     private boolean strictMode = true;
     private boolean ignoreTailColumns = false;
     private boolean skipUtf8Check = false;
+    private boolean taskNumExceedBeNum = false;
     private String timezone = TimeUtils.DEFAULT_TIME_ZONE;
     private boolean partialUpdate = false;
     private boolean recoverOffsetsFromLastJob = false;
@@ -326,6 +328,10 @@ public class CreateRoutineLoadStmt extends DdlStmt {
 
     public boolean isSkipUtf8Check() {
         return skipUtf8Check;
+    }
+
+    public boolean isTaskNumExceedBeNum() {
+        return taskNumExceedBeNum;
     }
 
     public String getTimezone() {
@@ -549,6 +555,10 @@ public class CreateRoutineLoadStmt extends DdlStmt {
         skipUtf8Check = Util.getBooleanPropertyOrDefault(jobProperties.get(LoadStmt.SKIP_UTF8_CHECK),
                 RoutineLoadJob.DEFAULT_SKIP_UTF8_CHECK,
                 LoadStmt.SKIP_UTF8_CHECK + " should be a boolean");
+
+        taskNumExceedBeNum = Util.getBooleanPropertyOrDefault(jobProperties.get(LoadStmt.TASK_NUM_EXCEED_BE_NUM),
+                RoutineLoadJob.DEFAULT_TASK_NUM_EXCEED_BE_NUM,
+                LoadStmt.TASK_NUM_EXCEED_BE_NUM + " should be a boolean");
 
         partialUpdate = Util.getBooleanPropertyOrDefault(jobProperties.get(LoadStmt.PARTIAL_UPDATE),
                 false,

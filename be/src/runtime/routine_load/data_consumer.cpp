@@ -545,7 +545,7 @@ Status PulsarDataConsumer::assign_partition(const std::string& partition, Stream
     DCHECK(_p_client);
 
     std::stringstream ss;
-    ss << "consumer: " << _id << ", grp: " << _grp_id << " assign partition: " << _topic
+    ss << "consumer: " << _id << ", grp: " << _grp_id << " assign partition: " << partition
        << ", subscription: " << _subscription << ", initial_position: " << initial_position;
     LOG(INFO) << ss.str();
 

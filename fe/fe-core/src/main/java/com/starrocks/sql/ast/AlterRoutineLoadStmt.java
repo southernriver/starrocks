@@ -43,6 +43,7 @@ public class AlterRoutineLoadStmt extends DdlStmt {
             .add(LoadStmt.STRICT_MODE)
             .add(LoadStmt.IGNORE_TAIL_COLUMNS)
             .add(LoadStmt.SKIP_UTF8_CHECK)
+            .add(LoadStmt.TASK_NUM_EXCEED_BE_NUM)
             .add(LoadStmt.TIMEZONE)
             .add(SessionVariable.EXEC_MEM_LIMIT)
             .build();
@@ -162,6 +163,11 @@ public class AlterRoutineLoadStmt extends DdlStmt {
         if (jobProperties.containsKey(LoadStmt.SKIP_UTF8_CHECK)) {
             boolean skipUtf8Check = Boolean.valueOf(jobProperties.get(LoadStmt.SKIP_UTF8_CHECK));
             analyzedJobProperties.put(LoadStmt.SKIP_UTF8_CHECK, String.valueOf(skipUtf8Check));
+        }
+
+        if (jobProperties.containsKey(LoadStmt.TASK_NUM_EXCEED_BE_NUM)) {
+            boolean taskNumExceedBeNum = Boolean.valueOf(jobProperties.get(LoadStmt.TASK_NUM_EXCEED_BE_NUM));
+            analyzedJobProperties.put(LoadStmt.TASK_NUM_EXCEED_BE_NUM, String.valueOf(taskNumExceedBeNum));
         }
 
         if (jobProperties.containsKey(LoadStmt.TIMEZONE)) {
