@@ -855,7 +855,7 @@ int meta_tool_main(int argc, char** argv) {
             return -1;
         }
     } else if (FLAGS_operation == "dump_short_key_index") {
-        starrocks::ChunkAllocator::init_instance(nullptr, 2ul * 1024 * 1024 * 1024);
+        starrocks::MemChunkAllocator::init_instance(nullptr, 2ul * 1024 * 1024 * 1024);
         if (FLAGS_file == "") {
             std::cout << "no file set for dump short key index" << std::endl;
             return -1;
