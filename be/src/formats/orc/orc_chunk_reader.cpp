@@ -1426,7 +1426,7 @@ static Status _create_type_descriptor_by_orc(const TypeDescriptor& origin_type, 
         DCHECK_EQ(0, result->children.size());
         TypeDescriptor& key_type = result->children.emplace_back();
         if (origin_type.children[0].is_unknown_type()) {
-            key_type.type = INVALID_TYPE;
+            key_type.type = TYPE_UNKNOWN;
         } else {
             RETURN_IF_ERROR(_create_type_descriptor_by_orc(origin_type.children.at(0), orc_type->getSubtype(0),
                                                            mapping->get_column_id_or_child_mapping(0).orc_mapping,
@@ -1435,7 +1435,7 @@ static Status _create_type_descriptor_by_orc(const TypeDescriptor& origin_type, 
 
         TypeDescriptor& value_type = result->children.emplace_back();
         if (origin_type.children[1].is_unknown_type()) {
-            value_type.type = INVALID_TYPE;
+            value_type.type = TYPE_UNKNOWN;
         } else {
             RETURN_IF_ERROR(_create_type_descriptor_by_orc(origin_type.children.at(1), orc_type->getSubtype(1),
                                                            mapping->get_column_id_or_child_mapping(1).orc_mapping,
