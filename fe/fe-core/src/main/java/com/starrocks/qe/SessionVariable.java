@@ -348,6 +348,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     public static final String DISTINCT_COLUMN_BUCKETS = "count_distinct_column_buckets";
     public static final String ENABLE_DISTINCT_COLUMN_BUCKETIZATION = "enable_distinct_column_bucketization";
     public static final String HDFS_BACKEND_SELECTOR_SCAN_RANGE_SHUFFLE = "hdfs_backend_selector_scan_range_shuffle";
+    public static final String TABLET_PARALLEL_DEGREE = "tablet_parallel_degree";
 
     public static final String SQL_QUOTE_SHOW_CREATE = "sql_quote_show_create";
 
@@ -880,6 +881,9 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VariableMgr.VarAttr(name = ENABLE_HIVE_MODE)
     private boolean enableHiveMode = false;
+
+    @VariableMgr.VarAttr(name = TABLET_PARALLEL_DEGREE)
+    private int tabletParallelDegree = 0;
 
     public void setFullSortMaxBufferedRows(long v) {
         fullSortMaxBufferedRows = v;
@@ -1657,6 +1661,14 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public void setEnablePruneComplexTypes(boolean enablePruneComplexTypes) {
         this.enablePruneComplexTypes = enablePruneComplexTypes;
+    }
+
+    public void setTabletParallelDegree(int tabletParallelDegree) {
+        this.tabletParallelDegree = tabletParallelDegree;
+    }
+
+    public int getTabletParallelDegree() {
+        return this.tabletParallelDegree;
     }
 
     public boolean getHDFSBackendSelectorScanRangeShuffle() {

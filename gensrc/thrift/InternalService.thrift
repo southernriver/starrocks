@@ -226,6 +226,7 @@ struct TQueryOptions {
 
   98: optional bool disable_column_pool = false;
   99: optional bool disable_storage_page_cache = false;
+  100: optional i32 tablet_parallel_degree;
 }
 
 

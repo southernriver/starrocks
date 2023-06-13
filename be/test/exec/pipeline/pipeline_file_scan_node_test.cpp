@@ -279,7 +279,7 @@ void PipeLineFileScanNodeTest::generate_morse_queue(
         auto* scan_node = (ScanNode*)(i);
         auto morsel_queue_factory = scan_node->convert_scan_range_to_morsel_queue_factory(
                 scan_ranges, no_scan_ranges_per_driver_seq, scan_node->id(), degree_of_parallelism, true,
-                TTabletInternalParallelMode::type::AUTO);
+                TTabletInternalParallelMode::type::AUTO, 0);
         DCHECK(morsel_queue_factory.ok());
         morsel_queue_factories.emplace(scan_node->id(), std::move(morsel_queue_factory).value());
     }

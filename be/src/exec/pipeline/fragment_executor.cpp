@@ -294,6 +294,9 @@ Status FragmentExecutor::_prepare_exec_plan(ExecEnv* exec_env, const UnifiedExec
     TTabletInternalParallelMode::type tablet_internal_parallel_mode =
             query_options.__isset.tablet_internal_parallel_mode ? query_options.tablet_internal_parallel_mode
                                                                 : TTabletInternalParallelMode::type::AUTO;
+    // Set custom tablet internal parallel degree
+    size_t tablet_parallel_degree = query_options.__isset.tablet_parallel_degree ? query_options.tablet_parallel_degree : 0;
+
 
     // Set up plan
     RETURN_IF_ERROR(ExecNode::create_tree(runtime_state, obj_pool, fragment.plan, desc_tbl, &_fragment_ctx->plan()));
@@ -386,7 +389,7 @@ Status FragmentExecutor::_prepare_exec_plan(ExecEnv* exec_env, const UnifiedExec
         ASSIGN_OR_RETURN(auto morsel_queue_factory,
                          scan_node->convert_scan_range_to_morsel_queue_factory(
                                  scan_ranges, scan_ranges_per_driver_seq, scan_node->id(), dop,
-                                 enable_tablet_internal_parallel, tablet_internal_parallel_mode));
+                                 enable_tablet_internal_parallel, tablet_internal_parallel_mode, tablet_parallel_degree));
         scan_node->enable_shared_scan(enable_shared_scan && morsel_queue_factory->is_shared());
         morsel_queue_factories.emplace(scan_node->id(), std::move(morsel_queue_factory));
     }

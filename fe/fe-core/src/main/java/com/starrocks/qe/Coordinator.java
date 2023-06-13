@@ -3207,6 +3207,8 @@ public class Coordinator {
             commonParams.params.setSend_query_statistics_with_every_batch(
                     fragment.isTransferQueryStatisticsWithEveryBatch());
 
+
+
             commonParams.setQuery_globals(queryGlobals);
             if (isEnablePipelineEngine) {
                 commonParams.setQuery_options(new TQueryOptions(queryOptions));
@@ -3228,6 +3230,10 @@ public class Coordinator {
                     commonParams.setEnable_resource_group(enableResourceGroup);
                     if (enableResourceGroup && resourceGroup != null) {
                         commonParams.setWorkgroup(resourceGroup);
+                    }
+
+                    if (sessionVariable.getTabletParallelDegree() > 0) {
+                        queryOptions.setTablet_parallel_degree(sessionVariable.getTabletParallelDegree());
                     }
                 }
             }
