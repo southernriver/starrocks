@@ -118,14 +118,12 @@ const char* logical_type_to_string(LogicalType type) {
         return "NULL";
     case LOGICAL_TYPE_FUNCTION:
         return "FUNCTION";
-    case LOGCIAL_TYPE_TIME:
+    case LOGICAL_TYPE_TIME:
         return "TIME";
-    case LOGCIAL_TYPE_BINARY:
+    case LOGICAL_TYPE_BINARY:
         return "BINARY";
     case LOGICAL_TYPE_MAX_VALUE:
         return "MAX_VALUE";
-    case LOGICAL_TYPE_VARBINARY:
-        return "VARBINARY";
     }
     return "";
 }
