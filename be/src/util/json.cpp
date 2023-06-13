@@ -33,10 +33,30 @@ StatusOr<JsonValue> JsonValue::parse_json_or_string(const Slice& src) {
         auto iter = std::find_if_not(src.get_data(), end, std::iswspace);
         if (iter != end && is_json_start_char(*iter)) {
             // Parse it as an object or array
-            auto b = vpack::Parser::fromJson(src.get_data(), src.get_size());
             JsonValue res;
-            res.assign(*b);
-            return res;
+            try {
+                auto b = vpack::Parser::fromJson(src.get_data(), src.get_size());
+                res.assign(*b);
+                return res;
+            } catch (const vpack::Exception& e) {
+                // The JSON library in dependency 'velocypack' does not support new line character yet.
+                // This is a workaround, add escape character before new line character if got an
+                // UnexpectedControlCharacter to avoid parse error.
+                if (vpack::Exception::ExceptionType::UnexpectedControlCharacter == e.errorCode()) {
+                    std::string s(src.get_data(), src.get_size());
+                    std::size_t index = 0;
+                    while ((index = s.find('\n', index)) != std::string::npos) {
+                        s.replace(index, 1, "\\n");
+                        index += 2;
+                    }
+                    auto b = vpack::Parser::fromJson(s.c_str(), s.size());
+                    VLOG(3) << "Replaced new line character in json string";
+                    res.assign(*b);
+                    return res;
+                } else {
+                    throw e;
+                }
+            }
         } else {
             // Consider it as a sub-type string
             return from_string(src);
