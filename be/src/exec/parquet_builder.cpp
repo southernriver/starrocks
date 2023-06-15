@@ -14,8 +14,6 @@
 
 #include "parquet_builder.h"
 
-#include <utility>
-
 #include <arrow/buffer.h>
 #include <arrow/io/file.h>
 #include <arrow/io/interfaces.h>
@@ -25,493 +23,60 @@
 #include "column/chunk.h"
 #include "column/column_helper.h"
 #include "common/logging.h"
-#include "exprs/expr.h"
 #include "exprs/vectorized/column_ref.h"
+#include "exprs/expr.h"
 #include "runtime/exec_env.h"
 #include "util/priority_thread_pool.hpp"
-#include "util/timezone_utils.h"
-
 
 namespace starrocks {
 
-using vectorized::NullableColumn;
-using vectorized::ColumnHelper;
-
-ParquetOutputStream::ParquetOutputStream(std::unique_ptr<WritableFile> writable_file)
-        : _writable_file(std::move(writable_file)) {
-    set_mode(arrow::io::FileMode::WRITE);
-}
-
-ParquetOutputStream::~ParquetOutputStream() {
-    arrow::Status st = ParquetOutputStream::Close();
-    if (!st.ok()) {
-        LOG(WARNING) << "close parquet output stream failed, err msg: " << st.ToString();
-    }
-}
-
-arrow::Status ParquetOutputStream::Write(const std::shared_ptr<arrow::Buffer>& data) {
-    arrow::Status st = Write(data->data(), data->size());
-    if (!st.ok()) {
-        LOG(WARNING) << "Failed to write data to output stream, err msg: " << st.message();
-    }
-    return st;
-}
-
-arrow::Status ParquetOutputStream::Write(const void* data, int64_t nbytes) {
-    if (_is_closed) {
-        return arrow::Status::IOError("The output stream is closed but there are still inputs");
-    }
-
-    const char* ch = reinterpret_cast<const char*>(data);
-
-    Slice slice(ch, nbytes);
-    Status st = _writable_file->append(slice);
-    if (!st.ok()) {
-        return arrow::Status::IOError(st.to_string());
-    }
-
-    return arrow::Status::OK();
-}
-
-arrow::Result<int64_t> ParquetOutputStream::Tell() const {
-    return _writable_file->size();
-}
-
-arrow::Status ParquetOutputStream::Close() {
-    if (_is_closed) {
-        return arrow::Status::OK();
-    }
-    Status st = _writable_file->close();
-    if (!st.ok()) {
-        LOG(WARNING) << "close parquet output stream failed, err msg: " << st;
-        return arrow::Status::IOError(st.to_string());
-    }
-    _is_closed = true;
-    return arrow::Status::OK();
-}
-
 ParquetBuilder::ParquetBuilder(std::unique_ptr<WritableFile> writable_file,
-                               const std::vector<ExprContext*>& output_expr_ctxs, const ParquetBuilderOptions& options,
-                               const std::vector<std::string>& file_column_names,
-                               std::vector<TypeDescriptor> output_types)
-        : _writable_file(std::move(writable_file)),
-          _output_expr_ctxs(output_expr_ctxs),
-          _file_column_names(file_column_names),
-          _output_types(std::move(output_types)),
-          _row_group_max_size(options.row_group_max_size) {
-    if (_output_types.empty()) {
-        for (auto ctx : _output_expr_ctxs) {
-            _output_types.push_back(ctx->root()->type());
-        }
-    }
-    _init(options, file_column_names);
+                               std::shared_ptr<::parquet::WriterProperties> properties,
+                               std::shared_ptr<::parquet::schema::GroupNode> schema,
+                               const std::vector<ExprContext*>& output_expr_ctxs, int64_t row_group_max_size) {
+    _writer = std::make_unique<starrocks::parquet::SyncFileWriter>(std::move(writable_file), std::move(properties),
+                                                                   std::move(schema), output_expr_ctxs);
+    _writer->set_max_row_group_size(row_group_max_size);
+    _writer->init();
 }
 
-Status ParquetBuilder::_init(const ParquetBuilderOptions& options, const std::vector<std::string>& file_column_names) {
-    _init_properties(options);
-    Status st = _init_schema(file_column_names);
-    if (!st.ok()) {
-        LOG(WARNING) << "Failed to init parquet schema: " << st;
-    }
-
-    _output_stream = std::make_shared<ParquetOutputStream>(std::move(_writable_file));
-    _buffered_values_estimate.reserve(_schema->field_count());
-    _file_writer = ::parquet::ParquetFileWriter::Open(_output_stream, _schema, _properties);
-    return Status::OK();
-}
-
-void ParquetBuilder::_init_properties(const ParquetBuilderOptions& options) {
+std::shared_ptr<::parquet::WriterProperties> ParquetBuilder::get_properties(const ParquetBuilderOptions& options) {
     ::parquet::WriterProperties::Builder builder;
     builder.version(::parquet::ParquetVersion::PARQUET_2_0);
     options.use_dict ? builder.enable_dictionary() : builder.disable_dictionary();
-    ParquetBuildHelper::build_compression_type(builder, options.compression_type);
-    _properties = builder.build();
+    starrocks::parquet::ParquetBuildHelper::build_compression_type(builder, options.compression_type);
+    return builder.build();
 }
 
-Status ParquetBuilder::_init_schema(const std::vector<std::string>& file_column_names) {
+std::shared_ptr<::parquet::schema::GroupNode> ParquetBuilder::get_schema(
+        const std::vector<std::string>& file_column_names, const std::vector<ExprContext*>& output_expr_ctxs) {
     ::parquet::schema::NodeVector fields;
-    for (int i = 0; i < _output_expr_ctxs.size(); i++) {
+    for (int i = 0; i < output_expr_ctxs.size(); i++) {
         ::parquet::Repetition::type parquet_repetition_type;
         ::parquet::Type::type parquet_data_type;
-        ::parquet::ConvertedType::type parquet_converted_type;
-        auto column_expr = _output_expr_ctxs[i]->root();
-        const auto type = _output_types[i].type;
-        ParquetBuildHelper::build_file_data_type(parquet_data_type, parquet_converted_type, type);
-        ParquetBuildHelper::build_parquet_repetition_type(parquet_repetition_type, column_expr->is_nullable());
+        auto column_expr = output_expr_ctxs[i]->root();
+        starrocks::parquet::ParquetBuildHelper::build_file_data_type(parquet_data_type, column_expr->type().type);
+        starrocks::parquet::ParquetBuildHelper::build_parquet_repetition_type(parquet_repetition_type,
+                                                                              column_expr->is_nullable());
         ::parquet::schema::NodePtr nodePtr = ::parquet::schema::PrimitiveNode::Make(
-                file_column_names[i], parquet_repetition_type, parquet_data_type, parquet_converted_type);
+                file_column_names[i], parquet_repetition_type, parquet_data_type);
         fields.push_back(nodePtr);
     }
 
-    _schema = std::static_pointer_cast<::parquet::schema::GroupNode>(
+    return std::static_pointer_cast<::parquet::schema::GroupNode>(
             ::parquet::schema::GroupNode::Make("schema", ::parquet::Repetition::REQUIRED, fields));
-    return Status::OK();
 }
-
-void ParquetBuildHelper::build_file_data_type(parquet::Type::type& parquet_data_type,
-                                              parquet::ConvertedType::type& parquet_converted_type,
-                                              const LogicalType& column_data_type) {
-    switch (column_data_type) {
-    case TYPE_BOOLEAN: {
-        parquet_data_type = parquet::Type::BOOLEAN;
-        parquet_converted_type = parquet::ConvertedType::NONE;
-        break;
-    }
-    case TYPE_TINYINT:
-    case TYPE_SMALLINT:
-    case TYPE_INT: {
-        parquet_data_type = parquet::Type::INT32;
-        parquet_converted_type = parquet::ConvertedType::NONE;
-        break;
-    }
-    case TYPE_BIGINT: {
-        parquet_data_type = parquet::Type::INT64;
-        parquet_converted_type = parquet::ConvertedType::NONE;
-        break;
-    }
-    case TYPE_DATE: {
-        parquet_data_type = parquet::Type::INT32;
-        parquet_converted_type = parquet::ConvertedType::DATE;
-        break;
-    }
-    case TYPE_DATETIME: {
-        parquet_data_type = parquet::Type::INT64;
-        parquet_converted_type = parquet::ConvertedType::TIMESTAMP_MICROS;
-        break;
-    }
-    case TYPE_LARGEINT: {
-        parquet_data_type = parquet::Type::INT96;
-        parquet_converted_type = parquet::ConvertedType::NONE;
-        break;
-    }
-    case TYPE_FLOAT: {
-        parquet_data_type = parquet::Type::FLOAT;
-        parquet_converted_type = parquet::ConvertedType::NONE;
-        break;
-    }
-    case TYPE_DOUBLE: {
-        parquet_data_type = parquet::Type::DOUBLE;
-        parquet_converted_type = parquet::ConvertedType::NONE;
-        break;
-    }
-    case TYPE_CHAR:
-    case TYPE_VARCHAR: {
-        parquet_data_type = parquet::Type::BYTE_ARRAY;
-        parquet_converted_type = parquet::ConvertedType::UTF8;
-        break;
-    }
-    case TYPE_DECIMAL:
-    case TYPE_DECIMAL32:
-    case TYPE_DECIMAL64:
-    case TYPE_DECIMALV2: {
-        parquet_data_type = parquet::Type::BYTE_ARRAY;
-        parquet_converted_type = parquet::ConvertedType::NONE;
-        break;
-    }
-    default:
-        parquet_data_type = parquet::Type::UNDEFINED;
-        parquet_converted_type = parquet::ConvertedType::NONE;
-    }
-}
-
-void ParquetBuildHelper::build_parquet_repetition_type(parquet::Repetition::type& parquet_repetition_type,
-                                                       const bool is_nullable) {
-    parquet_repetition_type = is_nullable ? parquet::Repetition::OPTIONAL : parquet::Repetition::REQUIRED;
-}
-
-void ParquetBuildHelper::build_compression_type(parquet::WriterProperties::Builder& builder,
-                                                const TCompressionType::type& compression_type) {
-    switch (compression_type) {
-    case TCompressionType::SNAPPY: {
-        builder.compression(parquet::Compression::SNAPPY);
-        break;
-    }
-    case TCompressionType::GZIP: {
-        builder.compression(parquet::Compression::GZIP);
-        break;
-    }
-    case TCompressionType::BROTLI: {
-        builder.compression(parquet::Compression::BROTLI);
-        break;
-    }
-    case TCompressionType::ZSTD: {
-        builder.compression(parquet::Compression::ZSTD);
-        break;
-    }
-    case TCompressionType::LZ4: {
-        builder.compression(parquet::Compression::LZ4);
-        break;
-    }
-    case TCompressionType::LZO: {
-        builder.compression(parquet::Compression::LZO);
-        break;
-    }
-    case TCompressionType::BZIP2: {
-        builder.compression(parquet::Compression::BZ2);
-        break;
-    }
-    default:
-        builder.compression(parquet::Compression::UNCOMPRESSED);
-    }
-}
-
-void ParquetBuilder::_generate_rg_writer() {
-    if (_rg_writer == nullptr) {
-        _rg_writer = _file_writer->AppendBufferedRowGroup();
-    }
-}
-
-#define DISPATCH_PARQUET_NUMERIC_WRITER(WRITER, COLUMN_TYPE, NATIVE_TYPE)                                         \
-    ParquetBuilder::_generate_rg_writer();                                                                        \
-    parquet::WRITER* col_writer = static_cast<parquet::WRITER*>(_rg_writer->column(i));                           \
-    col_writer->WriteBatch(                                                                                       \
-            num_rows, nullable ? def_level.data() : nullptr, nullptr,                                             \
-            reinterpret_cast<const NATIVE_TYPE*>(down_cast<const COLUMN_TYPE*>(data_column)->get_data().data())); \
-    _buffered_values_estimate[i] = col_writer->EstimatedBufferedValueBytes();  
-
-#define DISPATCH_PARQUET_DATE_NUMERIC_WRITER(WRITER, NATIVE_TYPE) \
-    auto* dateColumn = down_cast<vectorized::FixedLengthColumn<vectorized::DateValue>*>(data_column);             \
-    std::vector<NATIVE_TYPE> res(num_rows);                                                                       \
-    for (size_t row_id = 0; row_id < num_rows; row_id++) {                                                        \
-        res[row_id] = dateColumn->get_data()[row_id].to_date_literal();                                           \
-    }                                                                                                             \
-    ParquetBuilder::_generate_rg_writer();                                                                        \
-    parquet::WRITER* col_writer = static_cast<parquet::WRITER*>(_rg_writer->column(i));                           \
-    col_writer->WriteBatch(                                                                                       \
-            num_rows, nullable ? def_level.data() : nullptr, nullptr,                                             \
-            reinterpret_cast<const NATIVE_TYPE*>(res.data()));                                                    \
-    _buffered_values_estimate[i] = col_writer->EstimatedBufferedValueBytes();
-
-#define DISPATCH_PARQUET_DATETIME_INT64_WRITER(WRITER, NATIVE_TYPE)                                  \
-    auto* timeColumn = down_cast<vectorized::FixedLengthColumn<vectorized::TimestampValue>*>(data_column);        \
-    std::vector<NATIVE_TYPE> res(num_rows);                                                                       \
-    for (size_t row_id = 0; row_id < num_rows; row_id++) {                                                        \
-        res[row_id] = timeColumn->get_data()[row_id].to_unix_second() * 1000;                                                  \
-    }                                                                                                             \
-    ParquetBuilder::_generate_rg_writer();                                                                        \
-    parquet::WRITER* col_writer = static_cast<parquet::WRITER*>(_rg_writer->column(i));                           \
-    col_writer->WriteBatch(                                                                                       \
-            num_rows, nullable ? def_level.data() : nullptr, nullptr,                                             \
-            reinterpret_cast<const NATIVE_TYPE*>(res.data()));                                                    \
-    _buffered_values_estimate[i] = col_writer->EstimatedBufferedValueBytes();
-
-#define DISPATCH_PARQUET_DATETIME_INT32_WRITER(WRITER, NATIVE_TYPE)                                  \
-    auto* timeColumn = down_cast<vectorized::FixedLengthColumn<vectorized::TimestampValue>*>(data_column);        \
-    std::vector<NATIVE_TYPE> res(num_rows);                                                                       \
-    for (size_t row_id = 0; row_id < num_rows; row_id++) {                                                        \
-        res[row_id] = timeColumn->get_data()[row_id].to_unix_second();                                            \
-    }                                                                                                             \
-    ParquetBuilder::_generate_rg_writer();                                                                        \
-    parquet::WRITER* col_writer = static_cast<parquet::WRITER*>(_rg_writer->column(i));                           \
-    col_writer->WriteBatch(                                                                                       \
-            num_rows, nullable ? def_level.data() : nullptr, nullptr,                                             \
-            reinterpret_cast<const NATIVE_TYPE*>(res.data()));                                                    \
-    _buffered_values_estimate[i] = col_writer->EstimatedBufferedValueBytes();
-
-#define DISPATCH_PARQUET_COMPLEX_WRITER(COLUMN_TYPE)                                                              \
-    ParquetBuilder::_generate_rg_writer();                                                                        \
-    parquet::ByteArrayWriter* col_writer = static_cast<parquet::ByteArrayWriter*>(_rg_writer->column(i));         \
-    for (size_t row_id = 0; row_id < num_rows; row_id++) {                                                        \
-        Slice tmp = down_cast<const COLUMN_TYPE*>(data_column)->get(row_id).get_slice();                          \
-        parquet::ByteArray value;                                                                                 \
-        value.ptr = reinterpret_cast<const uint8_t*>(tmp.data);                                                   \
-        value.len = tmp.size;                                                                                     \
-        col_writer->WriteBatch(1, nullable ? &def_level[row_id] : nullptr, nullptr, &value);                      \
-    }                                                                                                             \
-    _buffered_values_estimate[i] = col_writer->EstimatedBufferedValueBytes();
-
-#define DISPATCH_PARQUET_DATETIME_COMPLEX_WRITER(COLUMN_TYPE)                                                     \
-    auto* dateColumn = down_cast<vectorized::FixedLengthColumn<COLUMN_TYPE>*>(data_column);                       \
-    ParquetBuilder::_generate_rg_writer();                                                                        \
-    parquet::ByteArrayWriter* col_writer = static_cast<parquet::ByteArrayWriter*>(_rg_writer->column(i));         \
-    for (size_t row_id = 0; row_id < num_rows; row_id++) {                                                        \
-        string bytes = dateColumn->get_data()[row_id].to_string();                                                \
-        parquet::ByteArray value;                                                                                 \
-        value.ptr = reinterpret_cast<const uint8_t*>(bytes.data());                                               \
-        value.len = bytes.size();                                                                                 \
-        col_writer->WriteBatch(1, nullable ? &def_level[row_id] : nullptr, nullptr, &value);                      \
-    }                                                                                                             \
-    _buffered_values_estimate[i] = col_writer->EstimatedBufferedValueBytes();
-
-#define DISPATCH_PARQUET_DATE_NUMERIC_STRING_WRITER(COLUMN_TYPE)                                                  \
-    auto* dateColumn = down_cast<vectorized::FixedLengthColumn<COLUMN_TYPE>*>(data_column);                       \
-    ParquetBuilder::_generate_rg_writer();                                                                        \
-    parquet::ByteArrayWriter* col_writer = static_cast<parquet::ByteArrayWriter*>(_rg_writer->column(i));         \
-    for (size_t row_id = 0; row_id < num_rows; row_id++) {                                                        \
-        string bytes = std::to_string(dateColumn->get_data()[row_id].to_date_literal());                          \
-        parquet::ByteArray value;                                                                                 \
-        value.ptr = reinterpret_cast<const uint8_t*>(bytes.data());                                               \
-        value.len = bytes.size();                                                                                 \
-        col_writer->WriteBatch(1, nullable ? &def_level[row_id] : nullptr, nullptr, &value);                      \
-    }                                                                                                             \
-    _buffered_values_estimate[i] = col_writer->EstimatedBufferedValueBytes();
 
 Status ParquetBuilder::add_chunk(vectorized::Chunk* chunk) {
-    if (!chunk->has_rows()) {
-        return Status::OK();
-    }
-
-    size_t num_rows = chunk->num_rows();
-    for (size_t i = 0; i < chunk->num_columns(); i++) {
-        string column_name = _file_column_names[i];
-        const auto& col = chunk->get_column_by_name(column_name);
-        bool nullable = col->is_nullable();
-        auto null_column = nullable && down_cast<NullableColumn*>(col.get())->has_null()
-                                   ? down_cast<NullableColumn*>(col.get())->null_column()
-                                   : nullptr;
-        const auto data_column = ColumnHelper::get_data_column(col.get());
-
-        std::vector<int16_t> def_level(num_rows, 1);
-        if (null_column != nullptr) {
-            auto nulls = null_column->get_data();
-            for (size_t j = 0; j < num_rows; j++) {
-                def_level[j] = nulls[j] == 0;
-            }
-        }
-
-        const auto srType = _output_expr_ctxs[i]->root()->type().type;
-        const auto& outType = _output_types[i];
-        switch (srType) {
-        case TYPE_BOOLEAN: {
-            DISPATCH_PARQUET_NUMERIC_WRITER(BoolWriter, vectorized::BooleanColumn, bool)
-            break;
-        }
-        case TYPE_INT: {
-            DISPATCH_PARQUET_NUMERIC_WRITER(Int32Writer, vectorized::Int32Column, int32_t)
-            break;
-        }
-        case TYPE_BIGINT: {
-            DISPATCH_PARQUET_NUMERIC_WRITER(Int64Writer, vectorized::Int64Column, int64_t)
-            break;
-        }
-        case TYPE_FLOAT: {
-            DISPATCH_PARQUET_NUMERIC_WRITER(FloatWriter, vectorized::FloatColumn, float)
-            break;
-        }
-        case TYPE_DOUBLE: {
-            DISPATCH_PARQUET_NUMERIC_WRITER(DoubleWriter, vectorized::DoubleColumn, double)
-            break;
-        }
-        case TYPE_CHAR:
-        case TYPE_VARCHAR: {
-            DISPATCH_PARQUET_COMPLEX_WRITER(vectorized::BinaryColumn)
-            break;
-        }
-        case TYPE_DATE: {
-            ParquetBuilder::_generate_rg_writer();
-            if (outType.type == TYPE_VARCHAR || outType.type == TYPE_CHAR) {
-                if (outType.len == 8) {
-                    // yyyyMMdd
-                    DISPATCH_PARQUET_DATE_NUMERIC_STRING_WRITER(vectorized::DateValue);
-                } else {
-                    // yyyy-MM-dd
-                    DISPATCH_PARQUET_DATETIME_COMPLEX_WRITER(vectorized::DateValue);
-                }
-            } else if (outType.type == TYPE_BIGINT) {
-                DISPATCH_PARQUET_DATE_NUMERIC_WRITER(Int64Writer, int64_t);
-            } else if (outType.type == TYPE_INT) {
-                DISPATCH_PARQUET_DATE_NUMERIC_WRITER(Int32Writer, int32_t);
-            } else {
-                auto* col_writer = static_cast<parquet::Int32Writer*>(_rg_writer->column(i));
-                std::vector<int32_t> res(num_rows);
-                const auto& t1970 = vectorized::DateValue::create(1970, 1, 1);
-                for (size_t row_id = 0; row_id < num_rows; row_id++) {
-                    res[row_id] = down_cast<const vectorized::DateColumn*>(data_column)->get_data()[row_id].julian() -
-                                  t1970.julian();
-                }
-                col_writer->WriteBatch(num_rows, nullable ? def_level.data() : nullptr, nullptr,
-                                       reinterpret_cast<const int32_t*>(res.data()));
-                _buffered_values_estimate[i] = col_writer->EstimatedBufferedValueBytes();
-            }
-            break;
-        }
-        case TYPE_DATETIME: {
-            ParquetBuilder::_generate_rg_writer();
-            if (outType.type == TYPE_VARCHAR || outType.type == TYPE_CHAR) {
-                DISPATCH_PARQUET_DATETIME_COMPLEX_WRITER(vectorized::TimestampValue);
-            } else if (outType.type == TYPE_BIGINT) {
-                DISPATCH_PARQUET_DATETIME_INT64_WRITER(Int64Writer, int64_t);
-            } else if (outType.type == TYPE_INT) {
-                DISPATCH_PARQUET_DATETIME_INT32_WRITER(Int32Writer, int32_t);
-            } else {
-                auto* col_writer = static_cast<parquet::Int64Writer*>(_rg_writer->column(i));
-                std::vector<uint64_t> res(num_rows);
-                cctz::time_zone ctz;
-                TimezoneUtils::find_cctz_time_zone(TimezoneUtils::default_time_zone, ctz);
-                int64_t offset = TimezoneUtils::to_utc_offset(ctz);
-                for (size_t row_id = 0; row_id < num_rows; row_id++) {
-                    res[row_id] = (down_cast<const vectorized::TimestampColumn*>(data_column)->get_data()[row_id]
-                                           .to_unix_second() - offset) * 1000000;
-                }
-                col_writer->WriteBatch(num_rows, nullable ? def_level.data() : nullptr, nullptr,
-                                       reinterpret_cast<const int64_t*>(res.data()));
-                _buffered_values_estimate[i] = col_writer->EstimatedBufferedValueBytes();
-            }
-            break;
-        }
-        default: {
-            return Status::InvalidArgument("Unsupported type");
-        }
-        }
-    }
-
-    _check_size();
-    return Status::OK();
-}
-
-// The current row group written bytes = total_bytes_written + total_compressed_bytes + estimated_bytes.
-// total_bytes_written: total bytes written by the page writer
-// total_compressed_types: total bytes still compressed but not written
-// estimated_bytes: estimated size of all column chunk uncompressed values that are not written to a page yet. it
-// mainly includes value buffer size and repetition buffer size and definition buffer value for each column.
-size_t ParquetBuilder::_get_rg_written_bytes() {
-    if (_rg_writer == nullptr) {
-        return 0;
-    }
-    auto estimated_bytes = std::accumulate(_buffered_values_estimate.begin(), _buffered_values_estimate.end(), 0);
-    return _rg_writer->total_bytes_written() + _rg_writer->total_compressed_bytes() + estimated_bytes;
-}
-
-// TODO(stephen): we should use the average of each row bytes to calculate the remaining writable size.
-void ParquetBuilder::_check_size() {
-    if (ParquetBuilder::_get_rg_written_bytes() > _row_group_max_size) {
-        _flush_row_group();
-    }
-}
-
-void ParquetBuilder::_flush_row_group() {
-    _rg_writer->Close();
-    _total_row_group_writen_bytes = _output_stream->Tell().MoveValueUnsafe();
-    _rg_writer = nullptr;
-    std::fill(_buffered_values_estimate.begin(), _buffered_values_estimate.end(), 0);
-}
-
-std::size_t ParquetBuilder::file_size() {
-    DCHECK(_output_stream != nullptr);
-    if (_rg_writer == nullptr) {
-        return _total_row_group_writen_bytes;
-    }
-
-    return _total_row_group_writen_bytes + _get_rg_written_bytes();
+    return _writer->write(chunk);
 }
 
 Status ParquetBuilder::finish() {
-    if (_closed) {
-        return Status::OK();
-    }
+    return _writer->close();
+}
 
-    if (_rg_writer != nullptr) {
-        _flush_row_group();
-    }
-
-    _file_writer->Close();
-    auto st = _output_stream->Close();
-    if (st != ::arrow::Status::OK()) {
-        return Status::InternalError("Close file failed!");
-    }
-
-    _closed = true;
-    return Status::OK();
+std::size_t ParquetBuilder::file_size() {
+    return _writer->file_size();
 }
 
 } // namespace starrocks

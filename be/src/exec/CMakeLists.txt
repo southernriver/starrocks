@@ -86,6 +86,7 @@ set(EXEC_FILES
     vectorized/arrow_to_json_converter.cpp
     vectorized/parquet_scanner.cpp
     vectorized/parquet_reader.cpp
+    vectorized/parquet_writer.cpp
     vectorized/file_scan_node.cpp
     vectorized/assert_num_rows_node.cpp
     vectorized/intersect_hash_set.cpp

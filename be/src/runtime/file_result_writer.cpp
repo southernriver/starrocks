@@ -94,9 +94,11 @@ Status FileResultWriter::_create_file_writer() {
         for (const auto& type : _file_opts->file_output_types) {
             output_types.push_back(TypeDescriptor::from_thrift(type));
         }
-        _file_builder = std::make_unique<ParquetBuilder>(std::move(writable_file), _output_expr_ctxs,
-                                                         _file_opts->parquet_options, _file_opts->file_column_names,
-                                                         output_types);
+        auto properties = ParquetBuilder::get_properties(_file_opts->parquet_options);
+        auto schema = ParquetBuilder::get_schema(_file_opts->file_column_names, _output_expr_ctxs);
+        _file_builder =
+                std::make_unique<ParquetBuilder>(std::move(writable_file), std::move(properties), std::move(schema),
+                                                 _output_expr_ctxs, _file_opts->parquet_options.row_group_max_size);
         break;
     }
     case TFileFormatType::FORMAT_ORC: {
@@ -172,6 +174,7 @@ Status FileResultWriter::_create_new_file_if_exceed_size() {
 
 Status FileResultWriter::_close_file_writer(bool done) {
     if (_file_builder != nullptr) {
+        LOG(WARNING) << "row count is " << _file_builder->file_size();
         RETURN_IF_ERROR(_file_builder->finish());
         COUNTER_UPDATE(_written_data_bytes, _file_builder->file_size());
         _file_builder.reset();
