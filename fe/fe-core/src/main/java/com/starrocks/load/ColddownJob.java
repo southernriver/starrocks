@@ -493,7 +493,7 @@ public class ColddownJob implements Writable {
         // it is ensured that there is only one partition column when create colddown job
         Column partitionColumn = rangePartitionInfo.getPartitionColumns().get(0);
         String format = DynamicPartitionUtil.getPartitionFormat(partitionColumn);
-        int lowerBoundOffset = getColddownPartitionEnd();
+        int lowerBoundOffset = getColddownPartitionEnd() + 1;
         return DynamicPartitionScheduler.getDropPartitionClause(db, table, partitionColumn, format, lowerBoundOffset)
                 .stream()
                 .map(DropPartitionClause::getPartition)

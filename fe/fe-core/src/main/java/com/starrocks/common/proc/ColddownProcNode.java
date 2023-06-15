@@ -23,12 +23,14 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.starrocks.catalog.Database;
 import com.starrocks.common.AnalysisException;
+import com.starrocks.load.ColddownJob;
 import com.starrocks.load.ColddownMgr;
+import com.starrocks.load.ExportMgr;
 
 import java.util.List;
 
 // TODO(lingbin): think if need a sub node to show unfinished instances
-public class ColddownProcNode implements ProcNodeInterface {
+public class ColddownProcNode implements ProcDirInterface {
     public static final ImmutableList<String> TITLE_NAMES = new ImmutableList.Builder<String>()
             .add("JobId").add("JobName").add("State").add("TableName")
             .add("user").add("TaskInfo").add("TargetType").add("TargetInfo")
@@ -39,10 +41,12 @@ public class ColddownProcNode implements ProcNodeInterface {
     private static final int LIMIT = 2000;
 
     private ColddownMgr colddownMgr;
+    private final ExportMgr exportMgr;
     private Database db;
 
-    public ColddownProcNode(ColddownMgr colddownMgr, Database db) {
+    public ColddownProcNode(ColddownMgr colddownMgr, ExportMgr exportMgr, Database db) {
         this.colddownMgr = colddownMgr;
+        this.exportMgr = exportMgr;
         this.db = db;
     }
 
@@ -68,5 +72,20 @@ public class ColddownProcNode implements ProcNodeInterface {
         }
 
         throw new AnalysisException("Title name[" + columnName + "] does not exist");
+    }
+
+    @Override
+    public boolean register(String name, ProcNodeInterface node) {
+        return false;
+    }
+
+    @Override
+    public ProcNodeInterface lookup(String jobId) throws AnalysisException {
+        ColddownJob job = colddownMgr.getIdToJob().get(Long.parseLong(jobId));
+        if (job == null) {
+            return null;
+        }
+        return new ExportProcNode(exportMgr, job.getDbId(),
+                job.getTableName().getDb() + "." + job.getTableName().getTbl());
     }
 }

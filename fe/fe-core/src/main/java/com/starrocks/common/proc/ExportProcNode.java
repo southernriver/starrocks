@@ -23,7 +23,6 @@ package com.starrocks.common.proc;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.starrocks.catalog.Database;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.load.ExportMgr;
 
@@ -41,23 +40,24 @@ public class ExportProcNode implements ProcDirInterface {
     private static final int LIMIT = 2000;
 
     private ExportMgr exportMgr;
-    private Database db;
+    private long dbId;
+    private String table;
 
-    public ExportProcNode(ExportMgr exportMgr, Database db) {
+    public ExportProcNode(ExportMgr exportMgr, long dbId, String table) {
         this.exportMgr = exportMgr;
-        this.db = db;
+        this.dbId = dbId;
+        this.table = table;
     }
 
     @Override
     public ProcResult fetchResult() throws AnalysisException {
-        Preconditions.checkNotNull(db);
         Preconditions.checkNotNull(exportMgr);
 
         BaseProcResult result = new BaseProcResult();
         result.setNames(TITLE_NAMES);
 
         List<List<String>> jobInfos =
-                exportMgr.getExportJobInfosByIdOrState(db.getId(), 0, null, null, null, null, LIMIT);
+                exportMgr.getExportJobInfosByIdOrState(dbId, 0, null, null, table, null, LIMIT);
         result.setRows(jobInfos);
         return result;
     }

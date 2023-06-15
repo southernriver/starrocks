@@ -82,9 +82,9 @@ public class JobsProcDir implements ProcDirInterface {
         } else if (jobTypeName.equals(SCHEMA_CHANGE)) {
             return new SchemaChangeProcDir(globalStateMgr.getSchemaChangeHandler(), db);
         } else if (jobTypeName.equals(EXPORT)) {
-            return new ExportProcNode(globalStateMgr.getExportMgr(), db);
+            return new ExportProcNode(globalStateMgr.getExportMgr(), db.getId(), null);
         } else if (jobTypeName.equals(COLDDOWN)) {
-            return new ColddownProcNode(globalStateMgr.getColddownMgr(), db);
+            return new ColddownProcNode(globalStateMgr.getColddownMgr(), globalStateMgr.getExportMgr(), db);
         } else {
             throw new AnalysisException("Invalid job type: " + jobTypeName);
         }
