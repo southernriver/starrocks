@@ -111,6 +111,7 @@ Status KafkaDataConsumerGroup::start_all(StreamLoadContext* ctx) {
         append_data = &KafkaConsumerPipe::append_json;
     } else {
         append_data = &KafkaConsumerPipe::append_with_row_delimiter;
+
         auto& per_node_scan_ranges = ctx->put_result.params.params.per_node_scan_ranges;
 
         if (!per_node_scan_ranges.empty()) {
@@ -203,24 +204,46 @@ Status KafkaDataConsumerGroup::start_all(StreamLoadContext* ctx) {
                     cmt_offset[msg->partition()] = msg->offset() - 1;
                 }
             } else {
-                Status st = (kafka_pipe.get()->*append_data)(static_cast<const char*>(msg->payload()),
-                                                             static_cast<size_t>(msg->len()), row_delimiter);
-                if (st.ok()) {
-                    received_rows++;
-                    left_bytes -= msg->len();
-                    cmt_offset[msg->partition()] = msg->offset();
-                    if (_consume_lags.find(msg->partition()) == _consume_lags.end()) {
-                        auto msg_timestamp = std::chrono::time_point<std::chrono::system_clock>(
-                                std::chrono::milliseconds(msg->timestamp().timestamp));
-                        _consume_lags[msg->partition()] = std::chrono::duration_cast<std::chrono::seconds>(
-                                                                  std::chrono::system_clock::now() - msg_timestamp)
-                                                                  .count();
+                Status st;
+                if(ctx->format == TFileFormatType::FORMAT_TDMSG_KV || ctx->format == TFileFormatType::FORMAT_TDMSG_CSV){
+                    std::list<tubemq::DataItem> data_items;
+                    st = get_data_items(msg, &data_items);
+                    if (st.ok()) {
+                        for (auto& data_item : data_items) {
+                            std::size_t len = data_item.GetLength();
+                            st = (kafka_pipe.get()->*append_data)(static_cast<const char*>(data_item.GetData()),
+                                                                 static_cast<size_t>(len), row_delimiter);
+                            if (st.ok()) {
+                                received_rows++;
+                                left_bytes -= len;
+                            } else {
+                                // failed to append this msg, we must stop
+                                LOG(WARNING) << "failed to append msg to pipe. grp: " << _grp_id
+                                             << ", errmsg=" << st.get_error_msg();
+                                break;
+                            }
+                        }
+                        cmt_offset[msg->partition()] = msg->offset();
+                        VLOG(3) << "consume partition[" << msg->partition() << " - " << msg->offset() << "]";
+                    }else{
+                        LOG(WARNING) << "failed to append msg to pipe. grp: " << _grp_id
+                                     << ", errmsg=" << st.get_error_msg();
                     }
-                    VLOG(3) << "consume partition[" << msg->partition() << " - " << msg->offset() << "]";
-                } else {
-                    // failed to append this msg, we must stop
-                    LOG(WARNING) << "failed to append msg to pipe. grp: " << _grp_id
-                                 << ", errmsg=" << st.get_error_msg();
+                }else {
+                    st = (kafka_pipe.get()->*append_data)(static_cast<const char*>(msg->payload()),
+                                                                 static_cast<size_t>(msg->len()), row_delimiter);
+                    if (st.ok()) {
+                        received_rows++;
+                        left_bytes -= msg->len();
+                        cmt_offset[msg->partition()] = msg->offset();
+                        VLOG(3) << "consume partition[" << msg->partition() << " - " << msg->offset() << "]";
+                    }else{
+                        // failed to append this msg, we must stop
+                        LOG(WARNING) << "failed to append msg to pipe. grp: " << _grp_id
+                                     << ", errmsg=" << st.get_error_msg();
+                    }
+                }
+                if (!st.ok()) {
                     eos = true;
                     {
                         std::unique_lock<std::mutex> lock(_mutex);
@@ -247,6 +270,21 @@ void KafkaDataConsumerGroup::actual_consume(const std::shared_ptr<DataConsumer>&
                                             const ConsumeFinishCallback& cb) {
     Status st = std::static_pointer_cast<KafkaDataConsumer>(consumer)->group_consume(ctx, queue, max_running_time_ms);
     cb(st);
+}
+
+Status KafkaDataConsumerGroup::get_data_items(const RdKafka::Message* msg, std::list<tubemq::DataItem>* data_items) {
+    std::string err_info;
+    tubemq::TubeMQTDMsg tdmsg;
+    if (tdmsg.ParseTDMsg(static_cast<const char*>(msg->payload()), msg->len(), err_info)) {
+        for (auto attr_data : tdmsg.GetAttr2DataMap()) {
+            data_items->splice(data_items->end(), attr_data.second);
+        }
+    } else {
+        LOG(WARNING) << "failed to parse tube data: " << err_info;
+        return Status::InternalError("PAUSE: failed to parse kafka data: " + err_info);
+    }
+
+    return Status::OK();
 }
 
 Status PulsarDataConsumerGroup::assign_topic_partitions(StreamLoadContext* ctx) {
@@ -399,24 +437,47 @@ Status PulsarDataConsumerGroup::start_all(StreamLoadContext* ctx) {
             VLOG(3) << "get pulsar message"
                     << ", partition: " << partition << ", message id: " << msg_id << ", len: " << len;
 
-            Status st = (pulsar_pipe.get()->*append_data)(static_cast<const char*>(msg->getData()),
-                                                          static_cast<size_t>(len), row_delimiter);
-
-            if (st.ok()) {
-                received_rows++;
-                left_bytes -= len;
-                ack_offset[partition] = msg_id;
-                if (_consume_lags.find(partition) == _consume_lags.end()) {
-                    auto msg_timestamp = std::chrono::time_point<std::chrono::system_clock>(
-                            std::chrono::milliseconds(msg->getPublishTimestamp()));
-                    _consume_lags[partition] = std::chrono::duration_cast<std::chrono::seconds>(
-                                                       std::chrono::system_clock::now() - msg_timestamp)
-                                                       .count();
+            Status st;
+            if(ctx->format == TFileFormatType::FORMAT_TDMSG_KV || ctx->format == TFileFormatType::FORMAT_TDMSG_CSV){
+                std::list<tubemq::DataItem> data_items;
+                st = get_data_items(msg, &data_items);
+                if (st.ok()) {
+                    for (auto& data_item : data_items) {
+                        std::size_t tdmsg_len = data_item.GetLength();
+                        st = (pulsar_pipe.get()->*append_data)(static_cast<const char*>(data_item.GetData()),
+                                                              static_cast<size_t>(tdmsg_len), row_delimiter);
+                        if (st.ok()) {
+                            received_rows++;
+                            left_bytes -= tdmsg_len;
+                        } else {
+                            // failed to append this msg, we must stop
+                            LOG(WARNING) << "failed to append msg to pipe. grp: " << _grp_id
+                                         << ", errmsg=" << st.get_error_msg();
+                            break;
+                        }
+                    }
+                    ack_offset[partition] = msg_id;
+                    VLOG(3) << "consume partition" << partition << " - " << msg_id;
+                }else{
+                    LOG(WARNING) << "failed to append msg to pipe. grp: " << _grp_id
+                                 << ", errmsg=" << st.get_error_msg();
                 }
-                VLOG(3) << "consume partition" << partition << " - " << msg_id;
             } else {
-                // failed to append this msg, we must stop
-                LOG(WARNING) << "failed to append msg to pipe. grp: " << _grp_id << ", errmsg=" << st.get_error_msg();
+                st = (pulsar_pipe.get()->*append_data)(static_cast<const char*>(msg->getData()),
+                                                       static_cast<size_t>(len), row_delimiter);
+                if (st.ok()) {
+                    received_rows++;
+                    left_bytes -= len;
+                    ack_offset[partition] = msg_id;
+                    VLOG(3) << "consume partition" << partition << " - " << msg_id;
+                } else {
+                    // failed to append this msg, we must stop
+                    LOG(WARNING) << "failed to append msg to pipe. grp: " << _grp_id
+                                 << ", errmsg=" << st.get_error_msg();
+                }
+            }
+
+            if(!st.ok()){
                 eos = true;
                 {
                     std::unique_lock<std::mutex> lock(_mutex);
@@ -442,6 +503,21 @@ void PulsarDataConsumerGroup::actual_consume(const std::shared_ptr<DataConsumer>
                                              const ConsumeFinishCallback& cb) {
     Status st = std::static_pointer_cast<PulsarDataConsumer>(consumer)->group_consume(queue, max_running_time_ms);
     cb(st);
+}
+
+Status PulsarDataConsumerGroup::get_data_items(const pulsar::Message* msg, std::list<tubemq::DataItem>* data_items) {
+    std::string err_info;
+    tubemq::TubeMQTDMsg tdmsg;
+    if (tdmsg.ParseTDMsg(static_cast<const char*>(msg->getData()), msg->getLength(), err_info)) {
+        for (auto attr_data : tdmsg.GetAttr2DataMap()) {
+            data_items->splice(data_items->end(), attr_data.second);
+        }
+    } else {
+        LOG(WARNING) << "failed to parse tube data: " << err_info;
+        return Status::InternalError("PAUSE: failed to parse pulsar data: " + err_info);
+    }
+
+    return Status::OK();
 }
 
 void PulsarDataConsumerGroup::get_backlog_nums(StreamLoadContext* ctx) {

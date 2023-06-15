@@ -581,6 +581,10 @@ public class CreateRoutineLoadStmt extends DdlStmt {
         if (format != null) {
             if (format.equalsIgnoreCase("csv")) {
                 format = ""; // if it's not json, then it's mean csv and set empty
+            } else if (format.equalsIgnoreCase("tdmsg_csv")) {
+                format = "tdmsg_csv";
+            } else if (format.equalsIgnoreCase("tdmsg_kv")) {
+                format = "tdmsg_kv";
             } else if (format.equalsIgnoreCase("json")) {
                 format = "json";
                 jsonPaths = jobProperties.get(JSONPATHS);

@@ -50,6 +50,7 @@ set(EXEC_FILES
         ./exec/vectorized/arrow_converter_test.cpp
         ./exec/vectorized/chunks_sorter_heap_sort_test.cpp
         ./exec/vectorized/chunks_sorter_test.cpp
+        ./exec/vectorized/csv_scanner_kv_reader_test.cpp
         ./exec/vectorized/csv_scanner_test.cpp
         ./exec/vectorized/file_scan_node_test.cpp
         ./exec/vectorized/hdfs_scanner_test.cpp

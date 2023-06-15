@@ -304,6 +304,16 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
             jobProperties.put(PROPS_STRIP_OUTER_ARRAY, "false");
             jobProperties.put(PROPS_JSONPATHS, "");
             jobProperties.put(PROPS_JSONROOT, "");
+        } else if (stmt.getFormat().equals("tdmsg_csv")) {
+            jobProperties.put(PROPS_FORMAT, "tdmsg_csv");
+            jobProperties.put(PROPS_STRIP_OUTER_ARRAY, "false");
+            jobProperties.put(PROPS_JSONPATHS, "");
+            jobProperties.put(PROPS_JSONROOT, "");
+        } else if (stmt.getFormat().equals("tdmsg_kv")) {
+            jobProperties.put(PROPS_FORMAT, "tdmsg_kv");
+            jobProperties.put(PROPS_STRIP_OUTER_ARRAY, "false");
+            jobProperties.put(PROPS_JSONPATHS, "");
+            jobProperties.put(PROPS_JSONROOT, "");
         } else if (stmt.getFormat().equals("json")) {
             jobProperties.put(PROPS_FORMAT, "json");
             if (!Strings.isNullOrEmpty(stmt.getJsonPaths())) {

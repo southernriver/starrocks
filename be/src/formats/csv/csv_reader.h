@@ -86,7 +86,7 @@ public:
 
     void set_limit(size_t limit) { _limit = limit; }
 
-    void split_record(const Record& record, Fields* fields) const;
+    virtual void split_record(const Record& record, Fields* fields) const;
 
 protected:
     string _row_delimiter;

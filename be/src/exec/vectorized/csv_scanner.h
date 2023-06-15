@@ -47,6 +47,20 @@ private:
         ScannerCounter* _counter = nullptr;
     };
 
+    class ScannerKVReader : public ScannerCSVReader {
+    public:
+        ScannerKVReader(std::shared_ptr<SequentialFile> file, const string& record_delimiter,
+                        const string& field_delimiter, std::vector<string>& columns)
+                : ScannerCSVReader(file, record_delimiter, field_delimiter), _columns(columns), _null_char("\\N") {}
+
+        void split_record(const Record& record, Fields* fields) const override;
+
+    private:
+        std::vector<string> _columns; // columns' name
+        const char*
+                _null_char; // SR use "\\N" to represent NULL, see nullable_converter.cpp NullableConverter::read_string to find how to convert in SR.
+    };
+
     ChunkPtr _create_chunk(const std::vector<SlotDescriptor*>& slots);
 
     Status _parse_csv(Chunk* chunk);

@@ -357,6 +357,10 @@ public class StreamLoadInfo {
         TFileFormatType fileFormatType = TFileFormatType.FORMAT_CSV_PLAIN;
         if (routineLoadJob.getFormat().equals("json")) {
             fileFormatType = TFileFormatType.FORMAT_JSON;
+        } else if (routineLoadJob.getFormat().equals("tdmsg_csv")) {
+            fileFormatType = TFileFormatType.FORMAT_TDMSG_CSV;
+        } else if (routineLoadJob.getFormat().equals("tdmsg_kv")) {
+            fileFormatType = TFileFormatType.FORMAT_TDMSG_KV;
         }
         StreamLoadInfo streamLoadInfo = new StreamLoadInfo(dummyId, -1L /* dummy txn id */,
                 TFileType.FILE_STREAM, fileFormatType);

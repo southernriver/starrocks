@@ -80,6 +80,7 @@ private:
     void actual_consume(const std::shared_ptr<DataConsumer>& consumer, StreamLoadContext* ctx,
                         TimedBlockingQueue<RdKafka::Message*>* queue, int64_t max_running_time_ms,
                         const ConsumeFinishCallback& cb);
+    Status get_data_items(const RdKafka::Message* msg, std::list<tubemq::DataItem>* data_items);
 
 private:
     // blocking queue to receive msgs from all consumers
@@ -105,6 +106,7 @@ private:
                         int64_t max_running_time_ms, const ConsumeFinishCallback& cb);
 
     void get_backlog_nums(StreamLoadContext* ctx);
+    Status get_data_items(const pulsar::Message* msg, std::list<tubemq::DataItem>* data_items);
 
 private:
     // blocking queue to receive msgs from all consumers

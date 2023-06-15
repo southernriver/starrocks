@@ -1,0 +1,6 @@
+a1=[]
+a1=[null]
+a1=\N
+a1=["apple",null,"pear"]
+a1=["str with left bracket([)","str with dot(,)"]
+a1=["I""m hungry!",""]

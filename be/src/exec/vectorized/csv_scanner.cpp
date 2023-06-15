@@ -148,10 +148,28 @@ StatusOr<ChunkPtr> CSVScanner::get_next() {
                 return st;
             }
 
-            _curr_reader = std::make_unique<ScannerCSVReader>(file, _record_delimiter, _field_delimiter);
+            // If file format is KV, use origin ScannerKVReader
+            // Use _src_slot_descriptors to extract corresponding columns
+            // For columns that are not shown in dest table, the slot is assigned NULL, so need to deal with it
+            if(_scan_range.ranges[_curr_file_index].format_type == TFileFormatType::FORMAT_TDMSG_KV){
+                std::vector<string> columns;
+                int null_idx = 0;
+                for(auto slot: _src_slot_descriptors){
+                    if(slot == nullptr){
+                        columns.emplace_back("null" + std::to_string(null_idx++));
+                    }else{
+                        columns.emplace_back(slot->col_name());
+                    }
+                }
+                _curr_reader = std::make_unique<ScannerKVReader>(file, _record_delimiter, _field_delimiter, columns);
+            }else {
+                _curr_reader = std::make_unique<ScannerCSVReader>(file, _record_delimiter, _field_delimiter);
+            }
             _curr_reader->set_counter(_counter);
             if (_scan_range.ranges[_curr_file_index].size > 0 &&
-                _scan_range.ranges[_curr_file_index].format_type == TFileFormatType::FORMAT_CSV_PLAIN) {
+                (_scan_range.ranges[_curr_file_index].format_type == TFileFormatType::FORMAT_CSV_PLAIN ||
+                 _scan_range.ranges[_curr_file_index].format_type == TFileFormatType::FORMAT_TDMSG_CSV ||
+                 _scan_range.ranges[_curr_file_index].format_type == TFileFormatType::FORMAT_TDMSG_KV )) {
                 // Does not set limit for compressed file.
                 _curr_reader->set_limit(_scan_range.ranges[_curr_file_index].size);
             }
@@ -226,7 +244,12 @@ Status CSVScanner::_parse_csv(Chunk* chunk) {
         }
 
         fields.clear();
-        _curr_reader->split_record(record, &fields);
+        try{
+            _curr_reader->split_record(record, &fields);
+        }catch (const char* error_msg){
+            _report_error(record.to_string(), error_msg);
+            continue;
+        }
 
         if (fields.size() != _num_fields_in_csv) {
             if (_ignore_tail_columns) {
@@ -299,4 +322,104 @@ void CSVScanner::_report_error(const std::string& line, const std::string& err_m
     _state->append_error_msg_to_file(line, err_msg);
 }
 
+
+void CSVScanner::ScannerKVReader::split_record(const Record& record, Fields* kv_fields) const {
+    const char* value = record.data;
+    const char* ptr = record.data;
+    const size_t size = record.size;
+
+    // It means it is an empty msg
+    if(size == 0){
+        return;
+    }
+
+    string _equal_separator = "=";
+    std::unordered_map<string, int> key_field_idx_dict;
+    std::unordered_map<int, string> field_idx_key_dict;
+
+    string key = "";
+    const string null_flag = "null";
+    int null_idx = 0; // process useless key
+    if (_column_separator_length == 1) {
+        for (size_t i = 0; i < size; ++i, ++ptr) {
+            if (*ptr == _equal_separator[0]) {
+                key = string(value, ptr - value);
+                if (std::find(_columns.begin(), _columns.end(), key) == _columns.end()) {
+                    key = null_flag + std::to_string(null_idx);
+                    ++null_idx;
+                }
+                value = ptr + 1;
+            } else if (*ptr == _column_separator[0]) {
+                // for some scenario such as a=1,,b=2,c=3
+                if (ptr != value) {
+                    if (key != "") {
+                        key_field_idx_dict[key] = kv_fields->size();
+                        field_idx_key_dict[kv_fields->size()] = key;
+                        key = ""; // ensure a value corresponds to a key
+                        kv_fields->emplace_back(value, ptr - value);
+                    }
+                }
+                value = ptr + 1;
+            }
+        }
+    } else {
+        const auto* const base = ptr;
+        const char* equal_ptr = ptr; //address for _equal_separator
+        const char* col_ptr = ptr;   //address for _col_separator
+        do {
+            // firstly, find _col_separator address, to check if it is an empty kv message
+            // for example, for _col_separator = "&&"
+            // there are kv_row like  "a1=1&&&&a3=3"
+            col_ptr = static_cast<char*>(
+                    memmem(value, size - (value - base), _column_separator.data(), _column_separator_length));
+            if(col_ptr != nullptr && col_ptr == value){
+                value = col_ptr + _column_separator_length;
+            }else{
+                equal_ptr = static_cast<char*>(
+                        memmem(value, size - (value - base), _equal_separator.data(), _equal_separator.size()));
+                if(equal_ptr != nullptr){
+                    key = string(value, equal_ptr - value);
+                    value = equal_ptr + _equal_separator.size();
+                    if(std::find(_columns.begin(), _columns.end(), key) == _columns.end()){
+                        key = null_flag + std::to_string(null_idx);
+                        ++null_idx;
+                    }
+                }
+                if(col_ptr != nullptr){
+                    if(key == ""){
+                        throw "Unsupported Format: unable to parse using KV format";
+                    }
+                    key_field_idx_dict[key] = kv_fields->size();
+                    field_idx_key_dict[kv_fields->size()] = key;
+                    key = "";
+                    kv_fields->emplace_back(value, col_ptr - value);
+                    value = col_ptr + _column_separator_length;
+                }
+            }
+        } while (col_ptr != nullptr);
+
+        // use ptr to have the same format with the case _column_separator_length == 1
+        ptr = record.data + size;
+    }
+    key_field_idx_dict[key] = kv_fields->size();
+    field_idx_key_dict[kv_fields->size()] = key;
+    kv_fields->emplace_back(value, ptr - value);
+
+    for(int i=0; i < _columns.size(); i++) {
+        string name = _columns[i];
+        if (key_field_idx_dict.count(name) == 0) {
+            key_field_idx_dict[name] = kv_fields->size();
+            field_idx_key_dict[kv_fields->size()] = key;
+            kv_fields->emplace_back(_null_char, 2); // "\\N"
+        }
+        int idx = key_field_idx_dict[name];
+        if (idx != i) {
+            field_idx_key_dict[idx] = field_idx_key_dict[i];
+            key_field_idx_dict[field_idx_key_dict[i]] = idx;
+            field_idx_key_dict[i] = name;
+            key_field_idx_dict[name] = i;
+            std::swap(kv_fields->at(idx), kv_fields->at(i));
+        }
+    }
+}
 } // namespace starrocks::vectorized

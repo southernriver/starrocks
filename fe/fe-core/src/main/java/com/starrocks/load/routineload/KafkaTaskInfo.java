@@ -170,6 +170,10 @@ public class KafkaTaskInfo extends RoutineLoadTaskInfo {
         tRoutineLoadTask.setMax_batch_size(Config.max_routine_load_batch_size);
         if (!routineLoadJob.getFormat().isEmpty() && routineLoadJob.getFormat().equalsIgnoreCase("json")) {
             tRoutineLoadTask.setFormat(TFileFormatType.FORMAT_JSON);
+        } else if (routineLoadJob.getFormat().equalsIgnoreCase("tdmsg_csv")) {
+            tRoutineLoadTask.setFormat(TFileFormatType.FORMAT_TDMSG_CSV);
+        } else if (routineLoadJob.getFormat().equalsIgnoreCase("tdmsg_kv")) {
+            tRoutineLoadTask.setFormat(TFileFormatType.FORMAT_TDMSG_KV);
         } else {
             tRoutineLoadTask.setFormat(TFileFormatType.FORMAT_CSV_PLAIN);
         }
