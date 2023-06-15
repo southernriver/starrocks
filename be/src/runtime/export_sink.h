@@ -86,7 +86,7 @@ private:
 
     MonotonicStopWatch timer;
     std::unique_ptr<FileBuilder> _file_builder;
-    ParquetBuilderOptions _parquet_options;
+    parquet::ParquetBuilderOptions _parquet_options;
     ORCBuilderOptions _orc_options;
     size_t num_rows;
     int64_t max_file_size_rows = -1;

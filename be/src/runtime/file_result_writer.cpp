@@ -94,8 +94,12 @@ Status FileResultWriter::_create_file_writer() {
         for (const auto& type : _file_opts->file_output_types) {
             output_types.push_back(TypeDescriptor::from_thrift(type));
         }
-        auto properties = ParquetBuilder::get_properties(_file_opts->parquet_options);
-        auto schema = ParquetBuilder::get_schema(_file_opts->file_column_names, _output_expr_ctxs);
+        auto properties = parquet::ParquetBuildHelper::make_properties(_file_opts->parquet_options);
+        auto result = parquet::ParquetBuildHelper::make_schema(_file_opts->file_column_names, _output_expr_ctxs);
+        if (!result.ok()) {
+            return Status::NotSupported(result.status().message());
+        }
+        auto schema = result.ValueOrDie();
         _file_builder =
                 std::make_unique<ParquetBuilder>(std::move(writable_file), std::move(properties), std::move(schema),
                                                  _output_expr_ctxs, _file_opts->parquet_options.row_group_max_size);

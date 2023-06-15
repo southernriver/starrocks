@@ -36,6 +36,9 @@ add_library(Formats STATIC
         parquet/group_reader.cpp
         parquet/file_reader.cpp
         parquet/file_writer.cpp
+        parquet/chunk_writer.cpp
+        parquet/level_builder.cpp
+        parquet/column_chunk_writer.cpp
         )
 
 # simdjson Runtime Implement Dispatch: https://github.com/simdjson/simdjson/blob/master/doc/implementation-selection.md#runtime-cpu-detection

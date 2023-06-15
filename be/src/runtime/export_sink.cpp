@@ -173,8 +173,12 @@ Status ExportSink::open_file_writer(int timeout_ms) {
         for (const auto& type : _t_export_sink.file_output_types) {
             output_types.push_back(TypeDescriptor::from_thrift(type));
         }
-        auto properties = ParquetBuilder::get_properties(_parquet_options);
-        auto schema = ParquetBuilder::get_schema(_t_export_sink.file_column_names, _output_expr_ctxs);
+        auto properties = parquet::ParquetBuildHelper::make_properties(_parquet_options);
+        auto result = parquet::ParquetBuildHelper::make_schema(_t_export_sink.file_column_names, _output_expr_ctxs);
+        if (!result.ok()) {
+            return Status::NotSupported(result.status().message());
+        }
+        auto schema = result.ValueOrDie();
         _file_builder = std::make_unique<ParquetBuilder>(
                 std::move(output_file), std::move(properties), std::move(schema),
                 _output_expr_ctxs, max_file_size_rows);

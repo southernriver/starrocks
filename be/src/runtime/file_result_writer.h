@@ -25,6 +25,7 @@
 #include "exec/parquet_builder.h"
 #include "fs/fs.h"
 #include "gen_cpp/DataSinks_types.h"
+#include "parquet/file_writer.h"
 #include "runtime/result_writer.h"
 #include "runtime/runtime_state.h"
 
@@ -49,7 +50,7 @@ struct ResultFileOptions {
     bool use_broker;
     std::vector<std::string> file_column_names;
     std::vector<TTypeDesc> file_output_types;
-    ParquetBuilderOptions parquet_options;
+    parquet::ParquetBuilderOptions parquet_options;
     ORCBuilderOptions orc_options;
 
     ResultFileOptions(const TResultFileSinkOptions& t_opt) {
