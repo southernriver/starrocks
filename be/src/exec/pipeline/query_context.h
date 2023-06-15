@@ -137,9 +137,11 @@ public:
         std::lock_guard<SpinLock> l(_lock);
         return _total_scan_stats_items;
     };
-    const std::vector<QueryStatisticsItemPB>& get_and_clean_delta_scan_stats_items() {
+    vector<QueryStatisticsItemPB>* get_and_clean_delta_scan_stats_items() {
         std::lock_guard<SpinLock> l(_lock);
-        return std::move(_delta_scan_stats_items);
+        auto* tmp_items = new std::vector<QueryStatisticsItemPB>(0);
+        std::swap(*tmp_items, _delta_scan_stats_items);
+        return tmp_items;
     };
 
     // Query start time, used to check how long the query has been running
