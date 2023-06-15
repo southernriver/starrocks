@@ -299,14 +299,14 @@ public class Coordinator {
     // Used for broker export task coordinator
     public Coordinator(Long jobId, TUniqueId queryId, DescriptorTable descTable, List<PlanFragment> fragments,
                        List<ScanNode> scanNodes, String timezone, long startTime,
-                       Map<String, String> sessionVariables) {
+                       Map<String, String> sessionVariables, boolean enablePipelineEngine) {
         this.isBlockQuery = true;
         this.jobId = jobId;
         this.queryId = queryId;
         ConnectContext connectContext = new ConnectContext();
         connectContext.setQualifiedUser(Auth.ROOT_USER);
         connectContext.setCurrentUserIdentity(UserIdentity.ROOT);
-        connectContext.getSessionVariable().setEnablePipelineEngine(false);
+        connectContext.getSessionVariable().setEnablePipelineEngine(enablePipelineEngine);
         connectContext.getSessionVariable().setPipelineDop(0);
         this.connectContext = connectContext;
         this.descTable = descTable.toThrift();

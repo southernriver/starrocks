@@ -399,7 +399,7 @@ public class ExportJob implements Writable {
                 break;
         }
         fragment.setOutputExprs(createOutputExprs());
-        fragment.setPipelineDop(1);
+        fragment.setPipelineDop(getExportDop());
 
         scanNode.setFragmentId(fragment.getFragmentId());
         LoadScanNode.initWhereExpr(scanNode, whereExpr, analyzer);
@@ -420,7 +420,7 @@ public class ExportJob implements Writable {
             fileOptions.setCompression_type(compressionType);
 
             if (properties.containsKey(OutFileClause.PARQUET_USE_DICT)) {
-                fileOptions.setUse_dict(Boolean.getBoolean(properties.get(OutFileClause.PARQUET_USE_DICT)));
+                fileOptions.setUse_dict(Boolean.parseBoolean(properties.get(OutFileClause.PARQUET_USE_DICT)));
             }
 
             if (properties.containsKey(OutFileClause.PARQUET_MAX_ROW_GROUP_SIZE)) {
@@ -523,7 +523,7 @@ public class ExportJob implements Writable {
             TUniqueId queryId = new TUniqueId(uuid.getMostSignificantBits() + i, uuid.getLeastSignificantBits());
             Coordinator coord = new Coordinator(
                     id, queryId, desc, Lists.newArrayList(fragment), Lists.newArrayList(scanNode),
-                    TimeUtils.DEFAULT_TIME_ZONE, stmt.getExportStartTime(), Maps.newHashMap());
+                    TimeUtils.DEFAULT_TIME_ZONE, stmt.getExportStartTime(), Maps.newHashMap(), enablePipelineEngine());
             coord.setExecMemoryLimit(getMemLimit());
             coord.setDisableStoragePageCache(true);
             coord.setDisableColumnPool(true);
@@ -614,6 +614,22 @@ public class ExportJob implements Writable {
         } else {
             // for compatibility, some export job in old version does not have this property. use default.
             return Config.export_task_default_timeout_second;
+        }
+    }
+
+    private boolean enablePipelineEngine() {
+        if (properties.containsKey("enable_pipeline_engine")) {
+            return Boolean.parseBoolean(properties.get("enable_pipeline_engine"));
+        } else {
+            return false;
+        }
+    }
+
+    public int getExportDop() {
+        if (properties.containsKey("export_dop")) {
+            return Integer.parseInt(properties.get("export_dop"));
+        } else {
+            return 1;
         }
     }
 
