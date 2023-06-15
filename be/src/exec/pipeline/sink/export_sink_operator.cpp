@@ -207,8 +207,8 @@ Status ExportSinkIOBuffer::_open_file_writer() {
         }
         auto schema = result.ValueOrDie();
         _file_builder = std::make_unique<ParquetBuilder>(
-                std::move(output_file), std::move(properties), std::move(schema),
-                _output_expr_ctxs, max_file_size_rows);
+                std::move(output_file), std::move(properties), std::move(schema), _output_expr_ctxs,
+                _parquet_options.row_group_max_size, max_file_size_bytes);
     } else if (file_format == "orc") {
         std::vector<TypeDescriptor> output_types;
         for (const auto& type : _t_export_sink.file_output_types) {
