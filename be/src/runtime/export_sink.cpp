@@ -114,15 +114,15 @@ Status ExportSink::close(RuntimeState* state, Status exec_status) {
     if (_file_builder != nullptr) {
         st = _file_builder->finish();
         if (st.ok()) {
-            _number_written_bytes += _file_builder->file_size();
+            int64_t size = _file_builder->file_size();
+            _number_written_bytes += size;
+            StarRocksMetrics::instance()->exported_bytes_total.increment(size);
         }
         _file_builder.reset();
     }
     _closed = true;
     state->update_num_rows_load_from_sink(_number_written_rows);
     state->update_num_bytes_load_from_sink(_number_written_bytes);
-    StarRocksMetrics::instance()->exported_rows_total.increment(_number_written_rows);
-    StarRocksMetrics::instance()->exported_bytes_total.increment(_number_written_bytes);
     COUNTER_SET(_rows_written_counter, _number_written_rows);
     COUNTER_SET(_bytes_written_counter, _number_written_bytes);
     COUNTER_UPDATE(_write_timer, timer.elapsed_time());
@@ -231,10 +231,13 @@ Status ExportSink::send_chunk(RuntimeState* state, vectorized::Chunk* chunk) {
         return status;
     }
     _number_written_rows += chunkNumRows;
+    StarRocksMetrics::instance()->exported_rows_total.increment(chunkNumRows);
     if ((max_file_size_rows > 0 && num_rows >= max_file_size_rows) ||
         (max_file_size_bytes > 0 && _file_builder->file_size() >= max_file_size_bytes)) {
         RETURN_IF_ERROR(_file_builder->finish());
-        _number_written_bytes += _file_builder->file_size();
+        int64_t size = _file_builder->file_size();
+        _number_written_bytes += size;
+        StarRocksMetrics::instance()->exported_bytes_total.increment(size);
         RETURN_IF_ERROR(open_file_writer(timeout_ms - timer.elapsed_time() / MICROS_PER_SEC));
         num_rows = 0;
     }
