@@ -530,7 +530,7 @@ void check_meta_consistency(DataDir* data_dir) {
                 }
                 for (const auto& column : columns) {
                     uint32_t unique_id = column.unique_id();
-                    starrocks::FieldType type = column.type();
+                    starrocks::LogicalType type = column.type();
                     auto iter = columns_in_footer.find(unique_id);
                     if (iter == columns_in_footer.end()) {
                         continue;
@@ -543,7 +543,7 @@ void check_meta_consistency(DataDir* data_dir) {
                     }
 
                     // if type is varchar, check length
-                    if (type == starrocks::FieldType::OLAP_FIELD_TYPE_VARCHAR) {
+                    if (type == starrocks::LogicalType::LOGICAL_TYPE_VARCHAR) {
                         const auto& column_pb = footer.columns(iter->second.first);
                         if (column.length() != column_pb.length()) {
                             tablet_ids.emplace_back(tablet_id);
@@ -611,7 +611,7 @@ std::shared_ptr<TabletSchema> SegmentDump::_init_search_schema_from_footer(const
         const auto& src_col = footer.columns(i);
         ColumnPB* dest_col = tablet_schema_pb.add_column();
         dest_col->set_unique_id(src_col.unique_id());
-        dest_col->set_type(type_to_string(scalar_field_type_to_primitive_type((FieldType)(src_col.type()))));
+        dest_col->set_type(type_to_string(scalar_field_type_to_primitive_type((LogicalType)(src_col.type()))));
         dest_col->set_is_nullable(src_col.is_nullable());
         dest_col->set_length(src_col.length());
     }
@@ -659,7 +659,7 @@ void SegmentDump::_analyze_short_key_columns(size_t key_column_count, std::vecto
 
     for (size_t i = 0; i < key_column_count; i++) {
         auto col = _tablet_schema->columns()[i];
-        FieldType logical_type = col.type();
+        LogicalType logical_type = col.type();
         if (is_enumeration_type(scalar_field_type_to_primitive_type(logical_type))) {
             if (short_key_size + col.length() > _max_short_key_size) {
                 break;
@@ -721,10 +721,10 @@ Status SegmentDump::_output_short_key_string(const std::vector<ColItem>& cols, s
         APPLY_FOR_TYPE_INTEGER(M)
         APPLY_FOR_TYPE_TIME(M)
         APPLY_FOR_TYPE_DECIMAL(M)
-        M(OLAP_FIELD_TYPE_FLOAT)
-        M(OLAP_FIELD_TYPE_DOUBLE)
-        M(OLAP_FIELD_TYPE_CHAR)
-        M(OLAP_FIELD_TYPE_VARCHAR)
+        M(LOGICAL_TYPE_FLOAT)
+        M(LOGICAL_TYPE_DOUBLE)
+        M(LOGICAL_TYPE_CHAR)
+        M(LOGICAL_TYPE_VARCHAR)
 #undef M
     default:
         std::cout << "Not support type: " << logical_type << std::endl;
