@@ -100,7 +100,7 @@ public class TdwRestClient extends RestClient {
         TdwResponse response = getTdwResponse(builder.build().toString());
 
         if (response.getCode() == 100002) {
-            LOG.warn("User " + userName + " not found in tdw, return default password.");
+            LOG.debug("User " + userName + " not found in tdw, return default password.");
             return "";
         }
 
