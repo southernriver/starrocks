@@ -3,6 +3,7 @@
 #pragma once
 
 #include "storage/olap_common.h"
+#include "types/logical_type.h"
 
 namespace starrocks {
 

@@ -26,7 +26,7 @@
 #include "common/config.h"
 #include "gen_cpp/AgentService_types.h"
 #include "gutil/strings/substitute.h"
-#include "storage/olap_common.h"
+#include "types/logical_type.h"
 #include "storage/tablet_schema.h"
 
 namespace starrocks {
