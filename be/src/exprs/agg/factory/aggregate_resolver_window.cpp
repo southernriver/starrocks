@@ -10,7 +10,7 @@
 namespace starrocks::vectorized {
 
 struct WindowDispatcher {
-    template <PrimitiveType pt>
+    template <LogicalType pt>
     void operator()(AggregateFuncResolver* resolver) {
         if constexpr (pt_is_aggregate<pt> || is_object_type(pt)) {
             resolver->add_aggregate_mapping_notnull<pt, pt>(

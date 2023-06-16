@@ -1628,7 +1628,7 @@ TEST_F(VectorizedCastExprTest, timeToVarchar) {
     }
 }
 
-template <PrimitiveType toType, class JsonValueType>
+template <LogicalType toType, class JsonValueType>
 static typename RunTimeColumnType<toType>::Ptr evaluateCastFromJson(TExprNode& cast_expr, JsonValueType json_str) {
     TPrimitiveType::type t_type = to_thrift(toType);
     cast_expr.type = gen_type_desc(t_type);
@@ -1651,7 +1651,7 @@ static typename RunTimeColumnType<toType>::Ptr evaluateCastFromJson(TExprNode& c
     return ColumnHelper::cast_to<toType>(ptr);
 }
 
-template <PrimitiveType toType, class JsonValueType>
+template <LogicalType toType, class JsonValueType>
 static ColumnPtr evaluateCastJsonNullable(TExprNode& cast_expr, JsonValueType json_str) {
     std::cerr << "evaluate castCast: " << json_str << std::endl;
     TPrimitiveType::type t_type = to_thrift(toType);
@@ -1741,7 +1741,7 @@ TEST_F(VectorizedCastExprTest, jsonToValue) {
     EXPECT_EQ(nullptr, evaluateCastJsonNullable<TYPE_HLL>(cast_expr, "1"));
 }
 
-template <PrimitiveType fromType>
+template <LogicalType fromType>
 static std::string evaluateCastToJson(TExprNode& cast_expr, RunTimeCppType<fromType> value) {
     cast_expr.child_type = to_thrift(fromType);
     cast_expr.type = gen_type_desc(to_thrift(TYPE_JSON));
@@ -1873,12 +1873,12 @@ static std::string cast_string_to_array(TExprNode& cast_expr, TTypeDesc type_des
     return ptr->debug_item(0);
 }
 
-static std::string cast_string_to_array(TExprNode& cast_expr, PrimitiveType element_type, const std::string& str) {
+static std::string cast_string_to_array(TExprNode& cast_expr, LogicalType element_type, const std::string& str) {
     auto type_desc = gen_array_type_desc(to_thrift(element_type));
     return cast_string_to_array(cast_expr, type_desc, str);
 }
 
-static ColumnPtr cast_string_to_array_ptr(TExprNode& cast_expr, PrimitiveType element_type, const ColumnPtr& src) {
+static ColumnPtr cast_string_to_array_ptr(TExprNode& cast_expr, LogicalType element_type, const ColumnPtr& src) {
     auto type_desc = gen_array_type_desc(to_thrift(element_type));
     cast_expr.child_type = to_thrift(TYPE_VARCHAR);
     cast_expr.type = type_desc;
@@ -2024,7 +2024,7 @@ TEST_F(VectorizedCastExprTest, string_split_test) {
     }
 }
 
-static std::string cast_json_to_array(TExprNode& cast_expr, PrimitiveType element_type, const std::string& str) {
+static std::string cast_json_to_array(TExprNode& cast_expr, LogicalType element_type, const std::string& str) {
     cast_expr.child_type = to_thrift(TYPE_JSON);
     cast_expr.type = gen_array_type_desc(to_thrift(element_type));
 
@@ -2072,7 +2072,7 @@ TEST_F(VectorizedCastExprTest, json_to_array) {
     EXPECT_EQ(R"([])", cast_json_to_array(cast_expr, TYPE_JSON, R"( {"a": 1} )"));
 }
 
-static ColumnPtr cast_json_to_array_ptr(TExprNode& cast_expr, PrimitiveType element_type, const ColumnPtr& src) {
+static ColumnPtr cast_json_to_array_ptr(TExprNode& cast_expr, LogicalType element_type, const ColumnPtr& src) {
     cast_expr.child_type = to_thrift(TYPE_JSON);
     cast_expr.type = gen_array_type_desc(to_thrift(element_type));
 

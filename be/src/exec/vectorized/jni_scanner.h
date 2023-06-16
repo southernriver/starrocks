@@ -57,13 +57,13 @@ private:
 
     Status _get_next_chunk(JNIEnv* _jni_env, long* chunk_meta);
 
-    template <PrimitiveType type, typename CppType>
+    template <LogicalType type, typename CppType>
     Status _append_primitive_data(const FillColumnArgs& args);
 
-    template <PrimitiveType type, typename CppType>
+    template <LogicalType type, typename CppType>
     Status _append_decimal_data(const FillColumnArgs& args);
 
-    template <PrimitiveType type>
+    template <LogicalType type>
     Status _append_string_data(const FillColumnArgs& args);
 
     Status _append_date_data(const FillColumnArgs& args);

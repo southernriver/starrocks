@@ -110,7 +110,7 @@ void ORCOutputStream::flush() {
     _pos = _buff;
 }
 
-const static std::unordered_map<PrimitiveType, orc::TypeKind> g_starrocks_orc_type_mapping = {
+const static std::unordered_map<LogicalType, orc::TypeKind> g_starrocks_orc_type_mapping = {
         {TYPE_BOOLEAN, orc::BOOLEAN},    {TYPE_TINYINT, orc::BYTE},
         {TYPE_SMALLINT, orc::SHORT},     {TYPE_INT, orc::INT},
         {TYPE_BIGINT, orc::LONG},        {TYPE_FLOAT, orc::FLOAT},

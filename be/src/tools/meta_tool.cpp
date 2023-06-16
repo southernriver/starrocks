@@ -543,7 +543,7 @@ void check_meta_consistency(DataDir* data_dir) {
                     }
 
                     // if type is varchar, check length
-                    if (type == starrocks::LogicalType::LOGICAL_TYPE_VARCHAR) {
+                    if (type == starrocks::LogicalType::TYPE_VARCHAR) {
                         const auto& column_pb = footer.columns(iter->second.first);
                         if (column.length() != column_pb.length()) {
                             tablet_ids.emplace_back(tablet_id);
@@ -721,10 +721,10 @@ Status SegmentDump::_output_short_key_string(const std::vector<ColItem>& cols, s
         APPLY_FOR_TYPE_INTEGER(M)
         APPLY_FOR_TYPE_TIME(M)
         APPLY_FOR_TYPE_DECIMAL(M)
-        M(LOGICAL_TYPE_FLOAT)
-        M(LOGICAL_TYPE_DOUBLE)
-        M(LOGICAL_TYPE_CHAR)
-        M(LOGICAL_TYPE_VARCHAR)
+        M(TYPE_FLOAT)
+        M(TYPE_DOUBLE)
+        M(TYPE_CHAR)
+        M(TYPE_VARCHAR)
 #undef M
     default:
         std::cout << "Not support type: " << logical_type << std::endl;

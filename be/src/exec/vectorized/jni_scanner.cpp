@@ -139,7 +139,7 @@ Status JniScanner::_get_next_chunk(JNIEnv* _jni_env, long* chunk_meta) {
     return Status::OK();
 }
 
-template <PrimitiveType type, typename CppType>
+template <LogicalType type, typename CppType>
 Status JniScanner::_append_primitive_data(const FillColumnArgs& args) {
     char* column_ptr = static_cast<char*>(next_chunk_meta_as_ptr());
     using ColumnType = typename starrocks::vectorized::RunTimeColumnType<type>;
@@ -149,7 +149,7 @@ Status JniScanner::_append_primitive_data(const FillColumnArgs& args) {
     return Status::OK();
 }
 
-template <PrimitiveType type>
+template <LogicalType type>
 Status JniScanner::_append_string_data(const FillColumnArgs& args) {
     int* offset_ptr = static_cast<int*>(next_chunk_meta_as_ptr());
     char* column_ptr = static_cast<char*>(next_chunk_meta_as_ptr());
@@ -169,7 +169,7 @@ Status JniScanner::_append_string_data(const FillColumnArgs& args) {
     return Status::OK();
 }
 
-template <PrimitiveType type, typename CppType>
+template <LogicalType type, typename CppType>
 Status JniScanner::_append_decimal_data(const FillColumnArgs& args) {
     int* offset_ptr = static_cast<int*>(next_chunk_meta_as_ptr());
     char* column_ptr = static_cast<char*>(next_chunk_meta_as_ptr());
@@ -369,38 +369,38 @@ Status JniScanner::_fill_column(FillColumnArgs* pargs) {
         // we assume every column starswith `null_column`.
     }
 
-    PrimitiveType column_type = args.slot_type.type;
-    if (column_type == PrimitiveType::TYPE_BOOLEAN) {
+    LogicalType column_type = args.slot_type.type;
+    if (column_type == LogicalType::TYPE_BOOLEAN) {
         RETURN_IF_ERROR((_append_primitive_data<TYPE_BOOLEAN, uint8_t>(args)));
-    } else if (column_type == PrimitiveType::TYPE_SMALLINT) {
+    } else if (column_type == LogicalType::TYPE_SMALLINT) {
         RETURN_IF_ERROR((_append_primitive_data<TYPE_SMALLINT, int16_t>(args)));
-    } else if (column_type == PrimitiveType::TYPE_INT) {
+    } else if (column_type == LogicalType::TYPE_INT) {
         RETURN_IF_ERROR((_append_primitive_data<TYPE_INT, int32_t>(args)));
-    } else if (column_type == PrimitiveType::TYPE_FLOAT) {
+    } else if (column_type == LogicalType::TYPE_FLOAT) {
         RETURN_IF_ERROR((_append_primitive_data<TYPE_FLOAT, float>(args)));
-    } else if (column_type == PrimitiveType::TYPE_BIGINT) {
+    } else if (column_type == LogicalType::TYPE_BIGINT) {
         RETURN_IF_ERROR((_append_primitive_data<TYPE_BIGINT, int64_t>(args)));
-    } else if (column_type == PrimitiveType::TYPE_DOUBLE) {
+    } else if (column_type == LogicalType::TYPE_DOUBLE) {
         RETURN_IF_ERROR((_append_primitive_data<TYPE_DOUBLE, double>(args)));
-    } else if (column_type == PrimitiveType::TYPE_VARCHAR) {
+    } else if (column_type == LogicalType::TYPE_VARCHAR) {
         RETURN_IF_ERROR((_append_string_data<TYPE_VARCHAR>(args)));
-    } else if (column_type == PrimitiveType::TYPE_CHAR) {
+    } else if (column_type == LogicalType::TYPE_CHAR) {
         RETURN_IF_ERROR((_append_string_data<TYPE_CHAR>(args)));
-    } else if (column_type == PrimitiveType::TYPE_DATE) {
+    } else if (column_type == LogicalType::TYPE_DATE) {
         RETURN_IF_ERROR((_append_date_data(args)));
-    } else if (column_type == PrimitiveType::TYPE_DATETIME) {
+    } else if (column_type == LogicalType::TYPE_DATETIME) {
         RETURN_IF_ERROR((_append_datetime_data(args)));
-    } else if (column_type == PrimitiveType::TYPE_DECIMAL32) {
+    } else if (column_type == LogicalType::TYPE_DECIMAL32) {
         RETURN_IF_ERROR((_append_decimal_data<TYPE_DECIMAL32, int32_t>(args)));
-    } else if (column_type == PrimitiveType::TYPE_DECIMAL64) {
+    } else if (column_type == LogicalType::TYPE_DECIMAL64) {
         RETURN_IF_ERROR((_append_decimal_data<TYPE_DECIMAL64, int64_t>(args)));
-    } else if (column_type == PrimitiveType::TYPE_DECIMAL128) {
+    } else if (column_type == LogicalType::TYPE_DECIMAL128) {
         RETURN_IF_ERROR((_append_decimal_data<TYPE_DECIMAL128, int128_t>(args)));
-    } else if (column_type == PrimitiveType::TYPE_ARRAY) {
+    } else if (column_type == LogicalType::TYPE_ARRAY) {
         RETURN_IF_ERROR((_append_array_data(args)));
-    } else if (column_type == PrimitiveType::TYPE_MAP) {
+    } else if (column_type == LogicalType::TYPE_MAP) {
         RETURN_IF_ERROR((_append_map_data(args)));
-    } else if (column_type == PrimitiveType::TYPE_STRUCT) {
+    } else if (column_type == LogicalType::TYPE_STRUCT) {
         RETURN_IF_ERROR((_append_struct_data(args)));
     } else {
         return Status::InternalError(fmt::format("Type {} is not supported for off-heap table scanner", column_type));

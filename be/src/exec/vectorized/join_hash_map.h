@@ -284,7 +284,7 @@ public:
     }
 
     // combine keys into fixed size key by column.
-    template <PrimitiveType PT>
+    template <LogicalType PT>
     static void serialize_fixed_size_key_column(const Columns& key_columns, Column* fixed_size_key_column,
                                                 uint32_t start, uint32_t count) {
         using CppType = typename RunTimeTypeTraits<PT>::CppType;
@@ -302,7 +302,7 @@ public:
     }
 };
 
-template <PrimitiveType PT>
+template <LogicalType PT>
 class JoinBuildFunc {
 public:
     using CppType = typename RunTimeTypeTraits<PT>::CppType;
@@ -314,7 +314,7 @@ public:
                                      HashTableProbeState* probe_state);
 };
 
-template <PrimitiveType PT>
+template <LogicalType PT>
 class DirectMappingJoinBuildFunc {
 public:
     using CppType = typename RunTimeTypeTraits<PT>::CppType;
@@ -326,7 +326,7 @@ public:
                                      HashTableProbeState* probe_state);
 };
 
-template <PrimitiveType PT>
+template <LogicalType PT>
 class FixedSizeJoinBuildFunc {
 public:
     using CppType = typename RunTimeTypeTraits<PT>::CppType;
@@ -365,7 +365,7 @@ private:
                                         uint32_t count, uint8_t** ptr);
 };
 
-template <PrimitiveType PT>
+template <LogicalType PT>
 class JoinProbeFunc {
 public:
     using CppType = typename RunTimeTypeTraits<PT>::CppType;
@@ -377,7 +377,7 @@ public:
     static bool equal(const CppType& x, const CppType& y) { return x == y; }
 };
 
-template <PrimitiveType PT>
+template <LogicalType PT>
 class DirectMappingJoinProbeFunc {
 public:
     using CppType = typename RunTimeTypeTraits<PT>::CppType;
@@ -389,7 +389,7 @@ public:
     static bool equal(const CppType& x, const CppType& y) { return true; }
 };
 
-template <PrimitiveType PT>
+template <LogicalType PT>
 class FixedSizeJoinProbeFunc {
 public:
     using CppType = typename RunTimeTypeTraits<PT>::CppType;
@@ -528,7 +528,7 @@ private:
     HashTableProbeState* _probe_state = nullptr;
 };
 
-template <PrimitiveType PT, class BuildFunc, class ProbeFunc>
+template <LogicalType PT, class BuildFunc, class ProbeFunc>
 class JoinHashMap {
 public:
     using CppType = typename RunTimeTypeTraits<PT>::CppType;
@@ -696,7 +696,7 @@ public:
 
 private:
     JoinHashMapType _choose_join_hash_map();
-    static size_t _get_size_of_fixed_and_contiguous_type(PrimitiveType data_type);
+    static size_t _get_size_of_fixed_and_contiguous_type(LogicalType data_type);
 
     Status _upgrade_key_columns_if_overflow();
 

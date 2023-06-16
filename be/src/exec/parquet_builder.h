@@ -65,7 +65,7 @@ class ParquetBuildHelper {
 public:
     static void build_file_data_type(parquet::Type::type& parquet_data_type,
                                      parquet::ConvertedType::type& parquet_converted_type,
-                                     const PrimitiveType& column_data_type);
+                                     const LogicalType& column_data_type);
 
     static void build_parquet_repetition_type(parquet::Repetition::type& parquet_repetition_type,
                                               const bool is_nullable);

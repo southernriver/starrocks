@@ -150,7 +150,7 @@ Status ParquetBuilder::_init_schema(const std::vector<std::string>& file_column_
 
 void ParquetBuildHelper::build_file_data_type(parquet::Type::type& parquet_data_type,
                                               parquet::ConvertedType::type& parquet_converted_type,
-                                              const PrimitiveType& column_data_type) {
+                                              const LogicalType& column_data_type) {
     switch (column_data_type) {
     case TYPE_BOOLEAN: {
         parquet_data_type = parquet::Type::BOOLEAN;

@@ -317,7 +317,7 @@ protected:
     }
 };
 
-template <PrimitiveType primitive_type, typename HashMap>
+template <LogicalType primitive_type, typename HashMap>
 struct PartitionHashMapWithOneNumberKey : public PartitionHashMapBase {
     using Iterator = typename HashMap::iterator;
     using ColumnType = RunTimeColumnType<primitive_type>;
@@ -341,7 +341,7 @@ struct PartitionHashMapWithOneNumberKey : public PartitionHashMapBase {
     }
 };
 
-template <PrimitiveType primitive_type, typename HashMap>
+template <LogicalType primitive_type, typename HashMap>
 struct PartitionHashMapWithOneNullableNumberKey : public PartitionHashMapBase {
     using Iterator = typename HashMap::iterator;
     using ColumnType = RunTimeColumnType<primitive_type>;

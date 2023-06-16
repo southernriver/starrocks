@@ -11,7 +11,7 @@
 namespace starrocks::vectorized {
 
 struct PercentileDiscDispatcher {
-    template <PrimitiveType pt>
+    template <LogicalType pt>
     void operator()(AggregateFuncResolver* resolver) {
         if constexpr (pt_is_datetime<pt> || pt_is_date<pt> || pt_is_arithmetic<pt> || pt_is_string<pt> ||
                       pt_is_decimal_of_any_version<pt>) {

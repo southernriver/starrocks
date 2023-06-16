@@ -25,7 +25,7 @@ namespace vectorized {
  * @tparam Type
  */
 
-template <PrimitiveType Type>
+template <LogicalType Type>
 class ColumnViewer {
 public:
     static auto constexpr TYPE = Type;

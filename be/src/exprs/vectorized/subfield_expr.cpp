@@ -33,7 +33,7 @@ public:
             if (col == nullptr) {
                 LOG(WARNING) << "Struct subfield name: " + fieldname + " not found!";
                 // Return an empty column to avoid nullptr
-                return ColumnHelper::create_column(TypeDescriptor::from_primtive_type(PrimitiveType::TYPE_NULL), true);
+                return ColumnHelper::create_column(TypeDescriptor::from_primtive_type(LogicalType::TYPE_NULL), true);
             }
         }
 
@@ -59,7 +59,7 @@ public:
         if (subfield_column == nullptr) {
             LOG(WARNING) << "Struct subfield name: " + fieldname + " not found!";
             // Return an empty column to avoid nullptr
-            return ColumnHelper::create_column(TypeDescriptor::from_primtive_type(PrimitiveType::TYPE_NULL), true);
+            return ColumnHelper::create_column(TypeDescriptor::from_primtive_type(LogicalType::TYPE_NULL), true);
         }
         if (subfield_column->is_nullable()) {
             auto* nullable = down_cast<NullableColumn*>(subfield_column.get());

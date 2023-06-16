@@ -233,7 +233,7 @@ Status OrcMappingFactory::_init_orc_mapping_with_hive_column_names(std::unique_p
 Status OrcMappingFactory::_set_child_mapping(const OrcMappingPtr& mapping, const TypeDescriptor& origin_type,
                                              const orc::Type& orc_type, const bool case_sensitive) {
     DCHECK(origin_type.is_complex_type());
-    if (origin_type.type == PrimitiveType::TYPE_STRUCT) {
+    if (origin_type.type == LogicalType::TYPE_STRUCT) {
         DCHECK(orc_type.getKind() == orc::TypeKind::STRUCT);
 
         std::unordered_map<std::string, size_t> tmp_orc_fieldname_2_pos;
@@ -266,7 +266,7 @@ Status OrcMappingFactory::_set_child_mapping(const OrcMappingPtr& mapping, const
             }
             mapping->add_mapping(index, need_add_column_id, need_add_child_mapping);
         }
-    } else if (origin_type.type == PrimitiveType::TYPE_ARRAY) {
+    } else if (origin_type.type == LogicalType::TYPE_ARRAY) {
         DCHECK(orc_type.getKind() == orc::TypeKind::LIST);
         const orc::Type& orc_child_type = *orc_type.getSubtype(0);
         const TypeDescriptor& origin_child_type = origin_type.children[0];
@@ -283,7 +283,7 @@ Status OrcMappingFactory::_set_child_mapping(const OrcMappingPtr& mapping, const
         }
 
         mapping->add_mapping(0, need_add_column_id, need_add_child_mapping);
-    } else if (origin_type.type == PrimitiveType::TYPE_MAP) {
+    } else if (origin_type.type == LogicalType::TYPE_MAP) {
         DCHECK(orc_type.getKind() == orc::TypeKind::MAP);
 
         // Check Map's key can be converted

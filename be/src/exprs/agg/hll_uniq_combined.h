@@ -16,7 +16,7 @@ namespace starrocks::vectorized {
  * ARGS_TYPE: ALL TYPE
  * SERIALIZED_TYPE: TYPE_VARCHAR
  */
-template <PrimitiveType PT, typename T = RunTimeCppType<PT>>
+template <LogicalType PT, typename T = RunTimeCppType<PT>>
 class HllUniqCombinedAggregateFunction final
         : public AggregateFunctionBatchHelper<DataSketchesHll, HllUniqCombinedAggregateFunction<PT, T>> {
 public:

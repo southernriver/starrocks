@@ -57,10 +57,10 @@ private:
 
 TEST_F(SubfieldExprTest, subfield_test) {
     TypeDescriptor struct_type;
-    struct_type.type = PrimitiveType::TYPE_STRUCT;
-    struct_type.children.emplace_back(PrimitiveType::TYPE_INT);
+    struct_type.type = LogicalType::TYPE_STRUCT;
+    struct_type.children.emplace_back(LogicalType::TYPE_INT);
     struct_type.field_names.emplace_back("id");
-    struct_type.children.emplace_back(PrimitiveType::TYPE_VARCHAR);
+    struct_type.children.emplace_back(LogicalType::TYPE_VARCHAR);
     struct_type.field_names.emplace_back("name");
 
     auto column = ColumnHelper::create_column(struct_type, false);
@@ -76,7 +76,7 @@ TEST_F(SubfieldExprTest, subfield_test) {
     column->append_datum(datum_struct_2);
 
     {
-        std::unique_ptr<Expr> expr = create_subfield_expr(TypeDescriptor(PrimitiveType::TYPE_INT), {"id"});
+        std::unique_ptr<Expr> expr = create_subfield_expr(TypeDescriptor(LogicalType::TYPE_INT), {"id"});
         expr->add_child(new_fake_const_expr(column, struct_type));
         auto result = expr->evaluate(nullptr, nullptr);
         EXPECT_TRUE(result->is_nullable());
@@ -88,7 +88,7 @@ TEST_F(SubfieldExprTest, subfield_test) {
     }
 
     {
-        std::unique_ptr<Expr> expr = create_subfield_expr(TypeDescriptor(PrimitiveType::TYPE_INT), {"name"});
+        std::unique_ptr<Expr> expr = create_subfield_expr(TypeDescriptor(LogicalType::TYPE_INT), {"name"});
         expr->add_child(new_fake_const_expr(column, struct_type));
         auto result = expr->evaluate(nullptr, nullptr);
         EXPECT_TRUE(result->is_nullable());
@@ -102,10 +102,10 @@ TEST_F(SubfieldExprTest, subfield_test) {
 
 TEST_F(SubfieldExprTest, subfield_null_test) {
     TypeDescriptor struct_type;
-    struct_type.type = PrimitiveType::TYPE_STRUCT;
-    struct_type.children.emplace_back(PrimitiveType::TYPE_INT);
+    struct_type.type = LogicalType::TYPE_STRUCT;
+    struct_type.children.emplace_back(LogicalType::TYPE_INT);
     struct_type.field_names.emplace_back("id");
-    struct_type.children.emplace_back(PrimitiveType::TYPE_VARCHAR);
+    struct_type.children.emplace_back(LogicalType::TYPE_VARCHAR);
     struct_type.field_names.emplace_back("name");
     {
         auto column = ColumnHelper::create_column(struct_type, false);
@@ -122,7 +122,7 @@ TEST_F(SubfieldExprTest, subfield_null_test) {
         datum_struct_3.push_back("cruise");
         column->append_datum(datum_struct_3);
 
-        std::unique_ptr<Expr> expr = create_subfield_expr(TypeDescriptor(PrimitiveType::TYPE_INT), {"id"});
+        std::unique_ptr<Expr> expr = create_subfield_expr(TypeDescriptor(LogicalType::TYPE_INT), {"id"});
         expr->add_child(new_fake_const_expr(column, struct_type));
         auto result = expr->evaluate(nullptr, nullptr);
         EXPECT_TRUE(result->is_nullable());
@@ -149,7 +149,7 @@ TEST_F(SubfieldExprTest, subfield_null_test) {
         datum_struct_3.push_back("cruise");
         column->append_datum(datum_struct_3);
 
-        std::unique_ptr<Expr> expr = create_subfield_expr(TypeDescriptor(PrimitiveType::TYPE_INT), {"id"});
+        std::unique_ptr<Expr> expr = create_subfield_expr(TypeDescriptor(LogicalType::TYPE_INT), {"id"});
         expr->add_child(new_fake_const_expr(column, struct_type));
         auto result = expr->evaluate(nullptr, nullptr);
         EXPECT_TRUE(result->is_nullable());
@@ -164,10 +164,10 @@ TEST_F(SubfieldExprTest, subfield_null_test) {
 
 TEST_F(SubfieldExprTest, subfield_clone_test) {
     TypeDescriptor struct_type;
-    struct_type.type = PrimitiveType::TYPE_STRUCT;
-    struct_type.children.emplace_back(PrimitiveType::TYPE_INT);
+    struct_type.type = LogicalType::TYPE_STRUCT;
+    struct_type.children.emplace_back(LogicalType::TYPE_INT);
     struct_type.field_names.emplace_back("id");
-    struct_type.children.emplace_back(PrimitiveType::TYPE_VARCHAR);
+    struct_type.children.emplace_back(LogicalType::TYPE_VARCHAR);
     struct_type.field_names.emplace_back("name");
     auto column = ColumnHelper::create_column(struct_type, false);
 
@@ -183,7 +183,7 @@ TEST_F(SubfieldExprTest, subfield_clone_test) {
     datum_struct_3.push_back("cruise");
     column->append_datum(datum_struct_3);
 
-    std::unique_ptr<Expr> expr = create_subfield_expr(TypeDescriptor(PrimitiveType::TYPE_INT), {"id"});
+    std::unique_ptr<Expr> expr = create_subfield_expr(TypeDescriptor(LogicalType::TYPE_INT), {"id"});
     expr->add_child(new_fake_const_expr(column, struct_type));
     auto result = expr->evaluate(nullptr, nullptr);
     EXPECT_TRUE(result->is_nullable());
@@ -201,13 +201,13 @@ TEST_F(SubfieldExprTest, subfield_clone_test) {
 
 TEST_F(SubfieldExprTest, subfield_multi_level_test) {
     TypeDescriptor struct_type;
-    struct_type.type = PrimitiveType::TYPE_STRUCT;
+    struct_type.type = LogicalType::TYPE_STRUCT;
     struct_type.field_names.emplace_back("id");
-    struct_type.children.emplace_back(PrimitiveType::TYPE_INT);
+    struct_type.children.emplace_back(LogicalType::TYPE_INT);
     struct_type.field_names.emplace_back("level1");
-    struct_type.children.emplace_back(PrimitiveType::TYPE_STRUCT);
+    struct_type.children.emplace_back(LogicalType::TYPE_STRUCT);
     struct_type.children[1].field_names.emplace_back("level2");
-    struct_type.children[1].children.emplace_back(PrimitiveType::TYPE_VARCHAR);
+    struct_type.children[1].children.emplace_back(LogicalType::TYPE_VARCHAR);
     auto column = ColumnHelper::create_column(struct_type, false);
 
     DatumStruct datum_struct_1_level1;
@@ -226,7 +226,7 @@ TEST_F(SubfieldExprTest, subfield_multi_level_test) {
     datum_struct_3_level1.push_back(datum_struct_3_level2);
     column->append_datum(datum_struct_3_level1);
 
-    std::unique_ptr<Expr> expr = create_subfield_expr(TypeDescriptor(PrimitiveType::TYPE_INT), {"level1", "level2"});
+    std::unique_ptr<Expr> expr = create_subfield_expr(TypeDescriptor(LogicalType::TYPE_INT), {"level1", "level2"});
     expr->add_child(new_fake_const_expr(column, struct_type));
     auto result = expr->evaluate(nullptr, nullptr);
     EXPECT_TRUE(result->is_nullable());

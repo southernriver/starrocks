@@ -16,13 +16,13 @@
 namespace starrocks::vectorized {
 
 // AvgResultLT for final result
-template <PrimitiveType PT, bool isCont, typename = guard::Guard>
-inline constexpr PrimitiveType PercentileResultPT = PT;
+template <LogicalType PT, bool isCont, typename = guard::Guard>
+inline constexpr LogicalType PercentileResultPT = PT;
 
-template <PrimitiveType PT>
-inline constexpr PrimitiveType PercentileResultPT<PT, true, ArithmeticPTGuard<PT>> = TYPE_DOUBLE;
+template <LogicalType PT>
+inline constexpr LogicalType PercentileResultPT<PT, true, ArithmeticPTGuard<PT>> = TYPE_DOUBLE;
 
-template <PrimitiveType LT, typename = guard::Guard>
+template <LogicalType LT, typename = guard::Guard>
 struct PercentileState {
     using CppType = RunTimeCppType<LT>;
     void update(CppType item) { items.emplace_back(item); }
@@ -31,7 +31,7 @@ struct PercentileState {
     double rate = 0.0;
 };
 
-template <PrimitiveType PT>
+template <LogicalType PT>
 class PercentileContDiscAggregateFunction
         : public AggregateFunctionBatchHelper<PercentileState<PT>, PercentileContDiscAggregateFunction<PT>> {
 public:
@@ -115,7 +115,7 @@ public:
     }
 };
 
-template <PrimitiveType PT>
+template <LogicalType PT>
 class PercentileContAggregateFunction final : public PercentileContDiscAggregateFunction<PT> {
     using InputCppType = RunTimeCppType<PT>;
     using InputColumnType = RunTimeColumnType<PT>;
@@ -151,7 +151,7 @@ class PercentileContAggregateFunction final : public PercentileContDiscAggregate
             result = new_vector[index] + (u - (double)index) * (new_vector[index + 1] - new_vector[index]);
         } else {
             // won't go there if percentile_cont is registered correctly
-            throw std::runtime_error("Invalid PrimitiveTypes for percentile_cont function");
+            throw std::runtime_error("Invalid LogicalType for percentile_cont function");
         }
 
         column->append(result);
@@ -160,7 +160,7 @@ class PercentileContAggregateFunction final : public PercentileContDiscAggregate
     std::string get_name() const override { return "percentile_cont"; }
 };
 
-template <PrimitiveType PT>
+template <LogicalType PT>
 class PercentileDiscAggregateFunction final : public PercentileContDiscAggregateFunction<PT> {
     using InputCppType = RunTimeCppType<PT>;
     using InputColumnType = RunTimeColumnType<PT>;
@@ -193,7 +193,7 @@ class PercentileDiscAggregateFunction final : public PercentileContDiscAggregate
             result = new_vector[index];
         } else {
             // won't go there if percentile_disc is registered correctly
-            throw std::runtime_error("Invalid PrimitiveTypes for percentile_disc function");
+            throw std::runtime_error("Invalid LogicalType for percentile_disc function");
         }
 
         column->append(result);

@@ -56,7 +56,7 @@ public:
                                        const TGetTabletScheduleRequest& request, TGetTabletScheduleResponse* response);
 };
 
-template <PrimitiveType SlotType>
+template <LogicalType SlotType>
 void fill_data_column_with_slot(vectorized::Column* data_column, void* slot) {
     using ColumnType = typename vectorized::RunTimeTypeTraits<SlotType>::ColumnType;
     using ValueType = typename vectorized::RunTimeTypeTraits<SlotType>::CppType;
@@ -78,7 +78,7 @@ void fill_data_column_with_slot(vectorized::Column* data_column, void* slot) {
     }
 }
 
-template <PrimitiveType SlotType>
+template <LogicalType SlotType>
 void fill_column_with_slot(vectorized::Column* result, void* slot) {
     if (result->is_nullable()) {
         vectorized::NullableColumn* nullable_column = down_cast<vectorized::NullableColumn*>(result);

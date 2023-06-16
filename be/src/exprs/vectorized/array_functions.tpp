@@ -13,7 +13,7 @@
 #include "util/phmap/phmap.h"
 
 namespace starrocks::vectorized {
-template <PrimitiveType PT>
+template <LogicalType PT>
 class ArrayDistinct {
 public:
     using CppType = RunTimeCppType<PT>;
@@ -111,7 +111,7 @@ private:
     }
 };
 
-template <PrimitiveType PT>
+template <LogicalType PT>
 class ArrayDifference {
 public:
     using CppType = RunTimeCppType<PT>;
@@ -217,7 +217,7 @@ private:
     }
 };
 
-template <PrimitiveType PT>
+template <LogicalType PT>
 class ArraySlice {
 public:
     using CppType = RunTimeCppType<PT>;
@@ -360,7 +360,7 @@ private:
     }
 };
 
-template <PrimitiveType PT>
+template <LogicalType PT>
 class ArrayConcat {
 public:
     using CppType = RunTimeCppType<PT>;
@@ -455,7 +455,7 @@ private:
     }
 };
 
-template <PrimitiveType PT>
+template <LogicalType PT>
 class ArrayOverlap {
 public:
     using CppType = RunTimeCppType<PT>;
@@ -552,7 +552,7 @@ private:
     }
 };
 
-template <PrimitiveType PT>
+template <LogicalType PT>
 class ArrayIntersect {
 public:
     using CppType = RunTimeCppType<PT>;
@@ -565,7 +565,7 @@ public:
         mutable size_t overlap_times;
     };
 
-    template <PrimitiveType type>
+    template <LogicalType type>
     struct CppTypeWithOverlapTimesHash {
         std::size_t operator()(const CppTypeWithOverlapTimes& cpp_type_value) const {
             if constexpr (pt_is_largeint<PT>) {
@@ -715,7 +715,7 @@ private:
     }
 };
 
-template <PrimitiveType PT>
+template <LogicalType PT>
 class ArraySort {
 public:
     using ColumnType = RunTimeColumnType<PT>;
@@ -848,7 +848,7 @@ protected:
     }
 };
 
-template <PrimitiveType PT>
+template <LogicalType PT>
 class ArrayReverse {
 public:
     using ColumnType = RunTimeColumnType<PT>;
@@ -1160,7 +1160,7 @@ private:
 
 // array_sortby(array, key_array) the key_array should not change the null property of array, if key_array is null,
 // keep the array the same.
-template <PrimitiveType PT>
+template <LogicalType PT>
 class ArraySortBy : public ArraySort<PT> {
 public:
     using ColumnType = RunTimeColumnType<PT>;

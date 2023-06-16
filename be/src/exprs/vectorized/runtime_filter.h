@@ -245,7 +245,7 @@ protected:
 };
 
 // The join runtime filter implement by bloom filter
-template <PrimitiveType Type>
+template <LogicalType Type>
 class RuntimeBloomFilter final : public JoinRuntimeFilter {
 public:
     using CppType = RunTimeCppType<Type>;
@@ -527,7 +527,7 @@ public:
     }
 
     std::string debug_string() const override {
-        PrimitiveType ptype = Type;
+        LogicalType ptype = Type;
         std::stringstream ss;
         ss << "RuntimeBF(type = " << ptype << ", bfsize = " << _size << ", has_null = " << _has_null;
         if constexpr (std::is_integral_v<CppType> || std::is_floating_point_v<CppType>) {
@@ -562,7 +562,7 @@ public:
     }
 
     size_t serialize(uint8_t* data) const override {
-        PrimitiveType ptype = Type;
+        LogicalType ptype = Type;
         size_t offset = 0;
         memcpy(data + offset, &ptype, sizeof(ptype));
         offset += sizeof(ptype);
@@ -595,7 +595,7 @@ public:
     }
 
     size_t deserialize(const uint8_t* data) override {
-        PrimitiveType ptype = Type;
+        LogicalType ptype = Type;
         size_t offset = 0;
         memcpy(&ptype, data + offset, sizeof(ptype));
         offset += sizeof(ptype);
