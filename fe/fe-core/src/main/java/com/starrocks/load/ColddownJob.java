@@ -564,8 +564,9 @@ public class ColddownJob implements Writable {
                     if (info.isTriggeredByTtl()) {
                         return false;
                     }
-                    // synced time is when the export job started, so this if means data is not changed after last job
-                    if (info.getSyncedTimeMs() > partition.getVisibleVersionTime()) {
+                    // synced time is when the export job started, so this if means data is not changed after last job.
+                    // ignoreLastSuccess is only for test purpose.
+                    if (info.getSyncedTimeMs() > partition.getVisibleVersionTime() && !ignoreLastSuccess(properties)) {
                         return false;
                     }
                 }
@@ -603,6 +604,14 @@ public class ColddownJob implements Writable {
             submitExportJob(partition, false, properties);
         }
         return true;
+    }
+
+    private boolean ignoreLastSuccess(Map<String, String> properties) {
+        if (properties.containsKey("ignore_last_success")) {
+            return Boolean.parseBoolean(properties.get("ignore_last_success"));
+        } else {
+            return false;
+        }
     }
 
     @Override
