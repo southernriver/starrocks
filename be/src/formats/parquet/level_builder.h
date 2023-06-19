@@ -106,6 +106,7 @@ private:
                                  const ::parquet::schema::NodePtr& node, const vectorized::ColumnPtr& col,
                                  const CallbackFunction& write_leaf_callback);
 
+    template <LogicalType lt>
     void _write_decimal128_column_chunk(const LevelBuilderContext& ctx, const TypeDescriptor& type_desc,
                                         const ::parquet::schema::NodePtr& node, const vectorized::ColumnPtr& col,
                                         const CallbackFunction& write_leaf_callback);
@@ -118,9 +119,27 @@ private:
                                   const ::parquet::schema::NodePtr& node, const vectorized::ColumnPtr& col,
                                   const CallbackFunction& write_leaf_callback);
 
-    void _write_datetime_column_chunk(const LevelBuilderContext& ctx, const TypeDescriptor& type_desc,
+    void _write_date_column_chunk_like_numeric(const LevelBuilderContext& ctx, const TypeDescriptor& type_desc,
+                                               const ::parquet::schema::NodePtr& node, const vectorized::ColumnPtr& col,
+                                               const CallbackFunction& write_leaf_callback);
+
+    template <LogicalType lt>
+    void _write_date_column_chunk_as_string(const LevelBuilderContext& ctx, const TypeDescriptor& type_desc,
+                                              const ::parquet::schema::NodePtr& node, const vectorized::ColumnPtr& col,
+                                              const CallbackFunction& write_leaf_callback);
+
+    template <::parquet::Type::type pt>
+    void _write_date_column_chunk_as_numeric(const LevelBuilderContext& ctx, const TypeDescriptor& type_desc,
+                                             const ::parquet::schema::NodePtr& node, const vectorized::ColumnPtr& col,
+                                             const CallbackFunction& write_leaf_callback);
+
+    void _write_date_column_chunk_as_datetime(const LevelBuilderContext& ctx, const TypeDescriptor& type_desc,
                                       const ::parquet::schema::NodePtr& node, const vectorized::ColumnPtr& col,
                                       const CallbackFunction& write_leaf_callback);
+
+    void _write_datetime_column_chunk(const LevelBuilderContext& ctx, const TypeDescriptor& type_desc,
+                                      const ::parquet::schema::NodePtr& node, const vectorized::ColumnPtr& col,
+                                      const CallbackFunction& write_leaf_callback, const long factor);
 
     void _write_array_column_chunk(const LevelBuilderContext& ctx, const TypeDescriptor& type_desc,
                                    const ::parquet::schema::NodePtr& node, const vectorized::ColumnPtr& col,

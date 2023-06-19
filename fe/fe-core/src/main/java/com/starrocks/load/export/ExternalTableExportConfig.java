@@ -232,8 +232,8 @@ public class ExternalTableExportConfig {
         String year = "";
         String month = "";
         String day = "";
-        String hour = "";
-        String minute = "";
+        String hour = "00";
+        String minute = "00";
         switch (TimestampArithmeticExpr.TimeUnit.valueOf(timeUnitValue.toUpperCase())) {
             case MINUTE:
                 year = partition.substring(0, 4);

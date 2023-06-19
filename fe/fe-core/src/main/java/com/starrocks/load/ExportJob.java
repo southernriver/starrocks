@@ -499,6 +499,13 @@ public class ExportJob implements Writable {
                     // yyyy-MM-dd HH:mm:ss
                     exportType = ScalarType.createVarcharType(19);
                 }
+                if (srType.getPrimitiveType() == PrimitiveType.LARGEINT) {
+                    // should be decimal(38, 0)
+                    if (!(exportType.getPrimitiveType().isDecimalV3Type() && exportType.getPrecision() == 38 &&
+                            ((ScalarType) exportType).getScalarScale() == 0)) {
+                        throw new AnalysisException(exportColumn + " should be decimal(38, 0)");
+                    }
+                }
                 exportTypesList.add(exportType);
             }
             return exportTypesList;

@@ -174,7 +174,7 @@ Status ExportSink::open_file_writer(int timeout_ms) {
             output_types.push_back(TypeDescriptor::from_thrift(type));
         }
         auto properties = parquet::ParquetBuildHelper::make_properties(_parquet_options);
-        auto result = parquet::ParquetBuildHelper::make_schema(_t_export_sink.file_column_names, _output_expr_ctxs,
+        auto result = parquet::ParquetBuildHelper::make_schema(_t_export_sink.file_column_names, output_types,
                                                            std::vector<parquet::FileColumnId>(_output_expr_ctxs.size()));
         if (!result.ok()) {
             return Status::NotSupported(result.status().message());
