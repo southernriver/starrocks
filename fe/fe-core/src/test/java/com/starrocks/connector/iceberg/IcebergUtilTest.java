@@ -24,7 +24,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static com.starrocks.connector.iceberg.IcebergUtil.convertColumnType;
+import static com.starrocks.connector.ColumnTypeConverter.fromIcebergType;
 import static com.starrocks.connector.iceberg.IcebergUtil.convertIcebergPartitionToPartitionName;
 
 public class IcebergUtilTest {
@@ -37,10 +37,10 @@ public class IcebergUtilTest {
 
     @Test
     public void testGetHdfsFileFormat() {
-        RemoteFileInputFormat fileFormat = IcebergUtil.getHdfsFileFormat(FileFormat.PARQUET);
+        RemoteFileInputFormat fileFormat = IcebergApiConverter.getHdfsFileFormat(FileFormat.PARQUET);
         Assert.assertTrue(fileFormat.equals(RemoteFileInputFormat.PARQUET));
         Assert.assertThrows("Unexpected file format: %s", StarRocksIcebergException.class, () -> {
-            IcebergUtil.getHdfsFileFormat(FileFormat.AVRO);
+            IcebergApiConverter.getHdfsFileFormat(FileFormat.AVRO);
         });
     }
 
@@ -58,7 +58,7 @@ public class IcebergUtilTest {
         int scale = 5;
         Type decimalType = ScalarType.createUnifiedDecimalType(precision, scale);
         org.apache.iceberg.types.Type icebergType = Types.DecimalType.of(precision, scale);
-        Type resType = convertColumnType(icebergType);
+        Type resType = fromIcebergType(icebergType);
         Assert.assertEquals(resType, decimalType);
     }
 
@@ -66,15 +66,15 @@ public class IcebergUtilTest {
     public void testString() {
         Type stringType = ScalarType.createDefaultString();
         org.apache.iceberg.types.Type icebergType = Types.StringType.get();
-        Type resType = convertColumnType(icebergType);
+        Type resType = fromIcebergType(icebergType);
         Assert.assertEquals(resType, stringType);
     }
 
     @Test
     public void testArray() {
-        Assert.assertEquals(convertColumnType(Types.ListType.ofRequired(136, Types.IntegerType.get())),
+        Assert.assertEquals(fromIcebergType(Types.ListType.ofRequired(136, Types.IntegerType.get())),
                 new ArrayType(ScalarType.createType(PrimitiveType.INT)));
-        Assert.assertEquals(convertColumnType(Types.ListType.ofRequired(136,
+        Assert.assertEquals(fromIcebergType(Types.ListType.ofRequired(136,
                         Types.ListType.ofRequired(136, Types.IntegerType.get()))),
                 new ArrayType(new ArrayType(ScalarType.createType(PrimitiveType.INT))));
     }
@@ -83,24 +83,24 @@ public class IcebergUtilTest {
     public void testUnsupported() {
         org.apache.iceberg.types.Type icebergType = Types.MapType.ofRequired(1, 2,
                 Types.ListType.ofRequired(136, Types.IntegerType.get()), Types.StringType.get());
-        Type resType = convertColumnType(icebergType);
+        Type resType = fromIcebergType(icebergType);
         Assert.assertTrue(resType.isUnknown());
 
         org.apache.iceberg.types.Type keyUnknownMapType = Types.MapType.ofRequired(1, 2,
                 Types.TimeType.get(), Types.StringType.get());
-        Type resKeyUnknowType = convertColumnType(keyUnknownMapType);
+        Type resKeyUnknowType = fromIcebergType(keyUnknownMapType);
         Assert.assertTrue(resKeyUnknowType.isUnknown());
 
         org.apache.iceberg.types.Type valueUnknownMapType = Types.MapType.ofRequired(1, 2,
                 Types.StringType.get(), Types.TimeType.get());
-        Type resValueUnknowType = convertColumnType(valueUnknownMapType);
+        Type resValueUnknowType = fromIcebergType(valueUnknownMapType);
         Assert.assertTrue(resValueUnknowType.isUnknown());
 
         List<Types.NestedField> fields = new ArrayList<>();
         fields.add(Types.NestedField.optional(1, "a", Types.IntegerType.get()));
         fields.add(Types.NestedField.required(1, "b", Types.TimeType.get()));
         org.apache.iceberg.types.Type unknownSubfieldStructType = Types.StructType.of(fields);
-        Type unknownStructType = convertColumnType(unknownSubfieldStructType);
+        Type unknownStructType = fromIcebergType(unknownSubfieldStructType);
         Assert.assertTrue(unknownStructType.isUnknown());
     }
 
@@ -108,7 +108,7 @@ public class IcebergUtilTest {
     public void testMap() {
         org.apache.iceberg.types.Type icebergType = Types.MapType.ofRequired(1, 2,
                 Types.StringType.get(), Types.IntegerType.get());
-        Type resType = convertColumnType(icebergType);
+        Type resType = fromIcebergType(icebergType);
         Assert.assertEquals(resType,
                 new MapType(ScalarType.createDefaultString(), ScalarType.createType(PrimitiveType.INT)));
     }
@@ -119,7 +119,7 @@ public class IcebergUtilTest {
         fields.add(Types.NestedField.optional(1, "a", Types.IntegerType.get()));
         fields.add(Types.NestedField.required(1, "b", Types.StringType.get()));
         org.apache.iceberg.types.Type icebergType = Types.StructType.of(fields);
-        Type resType = convertColumnType(icebergType);
+        Type resType = fromIcebergType(icebergType);
         Assert.assertTrue(resType.isStructType());
     }
 

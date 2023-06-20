@@ -22,6 +22,7 @@ import com.starrocks.common.AnalysisException;
 import com.starrocks.common.UserException;
 import com.starrocks.connector.PredicateUtils;
 import com.starrocks.connector.iceberg.ExpressionConverter;
+import com.starrocks.connector.iceberg.IcebergApiConverter;
 import com.starrocks.connector.iceberg.IcebergConnector;
 import com.starrocks.connector.iceberg.IcebergUtil;
 import com.starrocks.connector.iceberg.ScalarOperatorToIcebergExpr;
@@ -148,7 +149,7 @@ public class IcebergScanNode extends ScanNode {
      * please refer: https://iceberg.apache.org/spec/#scan-planning
      */
     public void preProcessIcebergPredicate(List<ScalarOperator> operators) {
-        Types.StructType schema = srIcebergTable.getIcebergTable().schema().asStruct();
+        Types.StructType schema = srIcebergTable.getNativeTable().schema().asStruct();
         ScalarOperatorToIcebergExpr.IcebergContext icebergContext =
                 new ScalarOperatorToIcebergExpr.IcebergContext(schema);
         icebergPredicate = new ScalarOperatorToIcebergExpr().convert(operators, icebergContext);
@@ -245,17 +246,17 @@ public class IcebergScanNode extends ScanNode {
 
     public void setupScanRangeLocations() throws UserException {
         Optional<Snapshot> snapshot = IcebergUtil.getCurrentTableSnapshot(
-                srIcebergTable.getIcebergTable());
+                srIcebergTable.getNativeTable());
         long startPlanTaskTime = System.currentTimeMillis();
         if (!snapshot.isPresent()) {
-            LOG.info(String.format("Table %s has no snapshot!", srIcebergTable.getRemoteTableName()));
+            LOG.info(String.format("Table %s has no snapshot!", srIcebergTable.getNativeTable()));
             return;
         }
         // partition -> partitionId
         Map<StructLike, Long> partitionMap = Maps.newHashMap();
 
         for (CombinedScanTask combinedScanTask : IcebergUtil.getTableScan(
-                srIcebergTable.getIcebergTable(), snapshot.get(), icebergPredicate, false).planTasks()) {
+                srIcebergTable.getNativeTable(), snapshot.get(), icebergPredicate, false).planTasks()) {
             for (FileScanTask task : combinedScanTask.files()) {
                 DataFile file = task.file();
                 LOG.debug("Scan with file " + file.path() + ", file record count " + file.recordCount());
@@ -284,7 +285,7 @@ public class IcebergScanNode extends ScanNode {
                 // For iceberg table we do not need partition id
                 hdfsScanRange.setPartition_id(-1);
                 hdfsScanRange.setFile_length(file.fileSizeInBytes());
-                hdfsScanRange.setFile_format(IcebergUtil.getHdfsFileFormat(file.format()).toThrift());
+                hdfsScanRange.setFile_format(IcebergApiConverter.getHdfsFileFormat(file.format()).toThrift());
 
                 hdfsScanRange.setDelete_files(task.deletes().stream().map(source -> {
                     TIcebergDeleteFile target = new TIcebergDeleteFile();
@@ -297,7 +298,7 @@ public class IcebergScanNode extends ScanNode {
                     if (source.content() == FileContent.EQUALITY_DELETES) {
                         source.equalityFieldIds().forEach(fieldId -> {
                             equalityDeleteColumns.add(
-                                    srIcebergTable.getIcebergTable().schema().findColumnName(fieldId));
+                                    srIcebergTable.getNativeTable().schema().findColumnName(fieldId));
                         });
                     }
 
@@ -336,7 +337,7 @@ public class IcebergScanNode extends ScanNode {
     protected String getNodeExplainString(String prefix, TExplainLevel detailLevel) {
         StringBuilder output = new StringBuilder();
 
-        output.append(prefix).append("TABLE: ").append(srIcebergTable.getRemoteTableName()).append("\n");
+        output.append(prefix).append("TABLE: ").append(srIcebergTable.getNativeTable()).append("\n");
 
         if (null != sortColumn) {
             output.append(prefix).append("SORT COLUMN: ").append(sortColumn).append("\n");
