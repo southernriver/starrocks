@@ -401,8 +401,8 @@ public class AnalyzerUtils {
                 tables.put(tableName, table);
             } else if (table.isIcebergTable()) {
                 IcebergTable icebergTable = (IcebergTable) table;
-                TableName tableName = new TableName(icebergTable.getCatalog(), icebergTable.getDb(),
-                        icebergTable.getTable());
+                TableName tableName = new TableName(icebergTable.getCatalogName(), icebergTable.getRemoteDbName(),
+                        icebergTable.getRemoteTableName());
                 tables.put(tableName, table);
             } else {
                 tables.put(node.getName(), table);

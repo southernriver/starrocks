@@ -465,7 +465,7 @@ public class ExternalTableExportConfig {
                         return null;
                     });
                     LOG.info("commit iceberg partition replace {} from {} to iceberg table {}.{} success", partition,
-                            olapTableName.toString(), icebergTable.getDb(), icebergTable.getName());
+                            olapTableName.toString(), icebergTable.getRemoteDbName(), icebergTable.getName());
                     return null;
                 } catch (Exception e) {
                     LOG.error("commit iceberg partition replace " + partition + " failed at try " + i, e);

@@ -119,7 +119,7 @@ public class MaterializedViewAnalyzer {
                 return Strings.isBlank(catalogName) || isResourceMappingCatalog(catalogName);
             } else if (table instanceof IcebergTable) {
                 IcebergTable icebergTable = (IcebergTable) table;
-                String catalogName = icebergTable.getCatalog();
+                String catalogName = icebergTable.getCatalogName();
                 return Strings.isBlank(catalogName) || isResourceMappingCatalog(catalogName);
             } else {
                 return true;
@@ -577,11 +577,11 @@ public class MaterializedViewAnalyzer {
                     }
                 } else if (table.isIcebergTable()) {
                     IcebergTable icebergTable = (IcebergTable) table;
-                    if (icebergTable.getCatalog().equals(baseTableInfo.getCatalogName()) &&
-                            icebergTable.getDb().equals(baseTableInfo.getDbName()) &&
+                    if (icebergTable.getCatalogName().equals(baseTableInfo.getCatalogName()) &&
+                            icebergTable.getRemoteDbName().equals(baseTableInfo.getDbName()) &&
                             table.getTableIdentifier().equals(baseTableInfo.getTableIdentifier())) {
                         slotRef.setTblName(new TableName(baseTableInfo.getCatalogName(),
-                                baseTableInfo.getDbName(), icebergTable.getTable()));
+                                baseTableInfo.getDbName(), icebergTable.getRemoteTableName()));
                         break;
                     }
                 }

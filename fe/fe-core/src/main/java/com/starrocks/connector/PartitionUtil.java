@@ -184,10 +184,10 @@ public class PartitionUtil {
             IcebergTable icebergTable = (IcebergTable) table;
             if (icebergTable.isUnPartitioned()) {
                 // return table name if table is unpartitioned
-                return Lists.newArrayList(icebergTable.getTable());
+                return Lists.newArrayList(icebergTable.getRemoteTableName());
             }
             partitionNames = GlobalStateMgr.getCurrentState().getMetadataMgr().listPartitionNames(
-                    icebergTable.getCatalog(), icebergTable.getDb(), icebergTable.getTable());
+                    icebergTable.getCatalogName(), icebergTable.getRemoteDbName(), icebergTable.getRemoteTableName());
         } else {
             Preconditions.checkState(false, "Do not support get partition names and columns for" +
                     "table type %s", table.getType());

@@ -102,7 +102,7 @@ public class IcebergScanNode extends ScanNode {
     }
 
     private void setupCloudCredential() {
-        String catalogName = srIcebergTable.getCatalog();
+        String catalogName = srIcebergTable.getCatalogName();
         if (catalogName == null) {
             return;
         }
@@ -248,7 +248,7 @@ public class IcebergScanNode extends ScanNode {
                 srIcebergTable.getIcebergTable());
         long startPlanTaskTime = System.currentTimeMillis();
         if (!snapshot.isPresent()) {
-            LOG.info(String.format("Table %s has no snapshot!", srIcebergTable.getTable()));
+            LOG.info(String.format("Table %s has no snapshot!", srIcebergTable.getRemoteTableName()));
             return;
         }
         // partition -> partitionId
@@ -317,7 +317,7 @@ public class IcebergScanNode extends ScanNode {
 
         scanNodePredicates.setSelectedPartitionIds(partitionMap.values());
         long planTaskTime = System.currentTimeMillis() - startPlanTaskTime;
-        LOG.info("Total planning task duration for table {} is {}ms.", srIcebergTable.getTable(), planTaskTime);
+        LOG.info("Total planning task duration for table {} is {}ms.", srIcebergTable.getRemoteTableName(), planTaskTime);
     }
 
     public HDFSScanNodePredicates getScanNodePredicates() {
@@ -336,7 +336,7 @@ public class IcebergScanNode extends ScanNode {
     protected String getNodeExplainString(String prefix, TExplainLevel detailLevel) {
         StringBuilder output = new StringBuilder();
 
-        output.append(prefix).append("TABLE: ").append(srIcebergTable.getTable()).append("\n");
+        output.append(prefix).append("TABLE: ").append(srIcebergTable.getRemoteTableName()).append("\n");
 
         if (null != sortColumn) {
             output.append(prefix).append("SORT COLUMN: ").append(sortColumn).append("\n");
@@ -414,7 +414,7 @@ public class IcebergScanNode extends ScanNode {
         }
 
         if (srIcebergTable != null) {
-            msg.hdfs_scan_node.setTable_name(srIcebergTable.getTable());
+            msg.hdfs_scan_node.setTable_name(srIcebergTable.getRemoteTableName());
         }
 
         if (cloudConfiguration != null) {
