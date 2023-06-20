@@ -5,14 +5,11 @@ package com.starrocks.sql.optimizer;
 import com.google.common.collect.Lists;
 import com.starrocks.analysis.JoinOperator;
 import com.starrocks.catalog.Column;
-import com.starrocks.catalog.IcebergTable;
 import com.starrocks.catalog.KeysType;
 import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.ScalarType;
 import com.starrocks.catalog.Table;
 import com.starrocks.catalog.Type;
-import com.starrocks.connector.iceberg.ScalarOperatorToIcebergExpr;
-import com.starrocks.connector.iceberg.cost.IcebergTableStatisticCalculator;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.optimizer.operator.Operator;
@@ -32,8 +29,6 @@ import com.starrocks.sql.optimizer.operator.scalar.ConstantOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
 import com.starrocks.sql.optimizer.statistics.ColumnStatistic;
 import org.apache.commons.collections.CollectionUtils;
-import org.apache.iceberg.expressions.Expression;
-import org.apache.iceberg.types.Types;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -345,23 +340,8 @@ public class Utils {
                 }
                 return true;
             } else if (operator instanceof LogicalIcebergScanOperator) {
-                if (ConnectContext.get().getSessionVariable().enableHiveColumnStats()) {
-                    IcebergTable table = (IcebergTable) scanOperator.getTable();
-                    try {
-                        List<ScalarOperator> predicates = Utils.extractConjuncts(operator.getPredicate());
-                        Types.StructType schema = table.getNativeTable().schema().asStruct();
-                        ScalarOperatorToIcebergExpr.IcebergContext icebergContext =
-                                new ScalarOperatorToIcebergExpr.IcebergContext(schema);
-                        Expression icebergPredicate = new ScalarOperatorToIcebergExpr().convert(predicates, icebergContext);
-                        List<ColumnStatistic> columnStatisticList = IcebergTableStatisticCalculator.getColumnStatistics(
-                                icebergPredicate, table.getNativeTable(),
-                                scanOperator.getColRefToColumnMetaMap());
-                        return columnStatisticList.stream().anyMatch(ColumnStatistic::isUnknown);
-                    } catch (Exception e) {
-                        LOG.warn("Iceberg table {} get column failed. error : {}", table.getName(), e);
-                        return true;
-                    }
-                }
+                // TODO(stephen): support `analyze table` to collect iceberg table ndv
+                // iceberg metadata doesn't have ndv, we default to unknown for all iceberg table column statistics.
                 return true;
             } else {
                 // For other scan operators, we do not know the column statistics.

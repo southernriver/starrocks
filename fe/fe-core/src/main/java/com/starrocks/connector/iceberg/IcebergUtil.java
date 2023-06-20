@@ -14,15 +14,12 @@ import com.starrocks.catalog.Type;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.DdlException;
 import com.starrocks.connector.HdfsEnvironment;
-import com.starrocks.connector.hive.RemoteFileInputFormat;
 import com.starrocks.connector.iceberg.glue.IcebergGlueCatalog;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.SessionVariable;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.server.MetadataMgr;
 import org.apache.iceberg.BaseTable;
-import org.apache.iceberg.FileFormat;
-import org.apache.iceberg.FileScanTask;
 import org.apache.iceberg.PartitionField;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Snapshot;
@@ -254,26 +251,6 @@ public class IcebergUtil {
         properties.put(IcebergTable.ICEBERG_IMPL, catalogImpl);
         properties.putAll(customProperties);
         return convertToSRTable(icebergTable, properties);
-    }
-
-    public static List<String> getIdentityPartitionNames(org.apache.iceberg.Table icebergTable) {
-        List<String> partitionNames = Lists.newArrayList();
-        TableScan tableScan = icebergTable.newScan();
-        List<FileScanTask> tasks = Lists.newArrayList(tableScan.planFiles());
-        if (icebergTable.spec().isUnpartitioned()) {
-            return partitionNames;
-        }
-
-        if (icebergTable.spec().fields().stream()
-                .anyMatch(partitionField -> !partitionField.transform().isIdentity())) {
-            return partitionNames;
-        }
-
-        for (FileScanTask fileScanTask : tasks) {
-            StructLike partition = fileScanTask.file().partition();
-            partitionNames.add(convertIcebergPartitionToPartitionName(icebergTable.spec(), partition));
-        }
-        return partitionNames;
     }
 
     static String convertIcebergPartitionToPartitionName(PartitionSpec partitionSpec, StructLike partition) {

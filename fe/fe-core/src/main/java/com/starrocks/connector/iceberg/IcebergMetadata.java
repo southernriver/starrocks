@@ -15,6 +15,7 @@ import com.starrocks.connector.ConnectorMetadata;
 import com.starrocks.connector.HdfsEnvironment;
 import com.starrocks.connector.RemoteFileDesc;
 import com.starrocks.connector.RemoteFileInfo;
+import com.starrocks.connector.iceberg.cost.IcebergStatisticProvider;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.optimizer.OptimizerContext;
 import com.starrocks.sql.optimizer.Utils;
@@ -23,6 +24,7 @@ import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
 import com.starrocks.sql.optimizer.statistics.Statistics;
 import org.apache.iceberg.CombinedScanTask;
 import org.apache.iceberg.FileScanTask;
+import org.apache.iceberg.StructLike;
 import org.apache.iceberg.TableScan;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.TableIdentifier;
@@ -41,6 +43,9 @@ import java.util.stream.Collectors;
 import static com.starrocks.catalog.IcebergTable.ICEBERG_CATALOG_TYPE;
 import static com.starrocks.catalog.IcebergTable.ICEBERG_IMPL;
 import static com.starrocks.catalog.IcebergTable.ICEBERG_METASTORE_URIS;
+import static com.starrocks.connector.PartitionUtil.convertIcebergPartitionToPartitionName;
+import static com.starrocks.connector.iceberg.IcebergCatalogType.GLUE_CATALOG;
+import static com.starrocks.connector.iceberg.IcebergCatalogType.HIVE_CATALOG;
 import static com.starrocks.connector.iceberg.IcebergUtil.getIcebergCustomCatalog;
 import static com.starrocks.connector.iceberg.IcebergUtil.getIcebergGlueCatalog;
 import static com.starrocks.connector.iceberg.IcebergUtil.getIcebergHiveCatalog;
@@ -55,11 +60,12 @@ public class IcebergMetadata implements ConnectorMetadata {
     private IcebergCatalog icebergCatalog;
     private Map<String, String> customProperties;
     private final Map<IcebergFilter, List<FileScanTask>> tasks = new ConcurrentHashMap<>();
+    private final IcebergStatisticProvider statisticProvider = new IcebergStatisticProvider();
 
     public IcebergMetadata(String catalogName, Map<String, String> properties, HdfsEnvironment hdfsEnvironment) {
         this.catalogName = catalogName;
 
-        if (IcebergCatalogType.HIVE_CATALOG == IcebergCatalogType.fromString(properties.get(ICEBERG_CATALOG_TYPE))) {
+        if (HIVE_CATALOG == IcebergCatalogType.fromString(properties.get(ICEBERG_CATALOG_TYPE))) {
             catalogType = properties.get(ICEBERG_CATALOG_TYPE);
             metastoreURI = properties.get(ICEBERG_METASTORE_URIS);
             Util.validateMetastoreUris(metastoreURI);
@@ -72,8 +78,7 @@ public class IcebergMetadata implements ConnectorMetadata {
             properties.remove(ICEBERG_CATALOG_TYPE);
             properties.remove(ICEBERG_IMPL);
             customProperties = properties;
-        } else if (IcebergCatalogType.GLUE_CATALOG ==
-                IcebergCatalogType.fromString(properties.get(ICEBERG_CATALOG_TYPE))) {
+        } else if (GLUE_CATALOG == IcebergCatalogType.fromString(properties.get(ICEBERG_CATALOG_TYPE))) {
             catalogType = properties.get(ICEBERG_CATALOG_TYPE);
             icebergCatalog = getIcebergGlueCatalog(catalogName, properties, hdfsEnvironment);
         } else {
@@ -112,7 +117,7 @@ public class IcebergMetadata implements ConnectorMetadata {
             if (IcebergCatalogType.fromString(catalogType).equals(IcebergCatalogType.CUSTOM_CATALOG)) {
                 return IcebergUtil.convertCustomCatalogToSRTable(icebergTable, catalogImpl, catalogName, dbName,
                         tblName, customProperties);
-            } else if (IcebergCatalogType.fromString(catalogType).equals(IcebergCatalogType.GLUE_CATALOG)) {
+            } else if (IcebergCatalogType.fromString(catalogType).equals(GLUE_CATALOG)) {
                 return IcebergUtil.convertGlueCatalogToSRTable(icebergTable, catalogName, dbName, tblName);
             } else {
                 return IcebergUtil.convertHiveCatalogToSRTable(icebergTable, metastoreURI, catalogName, dbName,
@@ -127,11 +132,12 @@ public class IcebergMetadata implements ConnectorMetadata {
     @Override
     public List<String> listPartitionNames(String dbName, String tblName) {
         org.apache.iceberg.Table icebergTable
-                = icebergCatalog.loadTable(IcebergUtil.getIcebergTableIdentifier(dbName, tblName));
-        if (!IcebergCatalogType.fromString(catalogType).equals(IcebergCatalogType.HIVE_CATALOG)
-                && !IcebergCatalogType.fromString(catalogType).equals(IcebergCatalogType.GLUE_CATALOG)) {
+                = icebergCatalog.loadTable(TableIdentifier.of(dbName, tblName));
+        IcebergCatalogType nativeType = icebergCatalog.getIcebergCatalogType();
+
+        if (nativeType != HIVE_CATALOG && nativeType != GLUE_CATALOG) {
             throw new StarRocksIcebergException(
-                    "Do not support get partitions from catalog type: " + catalogType);
+                    "Do not support get partitions from catalog type: " + nativeType);
         }
         if (icebergTable.spec().fields().stream()
                 .anyMatch(partitionField -> !partitionField.transform().isIdentity())) {
@@ -139,7 +145,23 @@ public class IcebergMetadata implements ConnectorMetadata {
                     "Do not support get partitions from No-Identity partition transform now");
         }
 
-        return IcebergUtil.getIdentityPartitionNames(icebergTable);
+        List<String> partitionNames = Lists.newArrayList();
+        TableScan tableScan = icebergTable.newScan();
+        List<FileScanTask> tasks = Lists.newArrayList(tableScan.planFiles());
+        if (icebergTable.spec().isUnpartitioned()) {
+            return partitionNames;
+        }
+
+        if (icebergTable.spec().fields().stream()
+                .anyMatch(partitionField -> !partitionField.transform().isIdentity())) {
+            return partitionNames;
+        }
+
+        for (FileScanTask fileScanTask : tasks) {
+            StructLike partition = fileScanTask.file().partition();
+            partitionNames.add(convertIcebergPartitionToPartitionName(icebergTable.spec(), partition));
+        }
+        return partitionNames;
     }
 
     public org.apache.iceberg.Table getIcebergTable(String dbName, String tblName) {
