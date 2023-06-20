@@ -529,6 +529,13 @@ Status PulsarDataConsumer::init(StreamLoadContext* ctx) {
         _custom_properties.emplace(item.first, item.second);
     }
 
+    if (config::pulsar_client_log_level >= 0 && config::pulsar_client_log_level <= 3) {
+        config.setLogger(new pulsar::FileLoggerFactory(
+                static_cast<pulsar::Logger::Level>(config::pulsar_client_log_level), "log/pulsar-cpp-client.log"));
+    } else {
+        config.setLogger(new pulsar::FileLoggerFactory(pulsar::Logger::Level::LEVEL_WARN, "log/pulsar-cpp-client.log"));
+    }
+
     _p_client = new pulsar::Client(_service_url, config);
 
     VLOG(3) << "finished to init pulsar consumer. " << ctx->brief();
@@ -551,7 +558,10 @@ Status PulsarDataConsumer::assign_partition(const std::string& partition, Stream
 
     // do subscribe
     pulsar::Result result;
-    result = _p_client->subscribe(partition, _subscription, _p_consumer);
+    pulsar::ConsumerConfiguration config;
+    config.setBatchIndexAckEnabled(true);
+
+    result = _p_client->subscribe(partition, _subscription, config, _p_consumer);
     if (result != pulsar::ResultOk) {
         LOG(WARNING) << "PAUSE: failed to create pulsar consumer: " << ctx->brief(true) << ", err: " << result;
         return Status::InternalError("PAUSE: failed to create pulsar consumer: " +

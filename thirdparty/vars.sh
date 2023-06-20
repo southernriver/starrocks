@@ -203,10 +203,10 @@ LIBRDKAFKA_SOURCE=librdkafka-1.9.2
 LIBRDKAFKA_MD5SUM="fe9624e905abbf8324b0f6be520d9c24"
 
 # pulsar
-PULSAR_DOWNLOAD="https://github.com/apache/pulsar/archive/refs/tags/v2.10.1.tar.gz"
-PULSAR_NAME=pulsar-2.10.1.tar.gz
-PULSAR_SOURCE=pulsar-2.10.1
-PULSAR_MD5SUM="3c387e7a8be4545a39e00611ed051918"
+PULSAR_DOWNLOAD="https://github.com/apache/pulsar-client-cpp/archive/refs/tags/v3.2.0.tar.gz"
+PULSAR_NAME=pulsar-client-3.2.0.tar.gz
+PULSAR_SOURCE=pulsar-client-cpp-3.2.0
+PULSAR_MD5SUM="41a21467ce875b6b1d28a11d3805a3c0"
 
 # tube
 TUBE_DOWNLOAD="https://mirrors.tencent.com/repository/generic/doris_thirdparty/tubemq-master-20220908.tar.gz"
