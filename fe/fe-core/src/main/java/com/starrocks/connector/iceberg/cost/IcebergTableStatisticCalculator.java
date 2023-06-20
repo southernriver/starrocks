@@ -241,7 +241,7 @@ public class IcebergTableStatisticCalculator {
                 .collect(toImmutableList());
 
         TableScan tableScan = IcebergUtil.getTableScan(icebergTable,
-                snapshot.get(), icebergPredicate);
+                snapshot.get(), icebergPredicate, true);
 
         IcebergFileStats icebergFileStats = null;
         for (FileScanTask fileScanTask : tableScan.planFiles()) {
