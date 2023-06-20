@@ -2,13 +2,21 @@
 
 package com.starrocks.connector.iceberg;
 
+import com.google.common.collect.Lists;
+import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
+import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.Table;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.util.Util;
 import com.starrocks.connector.ConnectorMetadata;
 import com.starrocks.connector.HdfsEnvironment;
+import com.starrocks.connector.RemoteFileInfo;
 import com.starrocks.server.GlobalStateMgr;
+import com.starrocks.sql.optimizer.OptimizerContext;
+import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
+import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
+import com.starrocks.sql.optimizer.statistics.Statistics;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.logging.log4j.LogManager;
@@ -125,5 +133,20 @@ public class IcebergMetadata implements ConnectorMetadata {
 
     public org.apache.iceberg.Table getIcebergTable(String dbName, String tblName) {
         return icebergCatalog.loadTable(IcebergUtil.getIcebergTableIdentifier(dbName, tblName));
+    }
+
+    @Override
+    public List<RemoteFileInfo> getRemoteFileInfos(Table table, List<PartitionKey> partitionKeys,
+                                                   long snapshotId, ScalarOperator predicate) {
+        return Lists.newArrayList();
+    }
+
+    @Override
+    public Statistics getTableStatistics(OptimizerContext session,
+                                         Table table,
+                                         Map<ColumnRefOperator, Column> columns,
+                                         List<PartitionKey> partitionKeys,
+                                         ScalarOperator predicate) {
+        return Statistics.builder().build();
     }
 }

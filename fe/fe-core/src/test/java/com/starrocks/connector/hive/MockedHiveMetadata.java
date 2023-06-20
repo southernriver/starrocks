@@ -25,6 +25,7 @@ import com.starrocks.connector.RemoteFileOperations;
 import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.sql.optimizer.OptimizerContext;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
+import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
 import com.starrocks.sql.optimizer.statistics.ColumnStatistic;
 import com.starrocks.sql.optimizer.statistics.Statistics;
 import org.apache.commons.collections4.map.CaseInsensitiveMap;
@@ -95,8 +96,9 @@ public class MockedHiveMetadata implements ConnectorMetadata {
     @Override
     public Statistics getTableStatistics(OptimizerContext session,
                                          com.starrocks.catalog.Table table,
-                                         List<ColumnRefOperator> columns,
-                                         List<PartitionKey> partitionKeys) {
+                                         Map<ColumnRefOperator, Column> columns,
+                                         List<PartitionKey> partitionKeys,
+                                         ScalarOperator predicate) {
         HiveMetaStoreTable hmsTable = (HiveMetaStoreTable) table;
         String hiveDb = hmsTable.getDbName();
         String tblName = hmsTable.getTableName();
@@ -106,7 +108,7 @@ public class MockedHiveMetadata implements ConnectorMetadata {
             HiveTableInfo info = MOCK_TABLE_MAP.get(hiveDb).get(tblName);
             Statistics.Builder builder = Statistics.builder();
             builder.setOutputRowCount(info.rowCount);
-            for (ColumnRefOperator columnRefOperator : columns) {
+            for (ColumnRefOperator columnRefOperator : columns.keySet()) {
                 ColumnStatistic columnStatistic = info.columnStatsMap.get(columnRefOperator.getName());
                 builder.addColumnStatistic(columnRefOperator, columnStatistic);
             }
@@ -117,7 +119,8 @@ public class MockedHiveMetadata implements ConnectorMetadata {
     }
 
     @Override
-    public List<RemoteFileInfo> getRemoteFileInfos(com.starrocks.catalog.Table table, List<PartitionKey> partitionKeys) {
+    public List<RemoteFileInfo> getRemoteFileInfos(com.starrocks.catalog.Table table, List<PartitionKey> partitionKeys,
+                                                   long snapshotId, ScalarOperator predicate) {
         HiveMetaStoreTable hmsTbl = (HiveMetaStoreTable) table;
         int size = partitionKeys.size();
         readLock();

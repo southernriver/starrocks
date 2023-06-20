@@ -3,7 +3,12 @@
 package com.starrocks.connector;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 import com.starrocks.connector.hive.TextFileFormatDesc;
+import org.apache.iceberg.FileScanTask;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class RemoteFileDesc {
     private String fileName;
@@ -14,6 +19,10 @@ public class RemoteFileDesc {
     private TextFileFormatDesc textFileFormatDesc;
     private ImmutableList<String> hudiDeltaLogs;
 
+    // Only this single RemoteFileDesc instance is used to record all iceberg scanTask
+    // to reduce the memory usage of RemoteFileInfo
+    private List<FileScanTask> icebergScanTasks = new ArrayList<>();
+
     public RemoteFileDesc(String fileName, String compression, long length,
                           ImmutableList<RemoteFileBlockDesc> blockDescs, ImmutableList<String> hudiDeltaLogs) {
         this.fileName = fileName;
@@ -21,6 +30,10 @@ public class RemoteFileDesc {
         this.length = length;
         this.blockDescs = blockDescs;
         this.hudiDeltaLogs = hudiDeltaLogs;
+    }
+
+    public RemoteFileDesc(List<FileScanTask> tasks) {
+        icebergScanTasks = Lists.newArrayList(tasks);
     }
 
     public String getFileName() {
@@ -59,6 +72,10 @@ public class RemoteFileDesc {
 
     public ImmutableList<String> getHudiDeltaLogs() {
         return hudiDeltaLogs;
+    }
+
+    public List<FileScanTask> getIcebergScanTasks() {
+        return icebergScanTasks;
     }
 
     @Override

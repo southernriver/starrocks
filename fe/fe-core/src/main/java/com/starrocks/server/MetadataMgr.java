@@ -6,6 +6,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.starrocks.analysis.TableName;
+import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.Table;
@@ -23,6 +24,7 @@ import com.starrocks.qe.ConnectContext;
 import com.starrocks.sql.ast.DropTableStmt;
 import com.starrocks.sql.optimizer.OptimizerContext;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
+import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
 import com.starrocks.sql.optimizer.statistics.Statistics;
 import com.starrocks.utils.TdwUtil;
 import org.apache.logging.log4j.LogManager;
@@ -171,19 +173,25 @@ public class MetadataMgr {
     public Statistics getTableStatistics(OptimizerContext session,
                                          String catalogName,
                                          Table table,
-                                         List<ColumnRefOperator> columns,
-                                         List<PartitionKey> partitionKeys) {
+                                         Map<ColumnRefOperator, Column> columns,
+                                         List<PartitionKey> partitionKeys,
+                                         ScalarOperator predicate) {
         Optional<ConnectorMetadata> connectorMetadata = getOptionalMetadata(catalogName);
         return connectorMetadata.map(metadata ->
-                metadata.getTableStatistics(session, table, columns, partitionKeys)).orElse(null);
+                metadata.getTableStatistics(session, table, columns, partitionKeys, predicate)).orElse(null);
     }
 
     public List<RemoteFileInfo> getRemoteFileInfos(String catalogName, Table table, List<PartitionKey> partitionKeys) {
+        return getRemoteFileInfos(catalogName, table, partitionKeys, -1, null);
+    }
+
+    public List<RemoteFileInfo> getRemoteFileInfos(String catalogName, Table table, List<PartitionKey> partitionKeys,
+                                                   long snapshotId, ScalarOperator predicate) {
         Optional<ConnectorMetadata> connectorMetadata = getOptionalMetadata(catalogName);
         ImmutableSet.Builder<RemoteFileInfo> files = ImmutableSet.builder();
         if (connectorMetadata.isPresent()) {
             try {
-                connectorMetadata.get().getRemoteFileInfos(table, partitionKeys).forEach(files::add);
+                connectorMetadata.get().getRemoteFileInfos(table, partitionKeys, snapshotId, predicate).forEach(files::add);
             } catch (Exception e) {
                 LOG.error("Failed to list remote file's metadata on catalog [{}], table [{}]", catalogName, table, e);
                 throw e;
