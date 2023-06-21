@@ -180,9 +180,11 @@ Status ExportSink::open_file_writer(int timeout_ms) {
             return Status::NotSupported(result.status().message());
         }
         auto schema = result.ValueOrDie();
-        _file_builder = std::make_unique<ParquetBuilder>(
+        auto parquet_builder = std::make_unique<ParquetBuilder>(
                 std::move(output_file), std::move(properties), std::move(schema), _output_expr_ctxs,
                 _parquet_options.row_group_max_size, max_file_size_bytes);
+        RETURN_IF_ERROR(parquet_builder->init());
+        _file_builder = std::move(parquet_builder);
     } else if (file_format == "orc") {
         std::vector<TypeDescriptor> output_types;
         for (const auto& type : _t_export_sink.file_output_types) {
