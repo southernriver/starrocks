@@ -225,6 +225,10 @@ public class DynamicPartitionUtil {
             if (Strings.isNullOrEmpty(buckets)) {
                 throw new DdlException("Must assign dynamic_partition.buckets properties");
             }
+            if (TimeUnit.fromName(timeUnit) == TimeUnit.HOUR && !((RangePartitionInfo) partitionInfo).getPartitionColumns()
+                    .get(0).getPrimitiveType().equals(PrimitiveType.DATETIME)) {
+                throw new DdlException("Hourly partition is only supported for column with DATETIME data type!");
+            }
         }
         return true;
     }

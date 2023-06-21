@@ -326,10 +326,10 @@ public class DynamicPartitionScheduler extends LeaderDaemon {
             }
 
             ArrayList<AddPartitionClause> addPartitionClauses = new ArrayList<>();
-            ArrayList<DropPartitionClause> dropPartitionClauses;
-            String tableName;
+            ArrayList<DropPartitionClause> dropPartitionClauses = new ArrayList<>();
+            String tableName = null;
             boolean skipAddPartition = false;
-            OlapTable olapTable;
+            OlapTable olapTable = null;
             db.readLock();
             try {
                 olapTable = (OlapTable) db.getTable(tableId);
@@ -369,15 +369,26 @@ public class DynamicPartitionScheduler extends LeaderDaemon {
                 }
 
                 if (!skipAddPartition) {
-                    addPartitionClauses = getAddPartitionClause(db, olapTable, partitionColumn, partitionFormat);
+                    try {
+                        addPartitionClauses = getAddPartitionClause(db, olapTable, partitionColumn, partitionFormat);
+                    } catch (Exception e) {
+                        LOG.error("Failed to generate AddPartitionClause due to ", e);
+                    }
+
                 }
 
                 DynamicPartitionProperty dynamicPartitionProperty =
                         olapTable.getTableProperty().getDynamicPartitionProperty();
                 int lowerBoundOffset = dynamicPartitionProperty.getStart();
-                dropPartitionClauses =
-                        getDropPartitionClause(db, olapTable, partitionColumn, partitionFormat, lowerBoundOffset);
+                try {
+                    dropPartitionClauses =
+                            getDropPartitionClause(db, olapTable, partitionColumn, partitionFormat, lowerBoundOffset);
+                } catch (Exception e) {
+                    LOG.error("Failed to generate DropPartitionClause due to ", e);
+                }
                 tableName = olapTable.getName();
+            } catch (Exception e) {
+                LOG.error("", e);
             } finally {
                 db.readUnlock();
             }
