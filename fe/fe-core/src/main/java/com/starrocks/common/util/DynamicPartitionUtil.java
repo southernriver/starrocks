@@ -62,6 +62,8 @@ public class DynamicPartitionUtil {
     private static final Logger LOG = LogManager.getLogger(DynamicPartitionUtil.class);
 
     private static final String TIMESTAMP_FORMAT = "yyyyMMdd";
+
+    private static final String TIMESTAMP_HOUR_FORMAT = "yyyyMMddHH";
     private static final String DATE_FORMAT = "yyyy-MM-dd";
     private static final String DATETIME_FORMAT = "yyyy-MM-dd HH:mm:ss";
 
@@ -225,9 +227,10 @@ public class DynamicPartitionUtil {
             if (Strings.isNullOrEmpty(buckets)) {
                 throw new DdlException("Must assign dynamic_partition.buckets properties");
             }
-            if (TimeUnit.fromName(timeUnit) == TimeUnit.HOUR && !((RangePartitionInfo) partitionInfo).getPartitionColumns()
-                    .get(0).getPrimitiveType().equals(PrimitiveType.DATETIME)) {
-                throw new DdlException("Hourly partition is only supported for column with DATETIME data type!");
+            PrimitiveType type = ((RangePartitionInfo) partitionInfo).getPartitionColumns().get(0).getPrimitiveType();
+            if (timeUnit.equalsIgnoreCase(TimeUnit.HOUR.toString()) && !(PrimitiveType.getStringTypeList().contains(type)
+                    || PrimitiveType.getIntegerTypeList().contains(type) || type.equals(PrimitiveType.DATETIME))) {
+                throw new DdlException("Hourly partition is only supported for column with DATETIME/STRING/BIGINT data type!");
             }
         }
         return true;
@@ -428,16 +431,20 @@ public class DynamicPartitionUtil {
         }
     }
 
-    public static String getPartitionFormat(Column column) throws DdlException {
+    public static String getPartitionFormat(Column column, String timeUnit) throws DdlException {
         if (column.getPrimitiveType().equals(PrimitiveType.DATE)) {
             return DATE_FORMAT;
         } else if (column.getPrimitiveType().equals(PrimitiveType.DATETIME)) {
             return DATETIME_FORMAT;
-        } else if (PrimitiveType.getIntegerTypeList().contains(column.getPrimitiveType())) {
+        } else if (PrimitiveType.getIntegerTypeList().contains(column.getPrimitiveType())
+                || PrimitiveType.getStringTypeList().contains(column.getPrimitiveType())) {
             // TODO: For Integer Type, only support format it as yyyyMMdd now
+            if (timeUnit.equalsIgnoreCase(TimeUnit.HOUR.toString())) {
+                return TIMESTAMP_HOUR_FORMAT;
+            }
             return TIMESTAMP_FORMAT;
         } else {
-            throw new DdlException("Dynamic Partition Only Support DATE, DATETIME and INTEGER Type Now.");
+            throw new DdlException("Dynamic Partition Only Support DATE, DATETIME, INTEGER and STRING Type Now.");
         }
     }
 

@@ -492,7 +492,9 @@ public class ColddownJob implements Writable {
         RangePartitionInfo rangePartitionInfo = (RangePartitionInfo) table.getPartitionInfo();
         // it is ensured that there is only one partition column when create colddown job
         Column partitionColumn = rangePartitionInfo.getPartitionColumns().get(0);
-        String format = DynamicPartitionUtil.getPartitionFormat(partitionColumn);
+        DynamicPartitionProperty dynamicPartitionProperty =
+                table.getTableProperty().getDynamicPartitionProperty();
+        String format = DynamicPartitionUtil.getPartitionFormat(partitionColumn, dynamicPartitionProperty.getTimeUnit());
         int lowerBoundOffset = getColddownPartitionEnd() + 1;
         return DynamicPartitionScheduler.getDropPartitionClause(db, table, partitionColumn, format, lowerBoundOffset)
                 .stream()

@@ -199,6 +199,10 @@ public enum PrimitiveType {
         return INTEGER_TYPE_LIST;
     }
 
+    public static ImmutableList<PrimitiveType> getStringTypeList() {
+        return STRING_TYPE_LIST;
+    }
+
     // Check whether 'type' can cast to 'target'
     public static boolean isImplicitCast(PrimitiveType type, PrimitiveType target) {
         if (type.equals(target)) {

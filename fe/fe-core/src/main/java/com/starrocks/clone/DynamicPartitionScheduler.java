@@ -360,9 +360,12 @@ public class DynamicPartitionScheduler extends LeaderDaemon {
                 }
 
                 Column partitionColumn = rangePartitionInfo.getPartitionColumns().get(0);
+                DynamicPartitionProperty dynamicPartitionProperty =
+                        olapTable.getTableProperty().getDynamicPartitionProperty();
                 String partitionFormat;
                 try {
-                    partitionFormat = DynamicPartitionUtil.getPartitionFormat(partitionColumn);
+                    partitionFormat = DynamicPartitionUtil.getPartitionFormat(partitionColumn,
+                            dynamicPartitionProperty.getTimeUnit());
                 } catch (DdlException e) {
                     recordCreatePartitionFailedMsg(db.getOriginName(), olapTable.getName(), e.getMessage());
                     continue;
@@ -372,23 +375,20 @@ public class DynamicPartitionScheduler extends LeaderDaemon {
                     try {
                         addPartitionClauses = getAddPartitionClause(db, olapTable, partitionColumn, partitionFormat);
                     } catch (Exception e) {
-                        LOG.error("Failed to generate AddPartitionClause due to ", e);
+                        LOG.error("Failed to generate AddPartitionClause for " + olapTable.getName() + " due to ", e);
                     }
-
                 }
 
-                DynamicPartitionProperty dynamicPartitionProperty =
-                        olapTable.getTableProperty().getDynamicPartitionProperty();
                 int lowerBoundOffset = dynamicPartitionProperty.getStart();
                 try {
                     dropPartitionClauses =
                             getDropPartitionClause(db, olapTable, partitionColumn, partitionFormat, lowerBoundOffset);
                 } catch (Exception e) {
-                    LOG.error("Failed to generate DropPartitionClause due to ", e);
+                    LOG.error("Failed to generate DropPartitionClause " + olapTable.getName() + " due to ", e);
                 }
                 tableName = olapTable.getName();
             } catch (Exception e) {
-                LOG.error("", e);
+                LOG.error("Failed to execute dynamic partition for " + tableName, e);
             } finally {
                 db.readUnlock();
             }
