@@ -1,15 +1,15 @@
 // This file is licensed under the Elastic License 2.0. Copyright 2021-present, StarRocks Inc.
 
-package com.starrocks.connector.iceberg;
+package com.starrocks.connector.iceberg.hive;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.IcebergTable;
 import com.starrocks.common.Config;
-import com.starrocks.connector.HdfsEnvironment;
-import com.starrocks.connector.iceberg.hive.CachedClientPool;
-import com.starrocks.connector.iceberg.hive.HiveTableOperations;
+import com.starrocks.connector.iceberg.IcebergCatalog;
+import com.starrocks.connector.iceberg.IcebergCatalogType;
+import com.starrocks.connector.iceberg.StarRocksIcebergException;
 import com.starrocks.connector.iceberg.io.IcebergCachingFileIO;
 import com.starrocks.connector.iceberg.io.IcebergFileIOWithUgi;
 import org.apache.hadoop.conf.Configuration;
@@ -36,26 +36,12 @@ import org.apache.thrift.TException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
-import static com.starrocks.connector.iceberg.IcebergUtil.convertToSRDatabase;
+import static com.starrocks.connector.hive.HiveMetastoreApiConverter.CONNECTOR_ID_GENERATOR;
 
 public class IcebergHiveCatalog extends BaseMetastoreCatalog implements IcebergCatalog, Configurable<Configuration> {
     private static final Logger LOG = LogManager.getLogger(IcebergHiveCatalog.class);
-
-    private static final ConcurrentHashMap<String, IcebergHiveCatalog> METASTORE_URI_TO_CATALOG =
-            new ConcurrentHashMap<>();
-
-    public static synchronized IcebergHiveCatalog getInstance(String uri, Map<String, String> properties,
-                                                              HdfsEnvironment hdfsEnvironment) {
-        if (!METASTORE_URI_TO_CATALOG.containsKey(uri)) {
-            properties.put(CatalogProperties.URI, uri);
-            METASTORE_URI_TO_CATALOG.put(uri, (IcebergHiveCatalog) CatalogLoader.hive(String.format("hive-%s", uri),
-                    hdfsEnvironment.getConfiguration(), properties).loadCatalog());
-        }
-        return METASTORE_URI_TO_CATALOG.get(uri);
-    }
 
     private String name;
     private Configuration conf;
@@ -73,7 +59,7 @@ public class IcebergHiveCatalog extends BaseMetastoreCatalog implements IcebergC
 
     @Override
     public Table loadTable(IcebergTable table) throws StarRocksIcebergException {
-        TableIdentifier tableId = IcebergUtil.getIcebergTableIdentifier(table);
+        TableIdentifier tableId = TableIdentifier.of(table.getRemoteDbName(), table.getRemoteTableName());
         return loadTable(tableId, null, null);
     }
 
@@ -179,7 +165,7 @@ public class IcebergHiveCatalog extends BaseMetastoreCatalog implements IcebergC
         if (db == null || db.getName() == null) {
             throw new TException("Hive db " + dbName + " doesn't exist");
         }
-        return convertToSRDatabase(dbName);
+        return new Database(CONNECTOR_ID_GENERATOR.getNextId().asInt(), dbName);
     }
 
     @Override

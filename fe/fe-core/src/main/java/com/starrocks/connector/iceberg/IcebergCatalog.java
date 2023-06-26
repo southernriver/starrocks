@@ -4,6 +4,7 @@ package com.starrocks.connector.iceberg;
 
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.IcebergTable;
+import com.starrocks.connector.exception.StarRocksConnectorException;
 import org.apache.commons.lang.NotImplementedException;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.iceberg.Table;
@@ -25,12 +26,12 @@ public interface IcebergCatalog {
     /**
      * Loads a native Iceberg table based on the information in 'feTable'.
      */
-    Table loadTable(IcebergTable table) throws StarRocksIcebergException;
+    Table loadTable(IcebergTable table) throws StarRocksConnectorException;
 
     /**
      * Loads a native Iceberg table based on the information in 'feTable'.
      */
-    Table loadTable(TableIdentifier tableIdentifier) throws StarRocksIcebergException;
+    Table loadTable(TableIdentifier tableIdentifier) throws StarRocksConnectorException;
 
     /**
      * this method is a work around way to fix iceberg passing ugi problem, it can be removed when this problem is fixed
@@ -51,7 +52,7 @@ public interface IcebergCatalog {
      */
     Table loadTable(TableIdentifier tableId,
                     String tableLocation,
-                    Map<String, String> properties) throws StarRocksIcebergException;
+                    Map<String, String> properties) throws StarRocksConnectorException;
 
     List<String> listAllDatabases();
 

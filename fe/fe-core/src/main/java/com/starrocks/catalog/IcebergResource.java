@@ -13,6 +13,7 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import static com.starrocks.common.util.Util.validateMetastoreUris;
@@ -112,7 +113,11 @@ public class IcebergResource extends Resource {
     }
 
     public Map<String, String> getProperties() {
-        return properties == null ? Maps.newHashMap() : properties;
+        Map<String, String> prop = properties == null ? Maps.newHashMap() : new HashMap<>(properties);
+        prop.put(ICEBERG_CATALOG, catalogType);
+        prop.put(ICEBERG_METASTORE_URIS, metastoreURIs);
+        prop.put(ICEBERG_IMPL, catalogImpl);
+        return prop;
     }
 
     public String getIcebergImpl() {

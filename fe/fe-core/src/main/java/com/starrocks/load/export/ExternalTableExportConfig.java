@@ -411,7 +411,7 @@ public class ExternalTableExportConfig {
             ReplacePartitions replacePartitions;
             try {
                 fileSystem = HdfsUtil.getFileSystem(path, brokerDesc);
-                table = icebergTable.getIcebergTableWithUgi(fileSystem.getUgi());
+                table = icebergTable.getNativeTableWithUgi(fileSystem.getUgi());
                 replacePartitions = table.newReplacePartitions();
             } catch (UserException e) {
                 String msg = String.format("failed to get FileSystem from path %s", path);

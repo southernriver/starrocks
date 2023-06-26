@@ -6,7 +6,7 @@ import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.starrocks.common.Config;
 import com.starrocks.common.Pair;
-import com.starrocks.connector.iceberg.IcebergUtil;
+import com.starrocks.connector.iceberg.IcebergMetadata;
 import org.apache.iceberg.CombinedScanTask;
 import org.apache.iceberg.FileScanTask;
 import org.apache.iceberg.Snapshot;
@@ -198,7 +198,7 @@ public class IcebergSplitDiscover {
                     splitsQueue.size(), currentConcurrentTaskNum * 50);
             return;
         }
-        IcebergUtil.refreshTable(iceTbl);
+        IcebergMetadata.refreshTable(iceTbl);
         Snapshot snapshot = iceTbl.currentSnapshot();
         if (snapshot == null) {
             // no data

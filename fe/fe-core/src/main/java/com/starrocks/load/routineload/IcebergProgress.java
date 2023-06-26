@@ -7,7 +7,7 @@ import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.starrocks.common.Config;
 import com.starrocks.common.util.DebugUtil;
-import com.starrocks.connector.iceberg.IcebergUtil;
+import com.starrocks.connector.iceberg.IcebergMetadata;
 import com.starrocks.thrift.TIcebergRLTaskProgress;
 import com.starrocks.thrift.TIcebergRLTaskProgressSplit;
 import org.apache.logging.log4j.LogManager;
@@ -164,7 +164,7 @@ public class IcebergProgress extends RoutineLoadProgress {
             org.apache.iceberg.Table table;
             try {
                 table = job.getIceTbl();
-                IcebergUtil.refreshTable(table);
+                IcebergMetadata.refreshTable(table);
             } catch (Exception e) {
                 LOG.warn(e.getMessage(), e);
                 // this method will be called again later, so just break here

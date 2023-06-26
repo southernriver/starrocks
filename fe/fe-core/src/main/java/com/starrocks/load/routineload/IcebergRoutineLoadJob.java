@@ -27,8 +27,6 @@ import com.starrocks.common.util.LogBuilder;
 import com.starrocks.common.util.LogKey;
 import com.starrocks.common.util.SmallFileMgr;
 import com.starrocks.common.util.SmallFileMgr.SmallFile;
-import com.starrocks.connector.HdfsEnvironment;
-import com.starrocks.connector.iceberg.IcebergHiveCatalog;
 import com.starrocks.connector.iceberg.IcebergUtil;
 import com.starrocks.connector.iceberg.StarRocksIcebergException;
 import com.starrocks.load.RoutineLoadDesc;
@@ -48,7 +46,6 @@ import com.starrocks.thrift.TUniqueId;
 import com.starrocks.transaction.TransactionState;
 import com.starrocks.transaction.TransactionStatus;
 import org.apache.iceberg.CombinedScanTask;
-import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.expressions.Expression;
 import org.apache.iceberg.expressions.Expressions;
 import org.apache.logging.log4j.LogManager;
@@ -58,7 +55,6 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
@@ -150,7 +146,8 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
         }
         try {
             if (IcebergCreateRoutineLoadStmtConfig.isHiveCatalogType(icebergCatalogType)) {
-                iceTbl = getIcbTblFromHiveMetastore();
+                iceTbl = IcebergUtil.getTableFromHiveMetastore(icebergCatalogHiveMetastoreUris, icebergDatabase,
+                        icebergTable);
             } else if (IcebergCreateRoutineLoadStmtConfig.isResourceCatalogType(icebergCatalogType)) {
                 iceTbl = IcebergUtil.getTableFromResource(icebergResourceName, icebergDatabase, icebergTable);
             } else if (IcebergCreateRoutineLoadStmtConfig.isExternalCatalogType(icebergCatalogType)) {
@@ -160,14 +157,6 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
         } catch (StarRocksIcebergException | AnalysisException e) {
             throw new UserException(e);
         }
-    }
-
-    private org.apache.iceberg.Table getIcbTblFromHiveMetastore() throws StarRocksIcebergException {
-        IcebergHiveCatalog catalog =
-                (IcebergHiveCatalog) IcebergUtil.getIcebergHiveCatalog(icebergCatalogHiveMetastoreUris, new HashMap<>(),
-                        new HdfsEnvironment());
-        TableIdentifier tableIdentifier = IcebergUtil.getIcebergTableIdentifier(icebergDatabase, icebergTable);
-        return catalog.loadTable(tableIdentifier);
     }
 
     private Expression getIcebergPredicates(org.apache.iceberg.Table iceTbl) throws UserException {
