@@ -81,6 +81,7 @@ import com.starrocks.common.NotImplementedException;
 import com.starrocks.common.util.DateUtils;
 import com.starrocks.mysql.MysqlPassword;
 import com.starrocks.qe.SqlModeHelper;
+import com.starrocks.sql.analyzer.CreateTableAnalyzer;
 import com.starrocks.sql.analyzer.RelationId;
 import com.starrocks.sql.analyzer.SemanticException;
 import com.starrocks.sql.ast.AddBackendClause;
@@ -528,7 +529,7 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
                 qualifiedNameToTableName(getQualifiedName(context.qualifiedName())),
                 context.columnDesc() == null ? null : getColumnDefs(context.columnDesc()),
                 context.indexDesc() == null ? null : getIndexDefs(context.indexDesc()),
-                context.engineDesc() == null ? "olap" :
+                context.engineDesc() == null ? CreateTableAnalyzer.EngineType.defaultEngine().name() :
                         ((Identifier) visit(context.engineDesc().identifier())).getValue(),
                 context.charsetDesc() == null ? "utf8" :
                         ((Identifier) visit(context.charsetDesc().identifierOrString())).getValue(),
@@ -563,6 +564,9 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
             }
             partitionDesc = new ListPartitionDesc(columnList, partitionDescList);
             throw new ParsingException("List partition is not supported.");
+        } else {
+            // For hive/iceberg/hudi partition
+            partitionDesc = new ListPartitionDesc(columnList, partitionDescList);
         }
         return partitionDesc;
     }

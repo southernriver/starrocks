@@ -26,6 +26,7 @@ import com.starrocks.common.DdlException;
 import com.starrocks.common.ExceptionChecker;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.GlobalStateMgr;
+import com.starrocks.sql.analyzer.SemanticException;
 import com.starrocks.sql.ast.CreateDbStmt;
 import com.starrocks.sql.ast.CreateTableLikeStmt;
 import com.starrocks.sql.ast.CreateTableStmt;
@@ -241,7 +242,7 @@ public class CreateTableLikeTest {
         String existedDbName2 = "test";
         String newTblName2 = "testAbTbl2_like";
         String existedTblName2 = "testAbTbl1";
-        ExceptionChecker.expectThrowsWithMsg(DdlException.class, "Unknown database 'fake_test'",
+        ExceptionChecker.expectThrowsWithMsg(SemanticException.class, "Unknown database 'fake_test'",
                 () -> checkCreateOlapTableLike(createTableSql2, createTableLikeSql2, newDbName2, existedDbName2,
                         newTblName2, existedTblName2));
     }

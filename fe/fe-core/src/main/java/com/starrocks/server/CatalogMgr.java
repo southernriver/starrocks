@@ -141,6 +141,10 @@ public class CatalogMgr {
         return name.equalsIgnoreCase(InternalCatalog.DEFAULT_INTERNAL_CATALOG_NAME);
     }
 
+    public static boolean isExternalCatalog(String name) {
+        return !Strings.isNullOrEmpty(name) && !isInternalCatalog(name) && !isResourceMappingCatalog(name);
+    }
+
     public void replayCreateCatalog(Catalog catalog) throws DdlException {
         String type = catalog.getType();
         String catalogName = catalog.getName();
@@ -254,6 +258,14 @@ public class CatalogMgr {
 
     public List<List<String>> getCatalogsInfo() {
         return procNode.fetchResult().getRows();
+    }
+
+    public String getCatalogType(String catalogName) {
+        if (isInternalCatalog(catalogName)) {
+            return "internal";
+        } else {
+            return catalogs.get(catalogName).getType();
+        }
     }
 
     public Catalog getCatalogByName(String name) {

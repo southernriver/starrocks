@@ -4,6 +4,7 @@ package com.starrocks.connector.iceberg.hive;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Strings;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.IcebergTable;
 import com.starrocks.common.Config;
@@ -21,8 +22,12 @@ import org.apache.iceberg.BaseTable;
 import org.apache.iceberg.CatalogProperties;
 import org.apache.iceberg.CatalogUtil;
 import org.apache.iceberg.ClientPool;
+import org.apache.iceberg.PartitionSpec;
+import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
+import org.apache.iceberg.TableMetadata;
 import org.apache.iceberg.TableOperations;
+import org.apache.iceberg.Transaction;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.hadoop.Configurable;
@@ -39,8 +44,11 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static com.starrocks.connector.hive.HiveMetastoreApiConverter.CONNECTOR_ID_GENERATOR;
+import static org.apache.iceberg.TableMetadata.newTableMetadata;
+import static org.apache.iceberg.Transactions.createTableTransaction;
 
 public class IcebergHiveCatalog extends BaseMetastoreCatalog implements IcebergCatalog, Configurable<Configuration> {
+    public static final String LOCATION_PROPERTY = "location";
     private static final Logger LOG = LogManager.getLogger(IcebergHiveCatalog.class);
 
     private String name;
@@ -180,8 +188,35 @@ public class IcebergHiveCatalog extends BaseMetastoreCatalog implements IcebergC
     }
 
     @Override
+    public Transaction newCreateTableTransaction(
+            String dbName,
+            String tableName,
+            Schema schema,
+            PartitionSpec partitionSpec,
+            String location,
+            Map<String, String> properties) {
+        TableMetadata metadata = newTableMetadata(schema, partitionSpec, location, properties);
+        TableOperations ops = newTableOps(TableIdentifier.of(Namespace.of(dbName), tableName));
+        return createTableTransaction(tableName, ops, metadata);
+    }
+
+    @Override
     public boolean dropTable(TableIdentifier tableIdentifier, boolean b) {
         throw new UnsupportedOperationException("Not implemented");
+    }
+
+    @Override
+    public String defaultTableLocation(String dbName, String tblName) {
+        try {
+            String location = clients.run(client -> client.getDatabase(dbName)).getLocationUri();
+            if (Strings.isNullOrEmpty(location)) {
+                throw new StarRocksConnectorException("Database %s location is not set", dbName);
+            }
+            location = location.endsWith("/") ? location : location + "/";
+            return location + tblName;
+        } catch (TException | InterruptedException e) {
+            throw new StarRocksConnectorException("Failed to get default table location on %s.%s", dbName, tblName);
+        }
     }
 
     @Override

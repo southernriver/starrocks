@@ -9,11 +9,15 @@ import com.starrocks.catalog.Database;
 import com.starrocks.catalog.IcebergTable;
 import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.Table;
+import com.starrocks.common.DdlException;
 import com.starrocks.connector.ConnectorMetadata;
 import com.starrocks.connector.RemoteFileDesc;
 import com.starrocks.connector.RemoteFileInfo;
 import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.connector.iceberg.cost.IcebergStatisticProvider;
+import com.starrocks.sql.ast.CreateTableStmt;
+import com.starrocks.sql.ast.ListPartitionDesc;
+import com.starrocks.sql.ast.PartitionDesc;
 import com.starrocks.sql.optimizer.OptimizerContext;
 import com.starrocks.sql.optimizer.Utils;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
@@ -22,8 +26,11 @@ import com.starrocks.sql.optimizer.statistics.Statistics;
 import org.apache.iceberg.BaseTable;
 import org.apache.iceberg.CombinedScanTask;
 import org.apache.iceberg.FileScanTask;
+import org.apache.iceberg.PartitionSpec;
+import org.apache.iceberg.Schema;
 import org.apache.iceberg.StructLike;
 import org.apache.iceberg.TableScan;
+import org.apache.iceberg.Transaction;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.exceptions.NoSuchTableException;
@@ -34,12 +41,16 @@ import org.apache.logging.log4j.Logger;
 import org.apache.thrift.TException;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import static com.starrocks.connector.PartitionUtil.convertIcebergPartitionToPartitionName;
+import static com.starrocks.connector.iceberg.IcebergApiConverter.getTableLocation;
+import static com.starrocks.connector.iceberg.IcebergApiConverter.parsePartitionFields;
+import static com.starrocks.connector.iceberg.IcebergApiConverter.toIcebergApiSchema;
 import static com.starrocks.connector.iceberg.IcebergCatalogType.GLUE_CATALOG;
 import static com.starrocks.connector.iceberg.IcebergCatalogType.HIVE_CATALOG;
 
@@ -81,6 +92,28 @@ public class IcebergMetadata implements ConnectorMetadata {
     public List<String> listTableNames(String dbName) {
         List<TableIdentifier> tableIdentifiers = icebergCatalog.listTables(Namespace.of(dbName));
         return tableIdentifiers.stream().map(TableIdentifier::name).collect(Collectors.toCollection(ArrayList::new));
+    }
+
+    @Override
+    public boolean createTable(CreateTableStmt stmt) throws DdlException {
+        String dbName = stmt.getDbName();
+        String tableName = stmt.getTableName();
+
+        Schema schema = toIcebergApiSchema(stmt.getColumns());
+        PartitionDesc partitionDesc = stmt.getPartitionDesc();
+        List<String> partitionColNames = partitionDesc == null ? Lists.newArrayList() :
+                ((ListPartitionDesc) partitionDesc).getPartitionColNames();
+        PartitionSpec partitionSpec = parsePartitionFields(schema, partitionColNames);
+        Map<String, String> properties = stmt.getProperties() == null ? new HashMap<>() : stmt.getProperties();
+        String tableLocation = getTableLocation(properties)
+                .orElseGet(() -> icebergCatalog.defaultTableLocation(dbName, tableName));
+        Map<String, String> createTableProperties = IcebergApiConverter.rebuildCreateTableProperties(properties);
+
+        Transaction transaction = icebergCatalog.newCreateTableTransaction(
+                dbName, tableName, schema, partitionSpec, tableLocation, createTableProperties);
+
+        transaction.commitTransaction();
+        return true;
     }
 
     @Override

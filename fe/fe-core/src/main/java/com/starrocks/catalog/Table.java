@@ -168,6 +168,17 @@ public class Table extends MetaObject implements Writable {
         return id;
     }
 
+    /**
+     * Get the unique id of table in string format, since we already ensure
+     * the uniqueness of id for internal table, we just convert it to string
+     * and return, for external table it's up to the implementation of connector.
+     *
+     * @return unique id of table in string format
+     */
+    public String getUUID() {
+        return Long.toString(id);
+    }
+
     public String getName() {
         return name;
     }

@@ -137,7 +137,7 @@ public class IcebergTable extends Table {
 
     public org.apache.iceberg.Table getNativeTableWithUgi(UserGroupInformation ugi) {
         IcebergMetadata connectorMetadata = (IcebergMetadata) GlobalStateMgr.getCurrentState().getMetadataMgr()
-                .getOptionalMetadata(catalogName).get();
+                .getOptionalMetadata(getCatalogName()).get();
         IcebergCatalog catalog = connectorMetadata.getIcebergCatalog();
         TableIdentifier tableId = TableIdentifier.of(remoteDbName, remoteTableName);
         return catalog.loadTableWithUgi(tableId, ugi);

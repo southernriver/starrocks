@@ -16,7 +16,6 @@ import org.apache.iceberg.catalog.TableIdentifier;
 import org.junit.Assert;
 import org.junit.Test;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import static com.starrocks.catalog.Table.TableType.ICEBERG;
@@ -89,8 +88,9 @@ public class IcebergMetadataTest {
         };
 
         IcebergMetadata metadata = new IcebergMetadata(CATALOG_NAME, icebergHiveCatalog);
-        Table expectResult = new Table(0, "tbl", ICEBERG, new ArrayList<>());
-        Assert.assertEquals(expectResult, metadata.getTable("db", "tbl"));
+        Table actual = metadata.getTable("db", "tbl");
+        Assert.assertEquals("tbl", actual.getName());
+        Assert.assertEquals(ICEBERG, actual.getType());
     }
 
     @Test

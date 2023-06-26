@@ -12,6 +12,7 @@ import com.starrocks.common.AnalysisException;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.MetaNotFoundException;
 import com.starrocks.common.UserException;
+import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.connector.hive.Partition;
 import com.starrocks.sql.ast.AddPartitionClause;
 import com.starrocks.sql.ast.AlterMaterializedViewStmt;
@@ -137,26 +138,26 @@ public interface ConnectorMetadata {
     default void dropDb(String dbName, boolean isForceDrop) throws DdlException, MetaNotFoundException {
     }
 
-    default List<Long> getDbIds() {
-        return Lists.newArrayList();
+    default Database getDb(long dbId) {
+        return null;
     }
 
     default Database getDb(String name) {
         return null;
     }
 
-    default Database getDb(long dbId) {
-        return null;
+    default List<Long> getDbIds() {
+        return Lists.newArrayList();
+    }
+
+    default boolean createTable(CreateTableStmt stmt) throws DdlException {
+        throw new StarRocksConnectorException("This connector doesn't support creating tables");
     }
 
     default void dropTable(DropTableStmt stmt) throws DdlException {
     }
 
     default void alterTable(AlterTableStmt stmt) throws UserException {
-    }
-
-    default boolean createTable(CreateTableStmt stmt) throws DdlException {
-        return true;
     }
 
     default void renameTable(Database db, Table table, TableRenameClause tableRenameClause) throws DdlException {

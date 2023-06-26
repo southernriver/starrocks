@@ -16,7 +16,6 @@ import com.starrocks.catalog.KeysType;
 import com.starrocks.catalog.PartitionType;
 import com.starrocks.catalog.PrimitiveType;
 import com.starrocks.common.AnalysisException;
-import com.starrocks.common.Config;
 import com.starrocks.common.ErrorCode;
 import com.starrocks.common.ErrorReport;
 import com.starrocks.common.FeConstants;
@@ -24,9 +23,12 @@ import com.starrocks.common.FeNameFormat;
 import com.starrocks.common.util.PropertyAnalyzer;
 import com.starrocks.external.elasticsearch.EsUtil;
 import com.starrocks.qe.ConnectContext;
+import com.starrocks.server.CatalogMgr;
+import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.ast.CreateTableStmt;
 import com.starrocks.sql.ast.DistributionDesc;
 import com.starrocks.sql.ast.HashDistributionDesc;
+import com.starrocks.sql.ast.ListPartitionDesc;
 import com.starrocks.sql.ast.PartitionDesc;
 import com.starrocks.sql.common.MetaUtils;
 import org.apache.commons.collections.CollectionUtils;
@@ -52,6 +54,7 @@ public class CreateTableAnalyzer {
     private static final String DEFAULT_ENGINE_NAME = "olap";
 
     private static final String ELASTICSEARCH = "elasticsearch";
+    private static final String ICEBERG = "iceberg";
 
     public enum EngineType {
         OLAP,
@@ -63,7 +66,11 @@ public class CreateTableAnalyzer {
         HUDI,
         JDBC,
         STARROCKS,
-        FILE
+        FILE;
+
+        public static EngineType defaultEngine() {
+            return OLAP;
+        }
     }
 
     public enum CharsetType {
@@ -71,19 +78,29 @@ public class CreateTableAnalyzer {
         GBK,
     }
 
-    private static String analyzeEngineName(String engineName) {
-        if (Strings.isNullOrEmpty(engineName)) {
-            return DEFAULT_ENGINE_NAME;
-        }
-
-        if (engineName.equalsIgnoreCase(CreateTableStmt.LAKE_ENGINE_NAME) && !Config.use_staros) {
-            throw new SemanticException("Engine %s needs 'use_staros = true' config in fe.conf", engineName);
-        }
-
-        try {
-            return EngineType.valueOf(engineName.toUpperCase()).name();
-        } catch (IllegalArgumentException e) {
-            throw new SemanticException("Unknown engine name: %s", engineName);
+    private static String analyzeEngineName(String engineName, String catalogName) {
+        if (CatalogMgr.isInternalCatalog(catalogName)) {
+            if (Strings.isNullOrEmpty(engineName)) {
+                return EngineType.defaultEngine().name();
+            } else {
+                try {
+                    return EngineType.valueOf(engineName.toUpperCase()).name();
+                } catch (IllegalArgumentException e) {
+                    throw new SemanticException("Unknown engine name: %s", engineName);
+                }
+            }
+        } else {
+            String catalogType = GlobalStateMgr.getCurrentState().getCatalogMgr().getCatalogType(catalogName);
+            if (Strings.isNullOrEmpty(engineName)) {
+                if (!catalogType.equals("iceberg")) {
+                    throw new SemanticException("Currently doesn't support creating tables of type " + catalogType);
+                }
+                return catalogType;
+            } else if (!engineName.equalsIgnoreCase(catalogType)) {
+                throw new SemanticException("Can't create %s table in the %s catalog", engineName, catalogType);
+            } else {
+                return engineName;
+            }
         }
     }
 
@@ -114,7 +131,19 @@ public class CreateTableAnalyzer {
             ErrorReport.reportSemanticException(ErrorCode.ERR_WRONG_TABLE_NAME, tableName);
         }
 
-        final String engineName = analyzeEngineName(statement.getEngineName()).toLowerCase();
+        final String catalogName = tableNameObject.getCatalog();
+        try {
+            MetaUtils.checkCatalogExistAndReport(catalogName);
+        } catch (AnalysisException e) {
+            throw new SemanticException(e.getMessage());
+        }
+
+        String dbName = tableNameObject.getDb();
+        if (GlobalStateMgr.getCurrentState().getMetadataMgr().getDb(catalogName, dbName) == null) {
+            throw new SemanticException("Unknown database '%s'", dbName);
+        }
+
+        final String engineName = analyzeEngineName(statement.getEngineName(), catalogName).toLowerCase();
         statement.setEngineName(engineName);
         statement.setCharsetName(analyzeCharsetName(statement.getCharsetName()).toLowerCase());
 
@@ -294,6 +323,15 @@ public class CreateTableAnalyzer {
         } else {
             if (engineName.equals(ELASTICSEARCH)) {
                 EsUtil.analyzePartitionAndDistributionDesc(partitionDesc, distributionDesc);
+            } else if (engineName.equalsIgnoreCase(ICEBERG)) {
+                if (partitionDesc != null) {
+                    try {
+                        // Iceberg table must use ListPartitionDesc
+                        ((ListPartitionDesc) partitionDesc).analyzePartitionColumns(columnDefs);
+                    } catch (AnalysisException e) {
+                        throw new SemanticException(e.getMessage());
+                    }
+                }
             } else {
                 if (partitionDesc != null || distributionDesc != null) {
                     throw new SemanticException("Create %s table should not contain partition or distribution desc",

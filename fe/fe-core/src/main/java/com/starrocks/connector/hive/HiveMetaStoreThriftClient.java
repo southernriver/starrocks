@@ -172,8 +172,6 @@ import static org.apache.hadoop.hive.metastore.utils.MetaStoreUtils.getDefaultCa
 
 /**
  * Modified from apache hive  org.apache.hadoop.hive.metastore.HiveMetaStoreClient.java
- * Current implemented methods are: getTable, getPartition, listPartitionNames, getPartitionsByNames, partitionNameToVals
- * ,getTableColumnStatistics, getPartitionColumnStatistics.
  * Newly added method should cover hive0/1/2/3 metastore server.
  */
 public class HiveMetaStoreThriftClient implements IMetaStoreClient, AutoCloseable {
@@ -1213,11 +1211,48 @@ public class HiveMetaStoreThriftClient implements IMetaStoreClient, AutoCloseabl
 
     }
 
-    @Override
-    public void createTable(Table tbl)
-            throws AlreadyExistsException, InvalidObjectException, MetaException, NoSuchObjectException, TException {
-        throw new TException("method not implemented");
+    private HiveMetaHook getHook(Table tbl) {
+        return null;
+    }
 
+    @Override
+    public void createTable(Table tbl) throws TException {
+        createTable(tbl, null);
+    }
+
+    public void createTable(Table tbl, EnvironmentContext envContext) throws AlreadyExistsException,
+            InvalidObjectException, MetaException, NoSuchObjectException, TException {
+        if (!tbl.isSetCatName()) {
+            tbl.setCatName(getDefaultCatalog(conf));
+        }
+        HiveMetaHook hook = getHook(tbl);
+        if (hook != null) {
+            hook.preCreateTable(tbl);
+        }
+        boolean success = false;
+        try {
+            // Subclasses can override this step (for example, for temporary tables)
+            create_table_with_environment_context(tbl, envContext);
+            if (hook != null) {
+                hook.commitCreateTable(tbl);
+            }
+            success = true;
+        }
+        finally {
+            if (!success && (hook != null)) {
+                try {
+                    hook.rollbackCreateTable(tbl);
+                } catch (Exception e){
+                    LOG.error("Create rollback failed with", e);
+                }
+            }
+        }
+    }
+
+    protected void create_table_with_environment_context(Table tbl, EnvironmentContext envContext)
+            throws AlreadyExistsException, InvalidObjectException,
+            MetaException, NoSuchObjectException, TException {
+        client.create_table_with_environment_context(tbl, envContext);
     }
 
     @Override
@@ -1249,18 +1284,15 @@ public class HiveMetaStoreThriftClient implements IMetaStoreClient, AutoCloseabl
     }
 
     @Override
-    public void alter_table_with_environmentContext(String dbName, String tblName, Table table,
-                                                    EnvironmentContext envContext)
-            throws InvalidOperationException, MetaException, TException {
+    public void alter_table_with_environmentContext(String databaseName, String tblName, Table table,
+                                                    EnvironmentContext environmentContext)
+            throws TException {
         HiveMetaHook hook = getHook(table);
         if (hook != null) {
-            hook.preAlterTable(table, envContext);
+            hook.preAlterTable(table, environmentContext);
         }
-        client.alter_table_with_environment_context(dbName, tblName, table, envContext);
-    }
 
-    private HiveMetaHook getHook(Table tbl) throws MetaException {
-        return hookLoader == null ? null : hookLoader.getHook(tbl);
+        client.alter_table_with_environment_context(databaseName, tblName, table, environmentContext);
     }
 
     @Override
@@ -2024,14 +2056,55 @@ public class HiveMetaStoreThriftClient implements IMetaStoreClient, AutoCloseabl
     }
 
     @Override
-    public void createTableWithConstraints(Table tTbl, List<SQLPrimaryKey> primaryKeys, List<SQLForeignKey> foreignKeys,
+    public void createTableWithConstraints(Table tbl,
+                                           List<SQLPrimaryKey> primaryKeys, List<SQLForeignKey> foreignKeys,
                                            List<SQLUniqueConstraint> uniqueConstraints,
                                            List<SQLNotNullConstraint> notNullConstraints,
                                            List<SQLDefaultConstraint> defaultConstraints,
                                            List<SQLCheckConstraint> checkConstraints)
-            throws AlreadyExistsException, InvalidObjectException, MetaException, NoSuchObjectException, TException {
-        throw new TException("method not implemented");
+            throws AlreadyExistsException, InvalidObjectException,
+            MetaException, NoSuchObjectException, TException {
 
+        if (!tbl.isSetCatName()) {
+            String defaultCat = getDefaultCatalog(conf);
+            tbl.setCatName(defaultCat);
+            if (primaryKeys != null) {
+                primaryKeys.forEach(pk -> pk.setCatName(defaultCat));
+            }
+            if (foreignKeys != null) {
+                foreignKeys.forEach(fk -> fk.setCatName(defaultCat));
+            }
+            if (uniqueConstraints != null) {
+                uniqueConstraints.forEach(uc -> uc.setCatName(defaultCat));
+            }
+            if (notNullConstraints != null) {
+                notNullConstraints.forEach(nn -> nn.setCatName(defaultCat));
+            }
+            if (defaultConstraints != null) {
+                defaultConstraints.forEach(def -> def.setCatName(defaultCat));
+            }
+            if (checkConstraints != null) {
+                checkConstraints.forEach(cc -> cc.setCatName(defaultCat));
+            }
+        }
+        HiveMetaHook hook = getHook(tbl);
+        if (hook != null) {
+            hook.preCreateTable(tbl);
+        }
+        boolean success = false;
+        try {
+            // Subclasses can override this step (for example, for temporary tables)
+            client.create_table_with_constraints(tbl, primaryKeys, foreignKeys,
+                    uniqueConstraints, notNullConstraints, defaultConstraints, checkConstraints);
+            if (hook != null) {
+                hook.commitCreateTable(tbl);
+            }
+            success = true;
+        } finally {
+            if (!success && (hook != null)) {
+                hook.rollbackCreateTable(tbl);
+            }
+        }
     }
 
     @Override
