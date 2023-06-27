@@ -21,7 +21,7 @@
 
 package com.starrocks.connector.iceberg.io;
 
-import com.starrocks.connector.iceberg.StarRocksIcebergException;
+import com.starrocks.connector.exception.StarRocksConnectorException;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.iceberg.hadoop.Util;
 import org.apache.iceberg.io.FileIO;
@@ -48,7 +48,7 @@ public class IcebergFileIOWithUgi implements FileIO {
         try {
             return Util.doAsWithUGI(ugi, () -> wrappedIO.newInputFile(path));
         } catch (IOException e) {
-            throw new StarRocksIcebergException(e.getMessage(), e);
+            throw new StarRocksConnectorException(e.getMessage(), e);
         }
     }
 
@@ -57,7 +57,7 @@ public class IcebergFileIOWithUgi implements FileIO {
         try {
             return Util.doAsWithUGI(ugi, () -> wrappedIO.newOutputFile(path));
         } catch (IOException e) {
-            throw new StarRocksIcebergException(e.getMessage(), e);
+            throw new StarRocksConnectorException(e.getMessage(), e);
         }
     }
 
@@ -69,7 +69,7 @@ public class IcebergFileIOWithUgi implements FileIO {
                 return null;
             });
         } catch (IOException e) {
-            throw new StarRocksIcebergException(e.getMessage(), e);
+            throw new StarRocksConnectorException(e.getMessage(), e);
         }
     }
 }

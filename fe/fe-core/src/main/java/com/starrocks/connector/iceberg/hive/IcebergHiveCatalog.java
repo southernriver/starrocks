@@ -7,9 +7,9 @@ import com.google.common.base.Preconditions;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.IcebergTable;
 import com.starrocks.common.Config;
+import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.connector.iceberg.IcebergCatalog;
 import com.starrocks.connector.iceberg.IcebergCatalogType;
-import com.starrocks.connector.iceberg.StarRocksIcebergException;
 import com.starrocks.connector.iceberg.io.IcebergCachingFileIO;
 import com.starrocks.connector.iceberg.io.IcebergFileIOWithUgi;
 import org.apache.hadoop.conf.Configuration;
@@ -58,36 +58,36 @@ public class IcebergHiveCatalog extends BaseMetastoreCatalog implements IcebergC
     }
 
     @Override
-    public Table loadTable(IcebergTable table) throws StarRocksIcebergException {
+    public Table loadTable(IcebergTable table) throws StarRocksConnectorException {
         TableIdentifier tableId = TableIdentifier.of(table.getRemoteDbName(), table.getRemoteTableName());
         return loadTable(tableId, null, null);
     }
 
     @Override
-    public Table loadTable(TableIdentifier tableIdentifier) throws StarRocksIcebergException {
+    public Table loadTable(TableIdentifier tableIdentifier) throws StarRocksConnectorException {
         return loadTable(tableIdentifier, null, null);
     }
 
     @Override
-    public Table loadTableWithUgi(TableIdentifier tableId, UserGroupInformation ugi) throws StarRocksIcebergException {
+    public Table loadTableWithUgi(TableIdentifier tableId, UserGroupInformation ugi) throws StarRocksConnectorException {
         try {
             TableOperations ops = newTableOps(tableId, conf, new IcebergFileIOWithUgi(fileIO, ugi));
             return new BaseTable(ops, fullTableName(this.name(), tableId));
         } catch (Exception e) {
-            throw new StarRocksIcebergException(String.format(
+            throw new StarRocksConnectorException(String.format(
                     "Failed to load Iceberg table with id: %s", tableId), e);
         }
     }
 
     @Override
     public Table loadTable(TableIdentifier tableId, String tableLocation,
-                           Map<String, String> properties) throws StarRocksIcebergException {
+                           Map<String, String> properties) throws StarRocksConnectorException {
         Preconditions.checkState(tableId != null);
         try {
             TableOperations ops = this.newTableOps(tableId);
             return new BaseTable(ops, fullTableName(this.name(), tableId));
         } catch (Exception e) {
-            throw new StarRocksIcebergException(String.format(
+            throw new StarRocksConnectorException(String.format(
                     "Failed to load Iceberg table with id: %s", tableId), e);
         }
     }

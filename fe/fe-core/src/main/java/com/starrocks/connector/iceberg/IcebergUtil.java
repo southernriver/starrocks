@@ -8,6 +8,7 @@ import com.starrocks.catalog.Resource;
 import com.starrocks.catalog.ResourceMgr;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.connector.HdfsEnvironment;
+import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.connector.iceberg.hive.IcebergHiveCatalog;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.server.MetadataMgr;
@@ -38,14 +39,14 @@ public class IcebergUtil {
     }
 
     public static org.apache.iceberg.Table getTableFromHiveMetastore(String metastoreUris, String dbName,
-                                                                     String tblName) throws StarRocksIcebergException {
+                                                                     String tblName) throws StarRocksConnectorException {
         IcebergHiveCatalog catalog =
                 getIcebergHiveCatalogInstance(metastoreUris, new HashMap<>(), new HdfsEnvironment());
         return catalog.loadTable(TableIdentifier.of(dbName, tblName));
     }
 
     public static Table getTableFromResource(String resourceName, String dbName, String tblName)
-            throws StarRocksIcebergException, AnalysisException {
+            throws StarRocksConnectorException, AnalysisException {
         ResourceMgr resourceMgr = GlobalStateMgr.getCurrentState().getResourceMgr();
         Resource resource = resourceMgr.getResource(resourceName);
         if (resource == null) {
@@ -62,11 +63,11 @@ public class IcebergUtil {
     }
 
     public static Table getTableFromCatalog(String catalogName, String dbName, String tblName)
-            throws StarRocksIcebergException, AnalysisException {
+            throws StarRocksConnectorException, AnalysisException {
         MetadataMgr metadataMgr = GlobalStateMgr.getCurrentState().getMetadataMgr();
         IcebergTable resTable = (IcebergTable) metadataMgr.getTable(catalogName, dbName, tblName);
         if (resTable == null) {
-            throw new StarRocksIcebergException(catalogName + "." + dbName + "." + tblName + " not exists");
+            throw new StarRocksConnectorException(catalogName + "." + dbName + "." + tblName + " not exists");
         } else {
             return resTable.getNativeTable();
         }

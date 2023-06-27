@@ -27,8 +27,8 @@ import com.starrocks.common.util.LogBuilder;
 import com.starrocks.common.util.LogKey;
 import com.starrocks.common.util.SmallFileMgr;
 import com.starrocks.common.util.SmallFileMgr.SmallFile;
+import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.connector.iceberg.IcebergUtil;
-import com.starrocks.connector.iceberg.StarRocksIcebergException;
 import com.starrocks.load.RoutineLoadDesc;
 import com.starrocks.load.streamload.StreamLoadInfo;
 import com.starrocks.planner.IcebergScanNode;
@@ -154,7 +154,7 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
                 iceTbl = IcebergUtil.getTableFromCatalog(icebergCatalogName, icebergDatabase, icebergTable);
             }
             return iceTbl;
-        } catch (StarRocksIcebergException | AnalysisException e) {
+        } catch (StarRocksConnectorException | AnalysisException e) {
             throw new UserException(e);
         }
     }
