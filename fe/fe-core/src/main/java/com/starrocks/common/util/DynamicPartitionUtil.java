@@ -25,6 +25,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.starrocks.analysis.TimestampArithmeticExpr.TimeUnit;
 import com.starrocks.catalog.Column;
+import com.starrocks.catalog.DistributionInfo;
 import com.starrocks.catalog.DynamicPartitionProperty;
 import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.PartitionInfo;
@@ -277,7 +278,8 @@ public class DynamicPartitionUtil {
         }
     }
 
-    public static Map<String, String> analyzeDynamicPartition(Map<String, String> properties) throws DdlException {
+    public static Map<String, String> analyzeDynamicPartition(OlapTable table, Map<String, String> properties)
+            throws DdlException {
         // properties should not be empty, check properties before call this function
         Map<String, String> analyzedProperties = new HashMap<>();
         if (properties.containsKey(DynamicPartitionProperty.TIME_UNIT)) {
@@ -294,6 +296,12 @@ public class DynamicPartitionUtil {
         }
         if (properties.containsKey(DynamicPartitionProperty.BUCKETS)) {
             String bucketsValue = properties.get(DynamicPartitionProperty.BUCKETS);
+            checkBuckets(bucketsValue);
+            properties.remove(DynamicPartitionProperty.BUCKETS);
+            analyzedProperties.put(DynamicPartitionProperty.BUCKETS, bucketsValue);
+        } else {
+            DistributionInfo defaultDistributionInfo = table.getDefaultDistributionInfo();
+            String bucketsValue = String.valueOf(defaultDistributionInfo.getBucketNum());
             checkBuckets(bucketsValue);
             properties.remove(DynamicPartitionProperty.BUCKETS);
             analyzedProperties.put(DynamicPartitionProperty.BUCKETS, bucketsValue);
@@ -415,7 +423,8 @@ public class DynamicPartitionUtil {
     public static void checkAndSetDynamicPartitionProperty(OlapTable olapTable, Map<String, String> properties)
             throws DdlException {
         if (DynamicPartitionUtil.checkInputDynamicPartitionProperties(properties, olapTable.getPartitionInfo())) {
-            Map<String, String> dynamicPartitionProperties = DynamicPartitionUtil.analyzeDynamicPartition(properties);
+            Map<String, String> dynamicPartitionProperties =
+                    DynamicPartitionUtil.analyzeDynamicPartition(olapTable, properties);
             TableProperty tableProperty = olapTable.getTableProperty();
             if (tableProperty != null) {
                 tableProperty.modifyTableProperties(dynamicPartitionProperties);

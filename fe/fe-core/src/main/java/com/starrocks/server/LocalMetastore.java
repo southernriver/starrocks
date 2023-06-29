@@ -3856,7 +3856,8 @@ public class LocalMetastore implements ConnectorMetadata {
         if (tableProperty == null) {
             DynamicPartitionUtil.checkAndSetDynamicPartitionProperty(table, properties);
         } else {
-            Map<String, String> analyzedDynamicPartition = DynamicPartitionUtil.analyzeDynamicPartition(properties);
+            Map<String, String> analyzedDynamicPartition =
+                    DynamicPartitionUtil.analyzeDynamicPartition(table, properties);
             tableProperty.modifyTableProperties(analyzedDynamicPartition);
             tableProperty.buildDynamicProperty();
         }
