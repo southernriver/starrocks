@@ -1804,6 +1804,9 @@ public class Config extends ConfigBase {
     @ConfField(mutable = true)
     public static long min_routine_load_lag_for_metrics = 10000;
 
+    @ConfField(mutable = true)
+    public static long max_table_metrics_num = 5000;
+
     /**
      * The heartbeat timeout of be/broker/fe.
      * the default is 5 seconds

@@ -2,25 +2,33 @@
 
 package com.starrocks.metric;
 
-import com.google.common.collect.Maps;
-import com.starrocks.common.ThreadPoolManager;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.RemovalListener;
+import com.starrocks.common.Config;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
-import java.util.Map;
-import java.util.TimerTask;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 public final class TableMetricsRegistry {
+    private static final Logger LOG = LogManager.getLogger(TableMetricsRegistry.class);
 
-    private final Map<Long, TableMetricsEntity> idToTableMetrics;
-    private final ScheduledThreadPoolExecutor timer;
+    private final Cache<Long, TableMetricsEntity> idToTableMetrics;
     private static final TableMetricsRegistry INSTANCE = new TableMetricsRegistry();
 
     private TableMetricsRegistry() {
-        idToTableMetrics = Maps.newHashMap();
-        // clear all metrics everyday
-        timer = ThreadPoolManager.newDaemonScheduledThreadPool(1, "Table-Metrics-Cleaner", true);
-        timer.scheduleAtFixedRate(new MetricsCleaner(), 0, 1L, TimeUnit.DAYS);
+        idToTableMetrics = CacheBuilder.newBuilder()
+                .maximumSize(Config.max_table_metrics_num)
+                .removalListener((RemovalListener<Long, TableMetricsEntity>) removalNotification -> {
+                    MetricVisitor visitor = new SimpleCoreMetricVisitor("starrocks_fe");
+                    LOG.info("Removed table metrics from table [" + removalNotification.getKey() + "] " +
+                            removalNotification.getValue().getMetrics().stream().map(m -> {
+                                visitor.visit(m);
+                                return visitor.build();
+                            }).collect(Collectors.joining(", ")));
+                }).build();
     }
 
     public static TableMetricsRegistry getInstance() {
@@ -28,16 +36,13 @@ public final class TableMetricsRegistry {
     }
 
     public synchronized TableMetricsEntity getMetricsEntity(long tableId) {
-        return idToTableMetrics.computeIfAbsent(tableId, k -> new TableMetricsEntity());
-    }
-
-    private class MetricsCleaner extends TimerTask {
-        @Override
-        public void run() {
-            synchronized (TableMetricsRegistry.this) {
-                idToTableMetrics.clear();
-            }
+        try {
+            return idToTableMetrics.get(tableId, TableMetricsEntity::new);
+        } catch (ExecutionException e) {
+            LOG.error("Failed to obtain table [" + tableId + "] metrics!");
         }
+        // Here suppose to be unreachable.
+        return null;
     }
 }
 
