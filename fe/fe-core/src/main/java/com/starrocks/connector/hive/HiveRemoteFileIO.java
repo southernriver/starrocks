@@ -24,6 +24,7 @@ import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
 import java.util.List;
@@ -81,6 +82,8 @@ public class HiveRemoteFileIO implements RemoteFileIO {
                 fileDescs.add(new RemoteFileDesc(fileName, "", locatedFileStatus.getLen(),
                         ImmutableList.copyOf(fileBlockDescs), ImmutableList.of()));
             }
+        } catch (FileNotFoundException e) {
+            LOG.warn("path: {} not found ignore it", path, e);
         } catch (Exception e) {
             LOG.error("Failed to get hive remote file's metadata on path: {}", path, e);
             throw new StarRocksConnectorException("Failed to get hive remote file's metadata on path: %s. msg: %s",
