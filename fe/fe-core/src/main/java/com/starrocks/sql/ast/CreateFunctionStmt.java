@@ -39,6 +39,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 // create a user define function
@@ -61,6 +62,7 @@ public class CreateFunctionStmt extends DdlStmt {
     public static final String WINDOW_UPDATE_METHOD_NAME = "windowUpdate";
     public static final String IS_ANALYTIC_NAME = "analytic";
     public static final String PROCESS_METHOD_NAME = "process";
+    public static final String ALL_CLASS_LOAD = "allClassLoad";
 
     private final FunctionName functionName;
     private final boolean isAggregate;
@@ -71,6 +73,7 @@ public class CreateFunctionStmt extends DdlStmt {
     private final Map<String, String> properties;
     private boolean isStarrocksJar = false;
     private boolean isAnalyticFn = false;
+    private boolean isAllClassLoad = false;
 
     // needed item set after analyzed
     private String objectFile;
@@ -278,13 +281,17 @@ public class CreateFunctionStmt extends DdlStmt {
 
     private void analyzeUdfClassInStarrocksJar() throws AnalysisException {
         String className = properties.get(SYMBOL_KEY);
+        isAllClassLoad = Boolean.parseBoolean(Optional.of(properties.get(ALL_CLASS_LOAD))
+                .map(String::toLowerCase).get());
         if (Strings.isNullOrEmpty(className)) {
             throw new AnalysisException("No '" + SYMBOL_KEY + "' in properties");
         }
 
         try {
             URL[] urls = {new URL("jar:" + objectFile + "!/")};
-            try (URLClassLoader classLoader = URLClassLoader.newInstance(urls)) {
+            try (URLClassLoader classLoader = isAllClassLoad
+                    ? URLClassLoader.newInstance(urls, this.getClass().getClassLoader().getParent())
+                    : URLClassLoader.newInstance(urls)) {
                 mainClass.setClazz(classLoader.loadClass(className));
 
                 if (isAggregate) {
@@ -350,7 +357,7 @@ public class CreateFunctionStmt extends DdlStmt {
         function = ScalarFunction.createUdf(
                 functionName, argsDef.getArgTypes(),
                 returnType.getType(), argsDef.isVariadic(), TFunctionBinaryType.SRJAR,
-                objectFile, mainClass.getCanonicalName(), "", "");
+                objectFile, mainClass.getCanonicalName(), "", "", isAllClassLoad);
         function.setChecksum(checksum);
     }
 

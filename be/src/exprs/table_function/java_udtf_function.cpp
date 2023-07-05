@@ -27,8 +27,9 @@ const TableFunction* getJavaUDTFFunction() {
 
 class JavaUDTFState : public TableFunctionState {
 public:
-    JavaUDTFState(std::string libpath, std::string symbol, const TTypeDesc& desc)
-            : _libpath(std::move(libpath)), _symbol(std::move(symbol)), _ret_type(TypeDescriptor::from_thrift(desc)) {}
+    JavaUDTFState(std::string libpath, std::string symbol, const TTypeDesc& desc, bool load_all_class)
+            : _libpath(std::move(libpath)), _symbol(std::move(symbol)), _is_load_all_class(load_all_class),
+              _ret_type(TypeDescriptor::from_thrift(desc)) {}
     ~JavaUDTFState() override = default;
 
     Status open();
@@ -42,6 +43,7 @@ public:
 private:
     std::string _libpath;
     std::string _symbol;
+    bool _is_load_all_class;
 
     std::unique_ptr<ClassLoader> _class_loader;
     std::unique_ptr<ClassAnalyzer> _analyzer;
@@ -53,7 +55,7 @@ private:
 
 Status JavaUDTFState::open() {
     RETURN_IF_ERROR(detect_java_runtime());
-    _class_loader = std::make_unique<ClassLoader>(std::move(_libpath));
+    _class_loader = std::make_unique<ClassLoader>(std::move(_libpath), _is_load_all_class);
     RETURN_IF_ERROR(_class_loader->init());
     _analyzer = std::make_unique<ClassAnalyzer>();
 
@@ -82,7 +84,7 @@ Status JavaUDTFFunction::init(const TFunction& fn, TableFunctionState** state) c
     std::string libpath;
     RETURN_IF_ERROR(UserFunctionCache::instance()->get_libpath(fn.fid, fn.hdfs_location, fn.checksum, &libpath));
     // Now we only support one return types
-    *state = new JavaUDTFState(std::move(libpath), fn.table_fn.symbol, fn.table_fn.ret_types[0]);
+    *state = new JavaUDTFState(std::move(libpath), fn.table_fn.symbol, fn.table_fn.ret_types[0], fn.load_all_class);
     return Status::OK();
 }
 

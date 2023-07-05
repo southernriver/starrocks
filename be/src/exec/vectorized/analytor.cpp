@@ -24,7 +24,8 @@
 namespace starrocks {
 namespace vectorized {
 Status window_init_jvm_context(int64_t fid, const std::string& url, const std::string& checksum,
-                               const std::string& symbol, starrocks_udf::FunctionContext* context);
+                               const std::string& symbol, starrocks_udf::FunctionContext* context,
+                               bool load_all_class);
 } // namespace vectorized
 
 Analytor::Analytor(const TPlanNode& tnode, const RowDescriptor& child_row_desc,
@@ -280,7 +281,8 @@ Status Analytor::open(RuntimeState* state) {
             if (_fns[i].binary_type == TFunctionBinaryType::SRJAR) {
                 const auto& fn = _fns[i];
                 auto st = vectorized::window_init_jvm_context(fn.fid, fn.hdfs_location, fn.checksum,
-                                                              fn.aggregate_fn.symbol, _agg_fn_ctxs[i]);
+                                                              fn.aggregate_fn.symbol, _agg_fn_ctxs[i],
+                                                              fn.load_all_class);
                 RETURN_IF_ERROR(st);
             }
         }

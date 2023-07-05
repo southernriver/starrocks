@@ -26,8 +26,10 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.starrocks.analysis.FunctionName;
 import com.starrocks.analysis.HdfsURI;
+import com.starrocks.common.FeMetaVersion;
 import com.starrocks.common.io.Text;
 import com.starrocks.common.io.Writable;
+import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.thrift.TFunction;
 import com.starrocks.thrift.TFunctionBinaryType;
 import org.apache.commons.lang.ArrayUtils;
@@ -115,6 +117,8 @@ public class Function implements Writable {
     private boolean couldApplyDictOptimize = false;
 
     private boolean isNullable = true;
+
+    private boolean isLoadAllClass = false;
 
     // Only used for serialization
     protected Function() {
@@ -284,6 +288,14 @@ public class Function implements Writable {
 
     public String getChecksum() {
         return checksum;
+    }
+
+    public boolean isLoadAllClass() {
+        return isLoadAllClass;
+    }
+
+    public void setLoadAllClass(boolean loadAllClass) {
+        isLoadAllClass = loadAllClass;
     }
 
     // TODO(cmy): Currently we judge whether it is UDF by wheter the 'location' is set.
@@ -548,6 +560,7 @@ public class Function implements Writable {
             fn.setChecksum(checksum);
         }
         fn.setCould_apply_dict_optimize(couldApplyDictOptimize);
+        fn.setLoad_all_class(isLoadAllClass);
         return fn;
     }
 
@@ -655,6 +668,7 @@ public class Function implements Writable {
         }
         writeOptionString(output, libUrl);
         writeOptionString(output, checksum);
+        output.writeBoolean(isLoadAllClass);
     }
 
     @Override
@@ -683,6 +697,9 @@ public class Function implements Writable {
         boolean hasChecksum = input.readBoolean();
         if (hasChecksum) {
             checksum = Text.readString(input);
+        }
+        if (GlobalStateMgr.getCurrentStateJournalVersion() >= FeMetaVersion.VERSION_95) {
+            isLoadAllClass = input.readBoolean();
         }
     }
 

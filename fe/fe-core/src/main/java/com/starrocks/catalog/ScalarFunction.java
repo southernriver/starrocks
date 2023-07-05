@@ -128,7 +128,8 @@ public class ScalarFunction extends Function {
             FunctionName name, Type[] args,
             Type returnType, boolean isVariadic,
             TFunctionBinaryType binaryType,
-            String objectFile, String symbol, String prepareFnSymbol, String closeFnSymbol) {
+            String objectFile, String symbol, String prepareFnSymbol, String closeFnSymbol,
+            boolean isAllClassLoad) {
         ScalarFunction fn = new ScalarFunction(name, args, returnType, isVariadic);
         fn.setBinaryType(binaryType);
         fn.setUserVisible(true);
@@ -136,6 +137,7 @@ public class ScalarFunction extends Function {
         fn.prepareFnSymbol = prepareFnSymbol;
         fn.closeFnSymbol = closeFnSymbol;
         fn.setLocation(new HdfsURI(objectFile));
+        fn.setLoadAllClass(isAllClassLoad);
         return fn;
     }
 
@@ -222,6 +224,7 @@ public class ScalarFunction extends Function {
         properties.put(CreateFunctionStmt.MD5_CHECKSUM, checksum);
         properties.put(CreateFunctionStmt.SYMBOL_KEY, getSymbolName());
         properties.put(CreateFunctionStmt.TYPE_KEY, getBinaryType().name());
+        properties.put(CreateFunctionStmt.ALL_CLASS_LOAD, String.valueOf(isLoadAllClass()));
         return new Gson().toJson(properties);
     }
 

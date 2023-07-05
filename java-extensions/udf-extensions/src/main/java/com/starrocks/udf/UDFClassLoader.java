@@ -24,6 +24,10 @@ public class UDFClassLoader extends URLClassLoader {
         super(new URL[] {new URL("file://" + udfPath)});
     }
 
+    public UDFClassLoader(String udfPath, ClassLoader parent) throws IOException {
+        super(new URL[] {new URL("file://" + udfPath)}, parent);
+    }
+
     @Override
     protected Class<?> findClass(String name) throws ClassNotFoundException {
         String clazzName = name.replace("/", ".");

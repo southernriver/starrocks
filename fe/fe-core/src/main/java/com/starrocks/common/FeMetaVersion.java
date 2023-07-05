@@ -201,6 +201,10 @@ public final class FeMetaVersion {
     public static final int VERSION_92 = 92;
     // for colddown job
     public static final int VERSION_93 = 93;
+    // light schema change
+    public static final int VERSION_94 = 94;
+    // for independent udf classloader
+    public static final int VERSION_95 = 95;
     // note: when increment meta version, should assign the latest version to VERSION_CURRENT
-    public static final int VERSION_CURRENT = VERSION_93;
+    public static final int VERSION_CURRENT = VERSION_95;
 }

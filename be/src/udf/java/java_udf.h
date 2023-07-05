@@ -380,7 +380,8 @@ public:
     static const inline int BATCH_SINGLE_UPDATE = 1;
     static const inline int BATCH_EVALUATE = 2;
     // Handle
-    ClassLoader(std::string path) : _path(std::move(path)) {}
+    ClassLoader(std::string path, bool is_load_all_class) :
+              _path(std::move(path)), _is_load_all_class(is_load_all_class) {};
     ~ClassLoader();
 
     ClassLoader& operator=(const ClassLoader& other) = delete;
@@ -394,6 +395,7 @@ public:
 
 private:
     std::string _path;
+    bool _is_load_all_class = false;
     jmethodID _get_class = nullptr;
     jmethodID _get_call_stub = nullptr;
     JavaGlobalRef _handle = nullptr;

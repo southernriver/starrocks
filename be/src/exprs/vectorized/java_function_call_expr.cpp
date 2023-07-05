@@ -165,7 +165,7 @@ Status JavaFunctionCallExpr::open(RuntimeState* state, ExprContext* context,
         std::string libpath;
         auto function_cache = UserFunctionCache::instance();
         RETURN_IF_ERROR(function_cache->get_libpath(_fn.fid, _fn.hdfs_location, _fn.checksum, &libpath));
-        _func_desc->udf_classloader = std::make_unique<ClassLoader>(std::move(libpath));
+        _func_desc->udf_classloader = std::make_unique<ClassLoader>(std::move(libpath), _fn.load_all_class);
         RETURN_IF_ERROR(_func_desc->udf_classloader->init());
         _func_desc->analyzer = std::make_unique<ClassAnalyzer>();
 
