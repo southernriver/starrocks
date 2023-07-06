@@ -261,7 +261,7 @@ public class ExportJob implements Writable {
         this.sql = stmt.toSql();
     }
 
-    public ExecutorService getIoExec() {
+    public static ExecutorService getIoExec() {
         return EXECUTOR_SERVICE;
     }
 

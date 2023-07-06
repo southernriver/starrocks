@@ -26,10 +26,12 @@ import com.starrocks.common.Pair;
 import com.starrocks.common.UserException;
 import com.starrocks.connector.ConnectorMetadata;
 import com.starrocks.connector.exception.StarRocksConnectorException;
+import com.starrocks.connector.iceberg.IcebergUtil;
 import com.starrocks.fs.HdfsUtil;
 import com.starrocks.fs.hdfs.HdfsFs;
 import com.starrocks.load.ExportJob;
 import com.starrocks.load.FsUtil;
+import com.starrocks.server.CatalogMgr;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.analyzer.AnalyzerUtils;
 import com.starrocks.sql.analyzer.SemanticException;
@@ -54,6 +56,7 @@ import org.apache.iceberg.types.Conversions;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.time.LocalDateTime;
@@ -61,6 +64,8 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -93,11 +98,27 @@ public class ExternalTableExportConfig {
         this.brokerDesc = brokerDesc;
     }
 
+    public Map<String, String> getProperties() {
+        return properties;
+    }
+
+    public Map<String, String> getTargetProperties() {
+        return targetProperties;
+    }
+
+    public BrokerDesc getBrokerDesc() {
+        return brokerDesc;
+    }
+
     public void analyzeProperties(Table table, String partition) {
         Table externalTable = verifyExternalTable();
         if (externalTable == null) {
             ErrorReport.reportSemanticException(ErrorCode.ERR_BAD_TABLE_ERROR, targetProperties.get(EXTERNAL_TABLE));
         }
+        prepareProperties(table, externalTable, partition);
+    }
+
+    public void prepareProperties(Table table, Table externalTable, String partition) {
         targetTableType = externalTable.getType();
         exportTypes = new LinkedHashMap<>();
         for (Column column : externalTable.getBaseSchema()) {
@@ -421,7 +442,7 @@ public class ExternalTableExportConfig {
             List<Future<Pair<Metrics, Long>>> futures = Lists.newArrayListWithExpectedSize(files.size());
             for (String filePath : files) {
                 HadoopInputFile inputFile = HadoopInputFile.fromLocation(filePath, fileSystem.getDFSFileSystem());
-                futures.add(job.getIoExec().submit(() -> {
+                futures.add(ExportJob.getIoExec().submit(() -> {
                     for (int i = 0; i < ExportExportingTask.RETRY_NUM; ++i) {
                         try {
                             Metrics metrics = null;
@@ -523,5 +544,90 @@ public class ExternalTableExportConfig {
             path = path.substring(0, path.length() - 1);
         }
         return path;
+    }
+
+    public void createExternalTable(Table table) {
+        TableName extTableName = AnalyzerUtils.stringToTableName(targetProperties.get(EXTERNAL_TABLE));
+        String extCatalogName = extTableName.getCatalog();
+        String extDbName = extTableName.getDb();
+        if (extCatalogName == null) {
+            extCatalogName = InternalCatalog.DEFAULT_INTERNAL_CATALOG_NAME;
+            if (Strings.isNullOrEmpty(extDbName)) {
+                extDbName = olapTableName.getDb();
+            }
+        }
+        if (!shouldCreateExternalTable(extCatalogName)) {
+            ErrorReport.reportSemanticException(ErrorCode.ERR_BAD_TABLE_ERROR, targetProperties.get(EXTERNAL_TABLE));
+            return;
+        }
+        TableName normalizedEtTableName = new TableName(extCatalogName, extDbName, extTableName.getTbl());
+        Map<String, String> properties = new HashMap<>();
+        getProperties().forEach((key, value) -> {
+            if (key.startsWith("colddown_") || key.startsWith("max_file_") || key.equals("timeout")) {
+                return;
+            }
+            properties.put(key, value);
+        });
+        try {
+            IcebergUtil.createTable(table, normalizedEtTableName, properties, brokerDesc);
+        } catch (IOException | UserException e) {
+            throw new SemanticException(e.getMessage(), e);
+        }
+    }
+
+    private boolean shouldCreateExternalTable(String extCatalogName) {
+        if (!isAutomaticallyCreateTargetTable() || !CatalogMgr.isExternalCatalog(extCatalogName)) {
+            return false;
+        }
+        String catalogType = GlobalStateMgr.getCurrentState().getCatalogMgr().getCatalogType(extCatalogName);
+        if (catalogType == null) {
+            throw new SemanticException("catalog " + extCatalogName + " not exist!");
+        }
+        // currently, try to create table only when it is iceberg catalog
+        return catalogType.equals("iceberg");
+    }
+
+    public Table applySchemaChange(final Table table, boolean exportColumnsSpecified) {
+        Table externalTable = verifyExternalTable();
+        // it happens when externalTable was dropped after colddown job created
+        if (externalTable == null) {
+            createExternalTable(table);
+            return verifyExternalTable();
+        } else if (exportColumnsSpecified || !isAutomaticallyUpdateTargetTableSchema(getTargetProperties())) {
+            return externalTable;
+        }
+        return applySchemaChange(table, externalTable);
+    }
+
+    private Table applySchemaChange(Table table, Table externalTable) {
+        Set<String> columnNamesInTargetTable = new HashSet<>();
+        for (Column column : externalTable.getBaseSchema()) {
+            String name = column.getName();
+            // tdw only
+            if (name.startsWith("sys_thive_")) {
+                name = name.substring("sys_thive_".length());
+            }
+            columnNamesInTargetTable.add(name);
+        }
+        if (externalTable.getType() != Table.TableType.ICEBERG) {
+            return externalTable;
+        }
+        return IcebergUtil.applySchemaChange(table, (IcebergTable) externalTable, brokerDesc);
+    }
+
+    private boolean isAutomaticallyCreateTargetTable() {
+        if (targetProperties.containsKey("automatically_create_target_table")) {
+            return Boolean.parseBoolean(targetProperties.get("automatically_create_target_table"));
+        } else {
+            return true;
+        }
+    }
+
+    public static boolean isAutomaticallyUpdateTargetTableSchema(Map<String, String> targetProperties) {
+        if (targetProperties.containsKey("automatically_update_target_table_schema")) {
+            return Boolean.parseBoolean(targetProperties.get("automatically_update_target_table_schema"));
+        } else {
+            return true;
+        }
     }
 }

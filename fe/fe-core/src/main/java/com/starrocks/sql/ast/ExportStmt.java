@@ -301,6 +301,10 @@ public class ExportStmt extends StatementBase {
             throw new SemanticException("Does not support export multiple partitions to external table now.");
         }
         externalTableExportConfig.analyzeProperties(table, partitions.get(0));
+        prepareExternalTableExportProperties(externalTableExportConfig);
+    }
+
+    protected void prepareExternalTableExportProperties(ExternalTableExportConfig externalTableExportConfig) {
         path = externalTableExportConfig.getPath();
         exportTypes = externalTableExportConfig.getExportTypes();
         exportColumnNames = externalTableExportConfig.reorder(exportColumnNames);

@@ -245,7 +245,7 @@ public class ExportExportingTask extends PriorityLeaderTask {
                     exportedFile.substring(0, exportedFile.lastIndexOf(".")) + "_" + fileIndex + format;
 
             String finalExportedFile = exportedFile;
-            futures.add(job.getIoExec().submit(() -> {
+            futures.add(ExportJob.getIoExec().submit(() -> {
                 String failMsg = moveFile(job, exportedTempFile, finalExportedFile);
                 if (failMsg != null) {
                     return new Status(TStatusCode.INTERNAL_ERROR, failMsg);
