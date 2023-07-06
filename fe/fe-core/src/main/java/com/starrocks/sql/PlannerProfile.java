@@ -4,6 +4,7 @@ package com.starrocks.sql;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
+import com.starrocks.common.util.DebugUtil;
 import com.starrocks.common.util.RuntimeProfile;
 import com.starrocks.qe.ConnectContext;
 import org.apache.logging.log4j.LogManager;
@@ -208,7 +209,8 @@ public class PlannerProfile {
     }
 
     private static String print(String name, long time, int step) {
-        return String.join("", Collections.nCopies(step, "    ")) + "-- " + name + " " + time + "ms" + "\n";
+        return String.join("", Collections.nCopies(step, "    ")) + "-- " + name + " "
+                + DebugUtil.getPrettyStringMs(time) + "\n";
     }
 
     public static String printPlannerTimeCost(PlannerProfile profile) {
