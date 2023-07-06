@@ -1663,6 +1663,10 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
         return hdfsBackendSelectorScanRangeShuffle;
     }
 
+    public boolean isEnableHiveMode() {
+        return enableHiveMode;
+    }
+
     public void setHiveMode(boolean enableHiveMode) {
         this.enableHiveMode = enableHiveMode;
     }

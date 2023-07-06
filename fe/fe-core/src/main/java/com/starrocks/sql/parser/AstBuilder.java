@@ -80,6 +80,7 @@ import com.starrocks.common.ErrorReport;
 import com.starrocks.common.NotImplementedException;
 import com.starrocks.common.util.DateUtils;
 import com.starrocks.mysql.MysqlPassword;
+import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.SqlModeHelper;
 import com.starrocks.sql.analyzer.CreateTableAnalyzer;
 import com.starrocks.sql.analyzer.RelationId;
@@ -4550,14 +4551,7 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
         }
 
         if (DATE_FUNCTIONS.contains(functionName)) {
-            if (context.expression().size() == 3) {
-                Expr e1 = (Expr) visit(context.expression(0));
-                Expr e2 = (Expr) visit(context.expression(1));
-                Expr e3 = (Expr) visit(context.expression(2));
-                IntervalLiteral intervalLiteral = new IntervalLiteral(e2, new UnitIdentifier(((SlotRef) e1).getColumnName()));
-                return new TimestampArithmeticExpr(functionName, e3, intervalLiteral.getValue(),
-                    intervalLiteral.getUnitIdentifier().getDescription());
-            } else if (context.expression().size() == 2) {
+            if (context.expression().size() == 2) {
                 Expr e1 = (Expr) visit(context.expression(0));
                 Expr e2 = (Expr) visit(context.expression(1));
                 if (!(e2 instanceof IntervalLiteral)) {
@@ -4566,6 +4560,13 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
                 IntervalLiteral intervalLiteral = (IntervalLiteral) e2;
 
                 return new TimestampArithmeticExpr(functionName, e1, intervalLiteral.getValue(),
+                    intervalLiteral.getUnitIdentifier().getDescription());
+            } else if (context.expression().size() == 3) {
+                Expr e1 = (Expr) visit(context.expression(0));
+                Expr e2 = (Expr) visit(context.expression(1));
+                Expr e3 = (Expr) visit(context.expression(2));
+                IntervalLiteral intervalLiteral = new IntervalLiteral(e2, new UnitIdentifier(((SlotRef) e1).getColumnName()));
+                return new TimestampArithmeticExpr(functionName, e3, intervalLiteral.getValue(),
                     intervalLiteral.getUnitIdentifier().getDescription());
             } else {
                 throw new ParsingException(
@@ -4580,6 +4581,12 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
                         Joiner.on(", ").join(params.stream().map(p -> p.getType().toSql()).collect(toList())));
             }
             return new IsNullPredicate(params.get(0), false);
+        }
+
+        if (functionName.equals(FunctionSet.LENGTH)) {
+            if (ConnectContext.get() != null && ConnectContext.get().getSessionVariable().isEnableHiveMode()) {
+                fnName = FunctionName.createFnName(FunctionSet.CHAR_LENGTH);
+            }
         }
 
         FunctionCallExpr functionCallExpr = new FunctionCallExpr(fnName,
