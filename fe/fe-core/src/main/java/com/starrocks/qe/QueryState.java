@@ -66,7 +66,8 @@ public class QueryState {
     public enum DataSource {
         INTERNAL,
         EXTERNAL,
-        HYBRID
+        AUTO_HYBRID,
+        MANUAL_HYBRID
     }
 
     private MysqlStateType stateType = MysqlStateType.OK;

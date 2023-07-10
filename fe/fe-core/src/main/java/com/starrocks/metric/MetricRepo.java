@@ -86,7 +86,8 @@ public final class MetricRepo {
     public static LongCounterMetric COUNTER_SLOW_QUERY;
     public static LongCounterMetric COUNTER_QUERY_DATA_SOURCE_INTERNAL;
     public static LongCounterMetric COUNTER_QUERY_DATA_SOURCE_EXTERNAL;
-    public static LongCounterMetric COUNTER_QUERY_DATA_SOURCE_HYBRID;
+    public static LongCounterMetric COUNTER_QUERY_DATA_SOURCE_AUTO_HYBRID;
+    public static LongCounterMetric COUNTER_QUERY_DATA_SOURCE_MANUAL_HYBRID;
 
     public static LongCounterMetric COUNTER_QUERY_QUEUE_PENDING;
     public static LongCounterMetric COUNTER_QUERY_QUEUE_TOTAL;
@@ -117,7 +118,8 @@ public final class MetricRepo {
     public static Histogram HISTO_QUERY_LATENCY;
     public static Histogram HISTO_QUERY_LATENCY_INTERNAL;
     public static Histogram HISTO_QUERY_LATENCY_EXTERNAL;
-    public static Histogram HISTO_QUERY_LATENCY_HYBRID;
+    public static Histogram HISTO_QUERY_LATENCY_AUTO_HYBRID;
+    public static Histogram HISTO_QUERY_LATENCY_MANUAL_HYBRID;
 
     public static Histogram HISTO_INSERT_LATENCY;
     public static Histogram HISTO_EDIT_LOG_WRITE_LATENCY;
@@ -376,10 +378,16 @@ public final class MetricRepo {
                         "query counter which source is external");
         COUNTER_QUERY_DATA_SOURCE_EXTERNAL.addLabel(new MetricLabel("type", "external"));
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_QUERY_DATA_SOURCE_EXTERNAL);
-        COUNTER_QUERY_DATA_SOURCE_HYBRID =
-                new LongCounterMetric("query_data_source", MetricUnit.REQUESTS, "query counter which source is hybrid");
-        COUNTER_QUERY_DATA_SOURCE_HYBRID.addLabel(new MetricLabel("type", "hybrid"));
-        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_QUERY_DATA_SOURCE_HYBRID);
+        COUNTER_QUERY_DATA_SOURCE_AUTO_HYBRID =
+                new LongCounterMetric("query_data_source", MetricUnit.REQUESTS,
+                        "auto lakehouse query counter");
+        COUNTER_QUERY_DATA_SOURCE_AUTO_HYBRID.addLabel(new MetricLabel("type", "auto_hybrid"));
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_QUERY_DATA_SOURCE_AUTO_HYBRID);
+        COUNTER_QUERY_DATA_SOURCE_MANUAL_HYBRID =
+                new LongCounterMetric("query_data_source", MetricUnit.REQUESTS,
+                        "use specified lakehouse(union data manually) query counter");
+        COUNTER_QUERY_DATA_SOURCE_MANUAL_HYBRID.addLabel(new MetricLabel("type", "manual_hybrid"));
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_QUERY_DATA_SOURCE_MANUAL_HYBRID);
 
         COUNTER_INSERT_ALL = new LongCounterMetric("insert_total", MetricUnit.REQUESTS, "total insert");
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_INSERT_ALL);
@@ -446,7 +454,10 @@ public final class MetricRepo {
                 METRIC_REGISTER.histogram(MetricRegistry.name("internal", "query", "latency", "ms"));
         HISTO_QUERY_LATENCY_EXTERNAL =
                 METRIC_REGISTER.histogram(MetricRegistry.name("external", "query", "latency", "ms"));
-        HISTO_QUERY_LATENCY_HYBRID = METRIC_REGISTER.histogram(MetricRegistry.name("hybrid", "query", "latency", "ms"));
+        HISTO_QUERY_LATENCY_AUTO_HYBRID =
+                METRIC_REGISTER.histogram(MetricRegistry.name("auto_hybrid", "query", "latency", "ms"));
+        HISTO_QUERY_LATENCY_MANUAL_HYBRID =
+                METRIC_REGISTER.histogram(MetricRegistry.name("manual_hybrid", "query", "latency", "ms"));
         HISTO_INSERT_LATENCY = METRIC_REGISTER.histogram(MetricRegistry.name("insert", "latency", "ms"));
         HISTO_EDIT_LOG_WRITE_LATENCY =
                 METRIC_REGISTER.histogram(MetricRegistry.name("editlog", "write", "latency", "ms"));

@@ -569,7 +569,7 @@ public class ConnectContext {
         }
         if (externalIncluded) {
             if (internalIncluded) {
-                state.setDataSource(QueryState.DataSource.HYBRID);
+                state.setDataSource(QueryState.DataSource.MANUAL_HYBRID);
             } else {
                 state.setDataSource(QueryState.DataSource.EXTERNAL);
             }

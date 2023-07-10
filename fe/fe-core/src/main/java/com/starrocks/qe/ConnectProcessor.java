@@ -75,9 +75,6 @@ import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.Optional;
 
-import static com.starrocks.qe.QueryState.DataSource.EXTERNAL;
-import static com.starrocks.qe.QueryState.DataSource.HYBRID;
-import static com.starrocks.qe.QueryState.DataSource.INTERNAL;
 
 /**
  * Process one mysql connection, receive one pakcet, process, send one packet.
@@ -189,8 +186,11 @@ public class ConnectProcessor {
                 case EXTERNAL:
                     MetricRepo.COUNTER_QUERY_DATA_SOURCE_EXTERNAL.increase(1L);
                     break;
-                case HYBRID:
-                    MetricRepo.COUNTER_QUERY_DATA_SOURCE_HYBRID.increase(1L);
+                case AUTO_HYBRID:
+                    MetricRepo.COUNTER_QUERY_DATA_SOURCE_AUTO_HYBRID.increase(1L);
+                    break;
+                case MANUAL_HYBRID:
+                    MetricRepo.COUNTER_QUERY_DATA_SOURCE_MANUAL_HYBRID.increase(1L);
                     break;
             }
             if (ctx.getState().getStateType() == QueryState.MysqlStateType.ERR) {
@@ -209,8 +209,11 @@ public class ConnectProcessor {
                     case EXTERNAL:
                         MetricRepo.HISTO_QUERY_LATENCY_EXTERNAL.update(elapseMs);
                         break;
-                    case HYBRID:
-                        MetricRepo.HISTO_QUERY_LATENCY_HYBRID.update(elapseMs);
+                    case AUTO_HYBRID:
+                        MetricRepo.HISTO_QUERY_LATENCY_AUTO_HYBRID.update(elapseMs);
+                        break;
+                    case MANUAL_HYBRID:
+                        MetricRepo.HISTO_QUERY_LATENCY_MANUAL_HYBRID.update(elapseMs);
                         break;
                 }
                 ResourceGroupMetricMgr.updateQueryLatency(ctx, elapseMs);
