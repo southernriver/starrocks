@@ -75,6 +75,10 @@ import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.Optional;
 
+import static com.starrocks.qe.QueryState.DataSource.EXTERNAL;
+import static com.starrocks.qe.QueryState.DataSource.HYBRID;
+import static com.starrocks.qe.QueryState.DataSource.INTERNAL;
+
 /**
  * Process one mysql connection, receive one pakcet, process, send one packet.
  */
@@ -177,9 +181,17 @@ public class ConnectProcessor {
         if (ctx.getState().isQuery()) {
             MetricRepo.COUNTER_QUERY_ALL.increase(1L);
             ResourceGroupMetricMgr.increaseQuery(ctx, 1L);
-            if (ctx.getState().isHotColdQuery()) {
-                MetricRepo.COUNTER_HOT_COLD_QUERY.increase(1L);
-                ctx.getAuditEventBuilder().setIsHotColdQuery(true);
+            ctx.getAuditEventBuilder().setDataSource(ctx.getState().getDataSource());
+            switch (ctx.getState().getDataSource()) {
+                case INTERNAL:
+                    MetricRepo.COUNTER_QUERY_DATA_SOURCE_INTERNAL.increase(1L);
+                    break;
+                case EXTERNAL:
+                    MetricRepo.COUNTER_QUERY_DATA_SOURCE_EXTERNAL.increase(1L);
+                    break;
+                case HYBRID:
+                    MetricRepo.COUNTER_QUERY_DATA_SOURCE_HYBRID.increase(1L);
+                    break;
             }
             if (ctx.getState().getStateType() == QueryState.MysqlStateType.ERR) {
                 // err query
@@ -190,6 +202,17 @@ public class ConnectProcessor {
                 // ok query
                 MetricRepo.COUNTER_QUERY_SUCCESS.increase(1L);
                 MetricRepo.HISTO_QUERY_LATENCY.update(elapseMs);
+                switch (ctx.getState().getDataSource()) {
+                    case INTERNAL:
+                        MetricRepo.HISTO_QUERY_LATENCY_INTERNAL.update(elapseMs);
+                        break;
+                    case EXTERNAL:
+                        MetricRepo.HISTO_QUERY_LATENCY_EXTERNAL.update(elapseMs);
+                        break;
+                    case HYBRID:
+                        MetricRepo.HISTO_QUERY_LATENCY_HYBRID.update(elapseMs);
+                        break;
+                }
                 ResourceGroupMetricMgr.updateQueryLatency(ctx, elapseMs);
                 if (elapseMs > Config.qe_slow_log_ms || ctx.getSessionVariable().isEnableSQLDigest()) {
                     MetricRepo.COUNTER_SLOW_QUERY.increase(1L);

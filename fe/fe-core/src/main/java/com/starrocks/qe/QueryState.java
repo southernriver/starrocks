@@ -63,6 +63,12 @@ public class QueryState {
         UNKNOWN
     }
 
+    public enum DataSource {
+        INTERNAL,
+        EXTERNAL,
+        HYBRID
+    }
+
     private MysqlStateType stateType = MysqlStateType.OK;
     private String errorMessage = "";
     private ErrorCode errorCode;
@@ -72,9 +78,9 @@ public class QueryState {
     private RequestType requestType = RequestType.UNKNOWN;
     private long affectedRows = 0;
     private int warningRows = 0;
-    private boolean isHotColdQuery = false;
     // make it public for easy to use
     public int serverStatus = 0;
+    public DataSource dataSource = DataSource.INTERNAL;
 
     public QueryState() {
     }
@@ -152,12 +158,12 @@ public class QueryState {
         return isQuery;
     }
 
-    public void setIsHotColdQuery(boolean isHotColdQuery) {
-        this.isHotColdQuery = isHotColdQuery;
+    public void setDataSource(DataSource dataSource) {
+        this.dataSource = dataSource;
     }
 
-    public boolean isHotColdQuery() {
-        return isHotColdQuery;
+    public DataSource getDataSource() {
+        return dataSource;
     }
 
     public String getInfoMessage() {

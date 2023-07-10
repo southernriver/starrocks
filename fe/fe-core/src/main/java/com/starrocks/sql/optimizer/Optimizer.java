@@ -7,6 +7,7 @@ import com.google.common.collect.Lists;
 import com.starrocks.analysis.JoinOperator;
 import com.starrocks.common.Config;
 import com.starrocks.qe.ConnectContext;
+import com.starrocks.qe.QueryState;
 import com.starrocks.qe.SessionVariable;
 import com.starrocks.sql.Explain;
 import com.starrocks.sql.PlannerProfile;
@@ -141,7 +142,7 @@ public class Optimizer {
         collectAllScanOperators(memo, rootTaskContext);
 
         if (rootTaskContext.isHybridScanIncluded()) {
-            connectContext.getState().setIsHotColdQuery(true);
+            connectContext.getState().setDataSource(QueryState.DataSource.HYBRID);
         }
 
         // Currently, we cache output columns in logic property.

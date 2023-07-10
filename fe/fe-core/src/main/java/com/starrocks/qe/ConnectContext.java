@@ -35,6 +35,7 @@ import com.starrocks.mysql.MysqlSerializer;
 import com.starrocks.mysql.ssl.SSLChannel;
 import com.starrocks.mysql.ssl.SSLChannelImpClassLoader;
 import com.starrocks.plugin.AuditEvent.AuditEventBuilder;
+import com.starrocks.server.CatalogMgr;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.PlannerProfile;
 import com.starrocks.sql.analyzer.SemanticException;
@@ -554,6 +555,27 @@ public class ConnectContext {
 
     public void setCurrentCatalog(String currentCatalog) {
         this.currentCatalog = currentCatalog;
+    }
+
+    public void updateQueryDataSource() {
+        boolean internalIncluded = false;
+        boolean externalIncluded = false;
+        for (String catalog : ((QueryDumpInfo) dumpInfo).getCatalog()) {
+            if (CatalogMgr.isInternalCatalog(catalog)) {
+                internalIncluded = true;
+            } else {
+                externalIncluded = true;
+            }
+        }
+        if (externalIncluded) {
+            if (internalIncluded) {
+                state.setDataSource(QueryState.DataSource.HYBRID);
+            } else {
+                state.setDataSource(QueryState.DataSource.EXTERNAL);
+            }
+        } else {
+            state.setDataSource(QueryState.DataSource.INTERNAL);
+        }
     }
 
     // kill operation with no protect.

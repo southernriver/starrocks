@@ -84,6 +84,9 @@ public final class MetricRepo {
     public static LongCounterMetric COUNTER_QUERY_TIMEOUT;
     public static LongCounterMetric COUNTER_QUERY_SUCCESS;
     public static LongCounterMetric COUNTER_SLOW_QUERY;
+    public static LongCounterMetric COUNTER_QUERY_DATA_SOURCE_INTERNAL;
+    public static LongCounterMetric COUNTER_QUERY_DATA_SOURCE_EXTERNAL;
+    public static LongCounterMetric COUNTER_QUERY_DATA_SOURCE_HYBRID;
 
     public static LongCounterMetric COUNTER_QUERY_QUEUE_PENDING;
     public static LongCounterMetric COUNTER_QUERY_QUEUE_TOTAL;
@@ -112,6 +115,9 @@ public final class MetricRepo {
     public static LongCounterMetric COUNTER_HOT_COLD_QUERY;
 
     public static Histogram HISTO_QUERY_LATENCY;
+    public static Histogram HISTO_QUERY_LATENCY_INTERNAL;
+    public static Histogram HISTO_QUERY_LATENCY_EXTERNAL;
+    public static Histogram HISTO_QUERY_LATENCY_HYBRID;
 
     public static Histogram HISTO_INSERT_LATENCY;
     public static Histogram HISTO_EDIT_LOG_WRITE_LATENCY;
@@ -360,6 +366,20 @@ public final class MetricRepo {
         COUNTER_QUERY_QUEUE_TIMEOUT = new LongCounterMetric("query_queue_timeout", MetricUnit.REQUESTS,
                 "total history query for timeout in queue");
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_QUERY_QUEUE_TIMEOUT);
+        COUNTER_QUERY_DATA_SOURCE_INTERNAL =
+                new LongCounterMetric("query_data_source", MetricUnit.REQUESTS,
+                        "query counter which source is internal");
+        COUNTER_QUERY_DATA_SOURCE_INTERNAL.addLabel(new MetricLabel("type", "internal"));
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_QUERY_DATA_SOURCE_INTERNAL);
+        COUNTER_QUERY_DATA_SOURCE_EXTERNAL =
+                new LongCounterMetric("query_data_source", MetricUnit.REQUESTS,
+                        "query counter which source is external");
+        COUNTER_QUERY_DATA_SOURCE_EXTERNAL.addLabel(new MetricLabel("type", "external"));
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_QUERY_DATA_SOURCE_EXTERNAL);
+        COUNTER_QUERY_DATA_SOURCE_HYBRID =
+                new LongCounterMetric("query_data_source", MetricUnit.REQUESTS, "query counter which source is hybrid");
+        COUNTER_QUERY_DATA_SOURCE_HYBRID.addLabel(new MetricLabel("type", "hybrid"));
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_QUERY_DATA_SOURCE_HYBRID);
 
         COUNTER_INSERT_ALL = new LongCounterMetric("insert_total", MetricUnit.REQUESTS, "total insert");
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_INSERT_ALL);
@@ -422,6 +442,11 @@ public final class MetricRepo {
 
         // 3. histogram
         HISTO_QUERY_LATENCY = METRIC_REGISTER.histogram(MetricRegistry.name("query", "latency", "ms"));
+        HISTO_QUERY_LATENCY_INTERNAL =
+                METRIC_REGISTER.histogram(MetricRegistry.name("internal", "query", "latency", "ms"));
+        HISTO_QUERY_LATENCY_EXTERNAL =
+                METRIC_REGISTER.histogram(MetricRegistry.name("external", "query", "latency", "ms"));
+        HISTO_QUERY_LATENCY_HYBRID = METRIC_REGISTER.histogram(MetricRegistry.name("hybrid", "query", "latency", "ms"));
         HISTO_INSERT_LATENCY = METRIC_REGISTER.histogram(MetricRegistry.name("insert", "latency", "ms"));
         HISTO_EDIT_LOG_WRITE_LATENCY =
                 METRIC_REGISTER.histogram(MetricRegistry.name("editlog", "write", "latency", "ms"));

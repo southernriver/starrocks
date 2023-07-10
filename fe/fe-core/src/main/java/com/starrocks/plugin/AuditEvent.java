@@ -96,8 +96,8 @@ public class AuditEvent {
     public String queryId = "";
     @AuditField(value = "IsQuery")
     public boolean isQuery = false;
-    @AuditField(value = "IsHotColdQuery")
-    public boolean isHotColdQuery = false;
+    @AuditField(value = "DataSource")
+    public String dataSource = "";
     @AuditField(value = "RequestType")
     public String requestType = "";
     @AuditField(value = "feIp")
@@ -228,8 +228,8 @@ public class AuditEvent {
             return this;
         }
 
-        public AuditEventBuilder setIsHotColdQuery(boolean isHotColdQuery) {
-            auditEvent.isHotColdQuery = isHotColdQuery;
+        public AuditEventBuilder setDataSource(QueryState.DataSource dataSource) {
+            auditEvent.dataSource = dataSource.name();
             return this;
         }
 
