@@ -32,6 +32,7 @@ import com.starrocks.catalog.Table;
 import com.starrocks.catalog.TabletInvertedIndex;
 import com.starrocks.common.Config;
 import com.starrocks.common.DdlException;
+import com.starrocks.common.MetaNotFoundException;
 import com.starrocks.common.ThreadPoolManager;
 import com.starrocks.common.UserException;
 import com.starrocks.common.util.KafkaUtil;
@@ -737,6 +738,7 @@ public final class MetricRepo {
         if (collectTableMetrics) {
             collectTableMetrics(visitor, minifyTableMetrics);
         }
+        collectRoutineLoadIngestMetrics(visitor);
 
         // histogram
         SortedMap<String, Histogram> histograms = METRIC_REGISTER.getHistograms();
@@ -749,8 +751,8 @@ public final class MetricRepo {
         if (Config.enable_routine_load_lag_metrics) {
             collectKafkaRoutineLoadProcessMetrics(visitor);
         }
-        collectRoutineLoadRowNumMetrics(visitor);
-        collectRoutineLoadProcessMetrics(visitor);
+        collectRoutineLoadRowNumLagMetrics(visitor);
+        collectRoutineLoadProcessLagMetrics(visitor);
         collectIcebergRoutineLoadProcessMetrics(visitor);
 
         // colddown metrics
@@ -826,15 +828,36 @@ public final class MetricRepo {
         }
     }
 
-    private static void collectRoutineLoadProcessMetrics(MetricVisitor visitor) {
+    private static void collectRoutineLoadProcessLagMetrics(MetricVisitor visitor) {
         for (GaugeMetricImpl<Long> metric : GAUGE_ROUTINE_LOAD_TIME_LAGS) {
             visitor.visit(metric);
         }
     }
 
-    private static void collectRoutineLoadRowNumMetrics(MetricVisitor visitor) {
+    private static void collectRoutineLoadRowNumLagMetrics(MetricVisitor visitor) {
         for (GaugeMetricImpl<Long> metric : GAUGE_ROUTINE_LOAD_ROW_NUM_LAGS) {
             visitor.visit(metric);
+        }
+    }
+
+    private static void collectRoutineLoadIngestMetrics(MetricVisitor visitor) {
+        List<RoutineLoadJob> jobs = GlobalStateMgr.getCurrentState().getRoutineLoadManager()
+                .getRoutineLoadJobByState(
+                        Sets.newHashSet(RoutineLoadJob.JobState.RUNNING, RoutineLoadJob.JobState.PAUSED));
+
+        for (RoutineLoadJob job : jobs) {
+            try {
+                CounterMetric<Long> metric =
+                        new LongCounterMetric("routine_load_aborted_tasks", MetricUnit.NOUNIT,
+                                "routine load aborted tasks");
+                metric.addLabel(new MetricLabel("job_name", job.getName()));
+                metric.addLabel(new MetricLabel("db_name", job.getDbFullName()));
+                metric.addLabel(new MetricLabel("tbl_name", job.getTableName()));
+                metric.addLabel(new MetricLabel("tbl_id", String.valueOf(job.getId())));
+                metric.increase(job.getAbortedTaskNum());
+                visitor.visit(metric);
+            } catch (MetaNotFoundException ignored) {
+            }
         }
     }
 
