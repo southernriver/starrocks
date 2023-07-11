@@ -285,6 +285,14 @@ public:
      */
     DEFINE_VECTORIZED_FN(split_part);
 
+    /**
+    * @param: [array_string, delimiter]
+    * @paramType: [ArrayBinaryColumn, BinaryColumn]
+    * @return: MapColumn map<string,string>
+    */
+
+    DEFINE_VECTORIZED_FN(str_to_map);
+
     // regex method
     static Status regexp_extract_prepare(starrocks_udf::FunctionContext* context,
                                          starrocks_udf::FunctionContext::FunctionStateScope scope);

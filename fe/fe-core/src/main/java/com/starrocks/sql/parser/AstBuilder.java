@@ -4589,6 +4589,32 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
             }
         }
 
+        // add default delimiters and rewrite str_to_map(str, del1, del2) to str_to_map(split(str, del1),del2)
+        if (functionName.equals(FunctionSet.STR_TO_MAP)) {
+            Expr e0;
+            Expr e1;
+            Expr e2;
+            String collectionDelimiter = ",";
+            String mapDelimiter = ":";
+            if (context.expression().size() == 1) {
+                e0 = (Expr) visit(context.expression(0));
+                e1 = new StringLiteral(collectionDelimiter);
+                e2 = new StringLiteral(mapDelimiter);
+            } else if (context.expression().size() == 2) {
+                e0 = (Expr) visit(context.expression(0));
+                e1 = (Expr) visit(context.expression(1));
+                e2 = new StringLiteral(mapDelimiter);
+            } else if (context.expression().size() == 3) {
+                e0 = (Expr) visit(context.expression(0));
+                e1 = (Expr) visit(context.expression(1));
+                e2 = (Expr) visit(context.expression(2));
+            } else {
+                throw new ParsingException("Wrong arguments number for function " + FunctionSet.STR_TO_MAP);
+            }
+            FunctionCallExpr split = new FunctionCallExpr(FunctionSet.SPLIT, ImmutableList.of(e0, e1));
+            return new FunctionCallExpr(functionName, ImmutableList.of(split, e2));
+        }
+
         FunctionCallExpr functionCallExpr = new FunctionCallExpr(fnName,
                 new FunctionParams(false, visit(context.expression(), Expr.class)));
         if (context.over() != null) {

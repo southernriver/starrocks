@@ -81,6 +81,7 @@ set(EXPR_FILES
   vectorized/runtime_filter.cpp
   vectorized/split.cpp
   vectorized/split_part.cpp
+  vectorized/str_to_map.cpp
   vectorized/string_functions.cpp
   vectorized/time_functions.cpp
   vectorized/utility_functions.cpp

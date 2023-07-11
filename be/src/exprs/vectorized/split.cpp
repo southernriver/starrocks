@@ -9,6 +9,7 @@
 #include "column/column_helper.h"
 #include "column/column_viewer.h"
 #include "exprs/vectorized/string_functions.h"
+#include "util/utf8.h"
 
 namespace starrocks::vectorized {
 
@@ -117,11 +118,12 @@ ColumnPtr StringFunctions::split(FunctionContext* context, const starrocks::vect
                 array_offsets->append(offset);
                 Slice haystack = string_viewer.value(row);
 
-                for (int h = 0; h < haystack.size; ++h) {
-                    v.emplace_back(Slice(haystack.data + h, 1));
+                for (int h = 0; h < haystack.size;) {
+                    auto char_size = UTF8_BYTE_LENGTH_TABLE[static_cast<unsigned char>(haystack.data[h])];
+                    v.emplace_back(Slice(haystack.data + h, char_size));
+                    h += char_size;
+                    ++offset;
                 }
-
-                offset += haystack.size;
             }
             array_offsets->append(offset);
 
@@ -174,19 +176,27 @@ ColumnPtr StringFunctions::split(FunctionContext* context, const starrocks::vect
             if (string_viewer.is_null(row) || delimiter_viewer.is_null(row)) {
                 null_array->append(1);
                 continue;
-            } else {
-                null_array->append(0);
             }
+            null_array->append(0);
 
             Slice str = string_viewer.value(row);
             Slice delimiter = delimiter_viewer.value(row);
-            std::vector<std::string> split_string =
-                    strings::Split(StringPiece(str.get_data(), str.get_size()),
-                                   StringPiece(delimiter.get_data(), delimiter.get_size()));
-            for (auto& i : split_string) {
-                array_binary_column->append(Slice(i.c_str()));
+            if (delimiter.size == 0) { // split each character
+                for (auto h = 0; h < str.size;) {
+                    auto char_size = UTF8_BYTE_LENGTH_TABLE[static_cast<unsigned char>(str.data[h])];
+                    array_binary_column->append(Slice(str.data + h, char_size));
+                    h += char_size;
+                    ++offset;
+                }
+            } else {
+                std::vector<std::string> split_string =
+                        strings::Split(StringPiece(str.get_data(), str.get_size()),
+                                       StringPiece(delimiter.get_data(), delimiter.get_size()));
+                for (auto& i : split_string) {
+                    array_binary_column->append(Slice(i.c_str()));
+                }
+                offset += split_string.size();
             }
-            offset += split_string.size();
         }
         array_offsets->append(offset);
         result_array = ArrayColumn::create(NullableColumn::create(array_binary_column, NullColumn::create(offset, 0)),

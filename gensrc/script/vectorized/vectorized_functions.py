@@ -265,12 +265,15 @@ vectorized_functions = [
     [30220, 'locate', 'INT', ['VARCHAR', 'VARCHAR'], 'StringFunctions::locate'],
     [30221, 'locate', 'INT', ['VARCHAR', 'VARCHAR', 'INT'], 'StringFunctions::locate_pos'],
 
-    [30250, 'concat', 'VARCHAR', ['VARCHAR', '...'], 'StringFunctions::concat', 'StringFunctions::concat_prepare', 'StringFunctions::concat_close'],
+    [30250, 'concat', 'VARCHAR', ['VARCHAR', '...'], 'StringFunctions::concat', 'StringFunctions::concat_prepare',
+     'StringFunctions::concat_close'],
 
     [30260, 'concat_ws', 'VARCHAR', ['VARCHAR', 'VARCHAR', '...'], 'StringFunctions::concat_ws'],
     [30270, 'find_in_set', 'INT', ['VARCHAR', 'VARCHAR'], 'StringFunctions::find_in_set'],
     [30310, 'split_part', 'VARCHAR', ['VARCHAR', 'VARCHAR', 'INT'], 'StringFunctions::split_part'],
-    [30311, 'split', 'ARRAY_VARCHAR', ['VARCHAR', 'VARCHAR'], 'StringFunctions::split', 'StringFunctions::split_prepare', 'StringFunctions::split_close'],
+    [30311, 'split', 'ARRAY_VARCHAR', ['VARCHAR', 'VARCHAR'], 'StringFunctions::split',
+     'StringFunctions::split_prepare', 'StringFunctions::split_close'],
+    [30316, 'str_to_map', 'MAP_VARCHAR_VARCHAR', ['ARRAY_VARCHAR', 'VARCHAR'], 'StringFunctions::str_to_map'],
 
     [30320, 'regexp_extract', 'VARCHAR', ['VARCHAR', 'VARCHAR', 'BIGINT'], 'StringFunctions::regexp_extract',
      'StringFunctions::regexp_extract_prepare', 'StringFunctions::regexp_close'],
