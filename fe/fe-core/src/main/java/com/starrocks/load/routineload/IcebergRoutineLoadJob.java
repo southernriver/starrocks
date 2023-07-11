@@ -10,6 +10,7 @@ import com.starrocks.analysis.BrokerDesc;
 import com.starrocks.analysis.Expr;
 import com.starrocks.analysis.RoutineLoadDataSourceProperties;
 import com.starrocks.analysis.TupleDescriptor;
+import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.Table;
@@ -40,6 +41,7 @@ import com.starrocks.planner.StreamLoadScanNode;
 import com.starrocks.qe.OriginStatement;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.ast.CreateRoutineLoadStmt;
+import com.starrocks.sql.ast.ImportColumnDesc;
 import com.starrocks.system.SystemInfoService;
 import com.starrocks.thrift.TExecPlanFragmentParams;
 import com.starrocks.thrift.TUniqueId;
@@ -48,6 +50,7 @@ import com.starrocks.transaction.TransactionStatus;
 import org.apache.iceberg.CombinedScanTask;
 import org.apache.iceberg.expressions.Expression;
 import org.apache.iceberg.expressions.Expressions;
+import org.apache.iceberg.types.Types;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -55,9 +58,11 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicReference;
@@ -453,6 +458,7 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
                 db.getId(), tableId, config, config.getBrokerDesc());
         icebergRoutineLoadJob.setOptional(stmt);
         icebergRoutineLoadJob.checkCustomProperties();
+        icebergRoutineLoadJob.checkSchema(icebergRoutineLoadJob.columnDescs);
 
         return icebergRoutineLoadJob;
     }
@@ -482,6 +488,41 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
 
     private void setCustomIcebergProperties(Map<String, String> icebergProperties) {
         this.customProperties = icebergProperties;
+    }
+
+    private void checkSchema(List<ImportColumnDesc> columnDescs) throws DdlException {
+        Set<String> columnsInIceTbl = new HashSet<>();
+        try {
+            org.apache.iceberg.Table iceTbl = getIceTbl();
+            iceTbl.refresh();
+            for (Types.NestedField field : iceTbl.schema().columns()) {
+                columnsInIceTbl.add(field.name());
+            }
+        } catch (UserException e) {
+            throw new DdlException("failed to get iceberg table", e);
+        }
+        if (columnDescs == null || columnDescs.isEmpty()) {
+            Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
+            db.readLock();
+            try {
+                Table table = db.getTable(tableId);
+                for (Column column : table.getBaseSchema()) {
+                    if (!columnsInIceTbl.contains(column.getName())) {
+                        throw new DdlException(
+                                "import column " + column.getName() + " does not exist in iceberg table");
+                    }
+                }
+            } finally {
+                db.readUnlock();
+            }
+            return;
+        }
+        for (ImportColumnDesc columnDesc : columnDescs) {
+            if (columnDesc.isColumn() && !columnsInIceTbl.contains(columnDesc.getColumnName())) {
+                throw new DdlException(
+                        "import column " + columnDesc.getColumnName() + " does not exist in iceberg table");
+            }
+        }
     }
 
     @Override
@@ -566,6 +607,9 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
                           RoutineLoadDataSourceProperties dataSourceProperties, OriginStatement originStatement,
                           boolean isReplay) throws DdlException {
         if (!isReplay) {
+            if (routineLoadDesc != null && routineLoadDesc.getColumnsInfo() != null) {
+                checkSchema(routineLoadDesc.getColumnsInfo().getColumns());
+            }
             // modification to whereExpr is only allowed when all current splits are finished.
             // otherwise the discover.planTasks() return different result to that before pause,
             // which may cause incorrect progress when resume from recovery if any iceberg routine load job's task
