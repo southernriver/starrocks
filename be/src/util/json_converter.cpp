@@ -184,5 +184,4 @@ StatusOr<JsonValue> convert_from_simdjson(SimdJsonObject value) {
         return fromVPackException(e);
     }
 }
-
 } //namespace starrocks

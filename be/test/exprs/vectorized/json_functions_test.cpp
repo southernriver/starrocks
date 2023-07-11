@@ -7,6 +7,8 @@
 #include <gtest/gtest.h>
 #include <velocypack/vpack.h>
 
+#include <boost/algorithm/string/join.hpp>
+#include <chrono>
 #include <string>
 
 #include "butil/time.h"
@@ -23,7 +25,6 @@
 #include "util/json.h"
 
 namespace starrocks::vectorized {
-
 class JsonFunctionsTest : public ::testing::Test {
 public:
     void SetUp() override {
@@ -53,6 +54,30 @@ public:
 
         simdjson::ondemand::value val;
         RETURN_IF_ERROR(JsonFunctions::extract_from_object(obj, path, &val));
+        std::string_view sv = simdjson::to_json_string(val);
+
+        output->assign(sv.data(), sv.size());
+        return Status::OK();
+    }
+
+    static Status test_extract_from_object_for_performance(std::string input, const std::string& jsonpath,
+                                                           std::string* output) {
+        // reverse for padding.
+        simdjson::padded_string pdinput = simdjson::padded_string(input);
+
+        simdjson::ondemand::parser parser;
+        simdjson::ondemand::document doc;
+        EXPECT_EQ(simdjson::error_code::SUCCESS, parser.iterate(pdinput).get(doc));
+
+        simdjson::ondemand::object obj;
+
+        EXPECT_EQ(simdjson::error_code::SUCCESS, doc.get_object().get(obj));
+
+        std::vector<SimpleJsonPath> path;
+        JsonFunctions::parse_json_paths(jsonpath, &path);
+
+        simdjson::ondemand::array val;
+        RETURN_IF_ERROR(JsonFunctions::extract_array_from_object(obj, path, &val));
         std::string_view sv = simdjson::to_json_string(val);
 
         output->assign(sv.data(), sv.size());
@@ -316,6 +341,177 @@ TEST_F(JsonFunctionsTest, json_float_double) {
     auto json_str = json.to_string();
     ASSERT_TRUE(json_str.ok());
     ASSERT_EQ("1.2", json_str.value());
+}
+
+class JsonQueryTestPerformanceFixture
+        : public ::testing::TestWithParam<std::tuple<std::string, std::string, std::string>> {};
+
+TEST_F(JsonQueryTestPerformanceFixture, json_query_p1) {
+    std::unique_ptr<FunctionContext> ctx(FunctionContext::create_test_context());
+
+    vector<std::string> param_jsons;
+    param_jsons.emplace_back(
+            R"({"debug_info": {"decision_info": [{"module_name": "mmspamnewmediacalc", "node_path": [0, 94, 42, 40, 44], "path": [{}], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "rule_version": 31}], "high_light": {}}, "errmsg": "", "evidence": "{}", "module_name": "mmspamnewmediacalc", "node_id": 44, "path": [0, 94, 42, 40, 44], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "status": 2, "version": 31, "warning_code": 0})");
+    param_jsons.emplace_back(
+            R"({"debug_info": {"decision_info": [{"module_name": "mmspamnewmediacalc", "node_path": [0, 94, 42, 44, 50, 54, 58, 60, 62, 52], "path": [{}], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "rule_version": 31}], "high_light": {}}, "errmsg": "", "evidence": "{}", "module_name": "mmspamnewmediacalc", "node_id": 52, "path": [0, 94, 42, 44, 50, 54, 58, 60, 62, 52], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "status": 2, "version": 31, "warning_code": 0})");
+    param_jsons.emplace_back(
+            R"({"debug_info": {"decision_info": [{"module_name": "mmspamnewmediacalc", "node_path": [0, 94, 42, 40, 44], "path": [{}], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "rule_version": 31}], "high_light": {}}, "errmsg": "", "evidence": "{}", "module_name": "mmspamnewmediacalc", "node_id": 44, "path": [0, 94, 42, 40, 44], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "status": 2, "version": 31, "warning_code": 0})");
+    param_jsons.emplace_back(
+            R"({"debug_info": {"decision_info": [{"module_name": "mmspamnewmediacalc", "node_path": [0, 94, 42, 44, 50, 52, 56], "path": [{}], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "rule_version": 31}], "high_light": {}}, "errmsg": "", "evidence": "{}", "module_name": "mmspamnewmediacalc", "node_id": 56, "path": [0, 94, 42, 44, 50, 52, 56], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "status": 2, "version": 31, "warning_code": 0})");
+    param_jsons.emplace_back(
+            R"({"debug_info": {"decision_info": [{"module_name": "mmspamnewmediacalc", "node_path": [0, 94, 42, 40, 44], "path": [{}], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "rule_version": 31}], "high_light": {}}, "errmsg": "", "evidence": "{}", "module_name": "mmspamnewmediacalc", "node_id": 44, "path": [0, 94, 42, 40, 44], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "status": 2, "version": 31, "warning_code": 0})");
+    param_jsons.emplace_back(
+            R"({"debug_info": {"decision_info": [{"module_name": "mmspamnewmediacalc", "node_path": [0, 94, 42, 44, 50, 52, 56, 64, 70], "path": [{}], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "rule_version": 31}], "high_light": {}}, "errmsg": "", "evidence": "{}", "module_name": "mmspamnewmediacalc", "node_id": 70, "path": [0, 94, 42, 44, 50, 52, 56, 64, 70], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "status": 2, "version": 31, "warning_code": 0})");
+    param_jsons.emplace_back(
+            R"({"debug_info": {"decision_info": [{"module_name": "mmspamnewmediacalc", "node_path": [0, 94, 42, 44, 50, 52, 56, 64, 70], "path": [{}], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "rule_version": 31}], "high_light": {}}, "errmsg": "", "evidence": "{}", "module_name": "mmspamnewmediacalc", "node_id": 70, "path": [0, 94, 42, 44, 50, 52, 56, 64, 70], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "status": 2, "version": 31, "warning_code": 0})");
+    param_jsons.emplace_back(
+            R"({"debug_info": {"decision_info": [{"module_name": "mmspamnewmediacalc", "node_path": [0, 94, 42, 44, 50, 52, 56, 64, 70, 72, 74], "path": [{}], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "rule_version": 31}], "high_light": {}}, "errmsg": "", "evidence": "{}", "module_name": "mmspamnewmediacalc", "node_id": 74, "path": [0, 94, 42, 44, 50, 52, 56, 64, 70, 72, 74], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "status": 2, "version": 31, "warning_code": 0})");
+    param_jsons.emplace_back(
+            R"({"debug_info": {"decision_info": [{"module_name": "mmspamnewmediacalc", "node_path": [0, 94, 42, 44, 50, 54, 52], "path": [{}], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "rule_version": 31}], "high_light": {}}, "errmsg": "", "evidence": "{}", "module_name": "mmspamnewmediacalc", "node_id": 52, "path": [0, 94, 42, 44, 50, 54, 52], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "status": 2, "version": 31, "warning_code": 0})");
+    param_jsons.emplace_back(
+            R"({"debug_info": {"decision_info": [{"module_name": "mmspamnewmediacalc", "node_path": [0, 94, 42, 44, 50, 52, 56, 64, 70, 72, 74], "path": [{}], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "rule_version": 31}], "high_light": {}}, "errmsg": "", "evidence": "{}", "module_name": "mmspamnewmediacalc", "node_id": 74, "path": [0, 94, 42, 44, 50, 52, 56, 64, 70, 72, 74], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "status": 2, "version": 31, "warning_code": 0})");
+
+    std::string param_path = "$.debug_info.decision_info[0].node_path[*]";
+    std::string param_result;
+    using namespace std::chrono;
+    double total = 0;
+
+    for (int i = 0; i < 10; i++) {
+        auto ints = JsonColumn::create();
+        ColumnBuilder<TYPE_VARCHAR> builder(1);
+
+        Columns columns{ints, builder.build(true)};
+        ctx.get()->impl()->set_constant_columns(columns);
+
+        builder.append(param_path);
+
+        time_point<system_clock> start = system_clock::now();
+        for (int j = 0; j < 10; j++) {
+            for (auto pos = param_jsons.begin(); pos < param_jsons.end(); pos++) {
+                std::string param_json = *pos;
+                auto json = JsonValue::parse_json_or_string(param_json);
+                if (json.ok()) {
+                    ints->append(&(json.value()));
+                }
+            }
+        }
+
+        JsonFunctions::native_json_path_prepare(ctx.get(), FunctionContext::FunctionStateScope::FRAGMENT_LOCAL);
+
+        ColumnPtr result = JsonFunctions::json_query(ctx.get(), columns);
+        time_point<system_clock> end = system_clock::now();
+        total += ((end - start).count());
+    }
+
+    for (int i = 0; i < 100; i++) {
+        for (auto pos = param_jsons.begin(); pos < param_jsons.end(); pos++) {
+            auto ints = JsonColumn::create();
+            ColumnBuilder<TYPE_VARCHAR> builder(1);
+            std::string param_json = *pos;
+            JsonValue json;
+
+            Columns columns{ints, builder.build(true)};
+
+            ctx.get()->impl()->set_constant_columns(columns);
+            JsonValue::parse(param_json, &json);
+            ints->append(&json);
+            if (param_path == "NULL") {
+                builder.append_null();
+            } else {
+                builder.append(param_path);
+            }
+
+            time_point<system_clock> start = system_clock::now();
+            JsonFunctions::native_json_path_prepare(ctx.get(), FunctionContext::FunctionStateScope::FRAGMENT_LOCAL);
+
+            ColumnPtr result = JsonFunctions::json_query(ctx.get(), columns);
+            time_point<system_clock> end = system_clock::now();
+            total += ((end - start).count());
+        }
+    }
+
+    ASSERT_TRUE(JsonFunctions::native_json_path_close(
+                        ctx.get(), FunctionContext::FunctionContext::FunctionStateScope::FRAGMENT_LOCAL)
+                        .ok());
+
+    std::cout << "time " << (int)total << std::endl;
+}
+
+TEST_F(JsonQueryTestPerformanceFixture, json_query_p2) {
+    std::unique_ptr<FunctionContext> ctx(FunctionContext::create_test_context());
+
+    vector<std::string> param_jsons;
+    param_jsons.emplace_back(
+            R"({"debug_info": {"decision_info": [{"module_name": "mmspamnewmediacalc", "node_path": [0, 94, 42, 40, 44], "path": [{}], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "rule_version": 31}], "high_light": {}}, "errmsg": "", "evidence": "{}", "module_name": "mmspamnewmediacalc", "node_id": 44, "path": [0, 94, 42, 40, 44], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "status": 2, "version": 31, "warning_code": 0})");
+    param_jsons.emplace_back(
+            R"({"debug_info": {"decision_info": [{"module_name": "mmspamnewmediacalc", "node_path": [0, 94, 42, 44, 50, 54, 58, 60, 62, 52], "path": [{}], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "rule_version": 31}], "high_light": {}}, "errmsg": "", "evidence": "{}", "module_name": "mmspamnewmediacalc", "node_id": 52, "path": [0, 94, 42, 44, 50, 54, 58, 60, 62, 52], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "status": 2, "version": 31, "warning_code": 0})");
+    param_jsons.emplace_back(
+            R"({"debug_info": {"decision_info": [{"module_name": "mmspamnewmediacalc", "node_path": [0, 94, 42, 40, 44], "path": [{}], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "rule_version": 31}], "high_light": {}}, "errmsg": "", "evidence": "{}", "module_name": "mmspamnewmediacalc", "node_id": 44, "path": [0, 94, 42, 40, 44], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "status": 2, "version": 31, "warning_code": 0})");
+    param_jsons.emplace_back(
+            R"({"debug_info"{"decision_info": [{"module_name": "mmspamnewmediacalc", "node_path": [0, 94, 42, 44, 50, 52, 56], "path": [{}], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "rule_version": 31}], "high_light": {}}, "errmsg": "", "evidence": "{}", "module_name": "mmspamnewmediacalc", "node_id": 56, "path": [0, 94, 42, 44, 50, 52, 56], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "status": 2, "version": 31, "warning_code": 0})");
+    param_jsons.emplace_back(
+            R"({"debug_info": {"decision_info": [{"module_name": "mmspamnewmediacalc", "node_path": [0, 94, 42, 40, 44], "path": [{}], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "rule_version": 31}], "high_light": {}}, "errmsg": "", "evidence": "{}", "module_name": "mmspamnewmediacalc", "node_id": 44, "path": [0, 94, 42, 40, 44], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "status": 2, "version": 31, "warning_code": 0})");
+    param_jsons.emplace_back(
+            R"({"debug_info": {"decision_info": [{"module_name": "mmspamnewmediacalc", "node_path": [0, 94, 42, 44, 50, 52, 56, 64, 70], "path": [{}], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "rule_version": 31}], "high_light": {}}, "errmsg": "", "evidence": "{}", "module_name": "mmspamnewmediacalc", "node_id": 70, "path": [0, 94, 42, 44, 50, 52, 56, 64, 70], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "status": 2, "version": 31, "warning_code": 0})");
+    param_jsons.emplace_back(
+            R"({"debug_info": {"decision_info": [{"module_name": "mmspamnewmediacalc", "node_path": [0, 94, 42, 44, 50, 52, 56, 64, 70], "path": [{}], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "rule_version": 31}], "high_light": {}}, "errmsg": "", "evidence": "{}", "module_name": "mmspamnewmediacalc", "node_id": 70, "path": [0, 94, 42, 44, 50, 52, 56, 64, 70], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "status": 2, "version": 31, "warning_code": 0})");
+    param_jsons.emplace_back(
+            R"({"debug_info": {"decision_info": [{"module_name": "mmspamnewmediacalc", "node_path": [0, 94, 42, 44, 50, 52, 56, 64, 70, 72, 74], "path": [{}], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "rule_version": 31}], "high_light": {}}, "errmsg": "", "evidence": "{}", "module_name": "mmspamnewmediacalc", "node_id": 74, "path": [0, 94, 42, 44, 50, 52, 56, 64, 70, 72, 74], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "status": 2, "version": 31, "warning_code": 0})");
+    param_jsons.emplace_back(
+            R"({"debug_info": {"decision_info": [{"module_name": "mmspamnewmediacalc", "node_path": [0, 94, 42, 44, 50, 54, 52], "path": [{}], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "rule_version": 31}], "high_light": {}}, "errmsg": "", "evidence": "{}", "module_name": "mmspamnewmediacalc", "node_id": 52, "path": [0, 94, 42, 44, 50, 54, 52], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "status": 2, "version": 31, "warning_code": 0})");
+    param_jsons.emplace_back(
+            R"({"debug_info": {"decision_info": [{"module_name": "mmspamnewmediacalc", "node_path": [0, 94, 42, 44, 50, 52, 56, 64, 70, 72, 74], "path": [{}], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "rule_version": 31}], "high_light": {}}, "errmsg": "", "evidence": "{}", "module_name": "mmspamnewmediacalc", "node_id": 74, "path": [0, 94, 42, 44, 50, 52, 56, 64, 70, 72, 74], "rule_id": 291490226, "rule_name": "newmedia_rumor_recognition", "status": 2, "version": 31, "warning_code": 0})");
+
+    std::string param_path = "$.debug_info.decision_info[0].node_path[*]";
+    std::string param_result;
+    int64 total = 0;
+    using namespace std::chrono;
+    for (int i = 0; i < 10; i++) {
+        std::vector<std::string> input_vector;
+        for (int j = 0; j < 10; j++) {
+            for (auto pos = param_jsons.begin(); pos < param_jsons.end(); pos++) {
+                input_vector.emplace_back(*pos);
+            }
+        }
+
+        auto varchar_column = BinaryColumn::create();
+        ColumnBuilder<TYPE_VARCHAR> builder(1);
+
+        Columns columns{varchar_column, builder.build(true)};
+        ctx.get()->impl()->set_constant_columns(columns);
+
+        builder.append(param_path);
+
+        for (int j = 0; j < 10; j++) {
+            for (auto pos = param_jsons.begin(); pos < param_jsons.end(); pos++) {
+                std::string param_json = *pos;
+                varchar_column->append(Slice(param_json));
+            }
+        }
+
+        time_point<system_clock> start = system_clock::now();
+
+        vector<std::string> output;
+        int64 copy_duration = 0, parse_duration = 0, extract_duration = 0;
+        JsonFunctions::fast_json_path_prepare(ctx.get(), starrocks_udf::FunctionContext::FRAGMENT_LOCAL);
+
+        auto result_column = JsonFunctions::fast_json_query(ctx.get(), columns);
+
+        time_point<system_clock> end = system_clock::now();
+        total += (end - start).count();
+
+        std::cout << "total now: " << total << " copy: " << copy_duration << " parse: " << parse_duration
+                  << " extract: " << extract_duration << std::endl;
+        JsonFunctions::fast_json_path_close(ctx.get(), starrocks_udf::FunctionContext::FRAGMENT_LOCAL);
+
+        for (int s = 0; s < result_column->size(); s++) {
+            std::cout << "result column: "
+                      << (result_column->is_null(s) ? "null" : result_column->get(s).get_json()->to_string_uncheck())
+                      << std::endl;
+        }
+    }
+
+    std::cout << "time " << total << std::endl;
 }
 
 class JsonQueryTestFixture : public ::testing::TestWithParam<std::tuple<std::string, std::string, std::string>> {};
@@ -711,6 +907,9 @@ TEST_F(JsonFunctionsTest, extract_from_object_test) {
 
     EXPECT_STATUS(Status::DataQualityError(""),
                   test_extract_from_object(R"({"data1 " : 1, "data2":})", "$.data", &output));
+
+    EXPECT_OK(test_extract_from_object(R"({"data": {"key": [1,2,3,4,5,6]}})", "$.data.key[*]", &output));
+    EXPECT_STREQ(output.data(), "[1, 2]");
 }
 
 class JsonLengthTestFixture : public ::testing::TestWithParam<std::tuple<std::string, std::string, int>> {};
@@ -956,4 +1155,4 @@ INSTANTIATE_TEST_SUITE_P(GetJsonXXXTest, GetJsonXXXTestFixture,
                                  // clang-format: on
                                  ));
 
-} // namespace starrocks
+} // namespace starrocks::vectorized

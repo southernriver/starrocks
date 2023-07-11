@@ -26,6 +26,10 @@ protected:
     size_t _len = 0;
 };
 
+struct SimpleJsonParserOption {
+    std::unique_ptr<simdjson::fallback::ondemand::parser> native_parser;
+    std::unique_ptr<vector<SimpleJsonPath>> json_paths;
+};
 // JsonDocumentStreamParser parse json in document stream (ndjson).
 // eg:
 // input: {"key":1} {"key":2}

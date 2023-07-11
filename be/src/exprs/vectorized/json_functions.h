@@ -140,6 +140,8 @@ public:
 
     DEFINE_VECTORIZED_FN(json_query);
 
+    DEFINE_VECTORIZED_FN(fast_json_query);
+
     /**
      * @param: [json_object, json_path]
      * @paramType: [JsonColumn, BinaryColumn]
@@ -196,6 +198,12 @@ public:
                                            starrocks_udf::FunctionContext::FunctionStateScope scope);
     static Status native_json_path_close(starrocks_udf::FunctionContext* context,
                                          starrocks_udf::FunctionContext::FunctionStateScope scope);
+
+    static Status fast_json_path_prepare(starrocks_udf::FunctionContext* context,
+                                         starrocks_udf::FunctionContext::FunctionStateScope scope);
+    static Status fast_json_path_close(starrocks_udf::FunctionContext* context,
+                                       starrocks_udf::FunctionContext::FunctionStateScope scope);
+
     /**
      * Return json built from struct/map
      */
@@ -206,7 +214,10 @@ public:
     static Status extract_from_object(simdjson::ondemand::object& obj, const std::vector<SimpleJsonPath>& jsonpath,
                                       simdjson::ondemand::value* value) noexcept;
 
-    static void parse_json_paths(const std::string& path_strings, std::vector<SimpleJsonPath>* parsed_paths);
+    static Status extract_array_from_object(simdjson::ondemand::object& obj, const std::vector<SimpleJsonPath>& jsonpath,
+                                                    simdjson::ondemand::array* array) noexcept;
+
+    static Status parse_json_paths(const std::string& path_strings, std::vector<SimpleJsonPath>* parsed_paths);
 
     template <typename ValueType>
     static std::string_view to_json_string(ValueType&& val, size_t limit) {

@@ -77,5 +77,17 @@ public:
         }                                    \
     } while (false)
 
+#define HANDLE_SIMDJSON_ERROR(err, msg)                                                                            \
+    do {                                                                                                           \
+        const simdjson::error_code& _err = err;                                                                    \
+        const std::string& _msg = msg;                                                                             \
+        if (UNLIKELY(_err)) {                                                                                      \
+            if (_err == simdjson::NO_SUCH_FIELD || _err == simdjson::INDEX_OUT_OF_BOUNDS) {                        \
+                return Status::NotFound(fmt::format("err: {}, msg: {}", simdjson::error_message(_err), _msg));     \
+            }                                                                                                      \
+            return Status::DataQualityError(fmt::format("err: {}, msg: {}", simdjson::error_message(_err), _msg)); \
+        }                                                                                                          \
+    } while (false);
+
 } // namespace vectorized
 } // namespace starrocks

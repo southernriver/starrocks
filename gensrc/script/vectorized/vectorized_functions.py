@@ -566,6 +566,8 @@ vectorized_functions = [
       "JsonFunctions::native_json_path_prepare", "JsonFunctions::native_json_path_close", False],
     [110100, "to_json", "JSON", ["ANY_MAP"], "JsonFunctions::to_json", False],
     [110101, "to_json", "JSON", ["ANY_STRUCT"], "JsonFunctions::to_json", False],
+    [110102, "fast_json_query", "JSON", ["VARCHAR", "VARCHAR"], "JsonFunctions::fast_json_query",
+     "JsonFunctions::fast_json_path_prepare", "JsonFunctions::fast_json_path_close", False],
 
     # aes and base64 function
     [120100, "aes_encrypt", "VARCHAR", ["VARCHAR", "VARCHAR"], "EncryptionFunctions::aes_encrypt", False],
