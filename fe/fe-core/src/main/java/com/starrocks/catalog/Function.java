@@ -698,7 +698,7 @@ public class Function implements Writable {
         if (hasChecksum) {
             checksum = Text.readString(input);
         }
-        if (GlobalStateMgr.getCurrentStateJournalVersion() >= FeMetaVersion.VERSION_95) {
+        if (GlobalStateMgr.getCurrentStateJournalVersion() >= FeMetaVersion.VERSION_94) {
             isLoadAllClass = input.readBoolean();
         }
     }
