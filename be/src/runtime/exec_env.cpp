@@ -76,6 +76,23 @@
 
 namespace starrocks {
 
+// Calculate the total memory limit of all query tasks on this BE
+static int64_t calc_max_query_memory(int64_t process_mem_limit) {
+    if (process_mem_limit == -1) {
+        // no limit
+        return -1;
+    }
+    int32_t max_query_memory_percent = config::query_process_max_memory_limit_percent;
+    if (max_query_memory_percent <= 0) {
+        max_query_memory_percent = 90;
+    }
+    int64_t max_query_memory_bytes = process_mem_limit * max_query_memory_percent / 100;
+    if (config::query_process_max_memory_limit_bytes <= 0) {
+        return max_query_memory_bytes;
+    }
+    return std::min<int64_t>(max_query_memory_bytes, config::query_process_max_memory_limit_bytes);
+}
+
 // Calculate the total memory limit of all load tasks on this BE
 static int64_t calc_max_load_memory(int64_t process_mem_limit) {
     if (process_mem_limit == -1) {
@@ -356,8 +373,10 @@ Status ExecEnv::init_mem_tracker() {
     }
 
     _process_mem_tracker = regist_tracker(MemTracker::PROCESS, bytes_limit, "process");
+
+    int64_t query_mem_limit = calc_max_query_memory(_process_mem_tracker->limit());
     _query_pool_mem_tracker =
-            regist_tracker(MemTracker::QUERY_POOL, bytes_limit * 0.9, "query_pool", this->process_mem_tracker());
+            regist_tracker(MemTracker::QUERY_POOL, query_mem_limit, "query_pool", this->process_mem_tracker());
 
     int64_t load_mem_limit = calc_max_load_memory(_process_mem_tracker->limit());
     _load_mem_tracker = regist_tracker(MemTracker::LOAD, load_mem_limit, "load", process_mem_tracker());
