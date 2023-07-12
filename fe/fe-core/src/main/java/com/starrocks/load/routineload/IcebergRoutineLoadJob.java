@@ -12,7 +12,10 @@ import com.starrocks.analysis.RoutineLoadDataSourceProperties;
 import com.starrocks.analysis.TupleDescriptor;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
+import com.starrocks.catalog.KeysType;
 import com.starrocks.catalog.OlapTable;
+import com.starrocks.catalog.Partition;
+import com.starrocks.catalog.RandomDistributionInfo;
 import com.starrocks.catalog.Table;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Config;
@@ -29,6 +32,7 @@ import com.starrocks.common.util.LogKey;
 import com.starrocks.common.util.SmallFileMgr;
 import com.starrocks.common.util.SmallFileMgr.SmallFile;
 import com.starrocks.connector.exception.StarRocksConnectorException;
+import com.starrocks.connector.iceberg.IcebergApiConverter;
 import com.starrocks.connector.iceberg.IcebergUtil;
 import com.starrocks.load.RoutineLoadDesc;
 import com.starrocks.load.streamload.StreamLoadInfo;
@@ -91,6 +95,7 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
 
     private final Queue<Pair<IcebergSplitMeta, CombinedScanTask>> splitsQueue = new LinkedBlockingQueue<>();
     private IcebergSplitDiscover discover;
+    private Expr icebergWhereExpr;
 
     public IcebergRoutineLoadJob() {
         // for serialization, id is dummy
@@ -107,6 +112,7 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
         this.icebergDatabase = config.getIcebergDatabase();
         this.icebergTable = config.getIcebergTable();
         this.icebergConsumePosition = config.getIcebergConsumePosition();
+        this.icebergWhereExpr = config.getIcebergWhereExpr();
         this.brokerDesc = brokerDesc;
         this.progress = new IcebergProgress(this);
     }
@@ -164,7 +170,7 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
         }
     }
 
-    private Expression getIcebergPredicates(org.apache.iceberg.Table iceTbl) throws UserException {
+    private Expression getIcebergPredicates(org.apache.iceberg.Table iceTbl, Expr whereExpr) throws UserException {
         Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
         if (db == null) {
             throw new MetaNotFoundException("db " + dbId + " does not exist");
@@ -177,9 +183,17 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
             if (table == null) {
                 throw new MetaNotFoundException("table " + this.tableId + " does not exist");
             }
+            OlapTable icebergPretendToOlapTable =
+                    new OlapTable(1, name + "_dummy", IcebergApiConverter.toFullSchemas(iceTbl), KeysType.DUP_KEYS,
+                            ((OlapTable) table).getPartitionInfo(), new RandomDistributionInfo(3));
+            for (Partition partition : table.getPartitions()) {
+                icebergPretendToOlapTable.addPartition(partition);
+            }
             final AtomicReference<List<Expr>> conjuncts = new AtomicReference<>();
+            StreamLoadInfo streamLoadInfo = StreamLoadInfo.fromRoutineLoadJob(this);
+            streamLoadInfo.setWhereExpr(whereExpr);
             StreamLoadPlanner planner =
-                    new StreamLoadPlanner(db, (OlapTable) table, StreamLoadInfo.fromRoutineLoadJob(this)) {
+                    new StreamLoadPlanner(db, icebergPretendToOlapTable, streamLoadInfo) {
                         @Override
                         protected ScanNode createScanNode(TUniqueId loadId, TupleDescriptor tupleDesc)
                                 throws UserException {
@@ -200,11 +214,11 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
                     };
             planner.plan(loadId);
             List<Expression> icebergPredicates = IcebergScanNode.preProcessConjuncts(iceTbl, conjuncts.get());
-            Expression icebergWhereExpr = Expressions.alwaysTrue();
+            Expression icebergWhereExpression = Expressions.alwaysTrue();
             if (!icebergPredicates.isEmpty()) {
-                icebergWhereExpr = icebergPredicates.stream().reduce(Expressions.alwaysTrue(), Expressions::and);
+                icebergWhereExpression = icebergPredicates.stream().reduce(Expressions.alwaysTrue(), Expressions::and);
             }
-            return icebergWhereExpr;
+            return icebergWhereExpression;
         } catch (Exception e) {
             LOG.warn("job " + name + " failed to parse whereExpr to iceberg predicate.", e);
             return null;
@@ -219,9 +233,12 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
         IcebergProgress icebergProgress = (IcebergProgress) progress;
         Long readIcebergSnapshotsAfterTimestamp =
                 IcebergCreateRoutineLoadStmtConfig.getReadIcebergSnapshotsAfterTimestamp(customProperties);
-        Expression icebergWhereExpr = null;
-        if (whereExpr != null) {
-            icebergWhereExpr = getIcebergPredicates(iceTbl);
+        Expression icebergWherePredicates = null;
+        if (icebergWhereExpr != null || whereExpr != null) {
+            icebergWherePredicates =
+                    getIcebergPredicates(iceTbl, icebergWhereExpr != null ? icebergWhereExpr : whereExpr);
+            String icebergPredicatesSql = icebergWhereExpr != null ? icebergWhereExpr.toSql() : whereExpr.toSql();
+            jobProperties.put("icebergWherePredicates", icebergWherePredicates != null ? icebergPredicatesSql : "");
         }
         if (discover == null) {
             discover = new IcebergSplitDiscover(name, iceTbl, icebergProgress, icebergConsumePosition,
@@ -229,7 +246,7 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
         }
         Long icebergPlanSplitSize =
                 IcebergCreateRoutineLoadStmtConfig.getIcebergPlanSplitSize(customProperties);
-        discover.setWhereExpr(icebergWhereExpr);
+        discover.setWhereExpr(icebergWherePredicates);
         discover.setCurrentConcurrentTaskNum(currentConcurrentTaskNum);
         discover.setSplitSize(icebergPlanSplitSize != null ? icebergPlanSplitSize : DEFAULT_SPLIT_SIZE);
         List<RoutineLoadTaskInfo> result = new ArrayList<>();
@@ -459,8 +476,27 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
         icebergRoutineLoadJob.setOptional(stmt);
         icebergRoutineLoadJob.checkCustomProperties();
         icebergRoutineLoadJob.checkSchema(icebergRoutineLoadJob.columnDescs);
+        icebergRoutineLoadJob.checkIcebergWhereExpr();
 
         return icebergRoutineLoadJob;
+    }
+
+    private void checkIcebergWhereExpr() throws DdlException {
+        if (whereExpr == null && icebergWhereExpr == null) {
+            return;
+        }
+        try {
+            Expression expression =
+                    getIcebergPredicates(iceTbl, icebergWhereExpr != null ? icebergWhereExpr : whereExpr);
+            // ignore error when parsing whereExpr to icebergPredicates
+            // do not ignore error when parsing icebergWhereExpr to icebergPredicates
+            if (expression == null && icebergWhereExpr != null) {
+                String msg = "job " + name + " failed to parse icebergWhereExpr to iceberg predicate.";
+                throw new DdlException(msg);
+            }
+        } catch (UserException e) {
+            throw new DdlException(e.getMessage(), e);
+        }
     }
 
     private void checkCustomProperties() throws DdlException {
@@ -535,6 +571,7 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
         dataSourceProperties.put("icebergDatabase", icebergDatabase);
         dataSourceProperties.put("icebergTable", icebergTable);
         dataSourceProperties.put("icebergConsumePosition", icebergConsumePosition);
+        dataSourceProperties.put("icebergWhereExpr", icebergWhereExpr != null ? icebergWhereExpr.toSql() : "");
         if (brokerDesc != null) {
             dataSourceProperties.put("brokerDesc", brokerDesc.toString());
         }
@@ -600,6 +637,8 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
                 this.customProperties.put(propertyKey.substring(propertyKey.indexOf(".") + 1), propertyValue);
             }
         }
+        icebergWhereExpr =
+                IcebergCreateRoutineLoadStmtConfig.getIcebergWhereExprFromCustomIcebergProperties(customProperties);
     }
 
     @Override
@@ -625,6 +664,9 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
             }
         }
         super.modifyJob(routineLoadDesc, jobProperties, dataSourceProperties, originStatement, isReplay);
+        if (!isReplay) {
+            checkIcebergWhereExpr();
+        }
     }
 
     @Override

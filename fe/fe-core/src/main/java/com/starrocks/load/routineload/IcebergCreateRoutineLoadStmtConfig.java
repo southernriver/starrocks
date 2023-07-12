@@ -6,8 +6,11 @@ import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.starrocks.analysis.BrokerDesc;
+import com.starrocks.analysis.Expr;
 import com.starrocks.common.AnalysisException;
+import com.starrocks.qe.SqlModeHelper;
 import com.starrocks.sql.ast.CreateRoutineLoadStmt;
+import com.starrocks.sql.parser.SqlParser;
 
 import java.util.Map;
 import java.util.Optional;
@@ -24,6 +27,7 @@ public class IcebergCreateRoutineLoadStmtConfig {
     private static final String ICEBERG_TABLE = "iceberg_table";
     // optional
     private static final String ICEBERG_CONSUME_POSITION = "iceberg_consume_position";
+    public static final String ICEBERG_WHERE_EXPR = "iceberg_where_expr";
     private static final String READ_ICEBERG_SNAPSHOTS_AFTER_TIMESTAMP = "read_iceberg_snapshots_after_timestamp";
     private static final String ICEBERG_PLAN_SPLIT_SIZE = "plan_split_size";
 
@@ -38,6 +42,7 @@ public class IcebergCreateRoutineLoadStmtConfig {
             .add(ICEBERG_DATABASE)
             .add(ICEBERG_TABLE)
             .add(ICEBERG_CONSUME_POSITION)
+            .add(ICEBERG_WHERE_EXPR)
             .build();
 
     // iceberg related properties
@@ -48,6 +53,7 @@ public class IcebergCreateRoutineLoadStmtConfig {
     private String icebergDatabase;
     private String icebergTable = null;
     private String icebergConsumePosition = null;
+    private Expr icebergWhereExpr = null;
     private final Map<String, String> dataSourceProperties;
     // custom iceberg property map<key, value>
     private Map<String, String> customIcebergProperties = Maps.newHashMap();
@@ -106,6 +112,10 @@ public class IcebergCreateRoutineLoadStmtConfig {
         return brokerDesc;
     }
 
+    public Expr getIcebergWhereExpr() {
+        return icebergWhereExpr;
+    }
+
     public void checkIcebergProperties() throws AnalysisException {
         Optional<String> optional = dataSourceProperties.keySet().stream()
                 .filter(entity -> !ICEBERG_PROPERTIES_SET.contains(entity))
@@ -139,7 +149,17 @@ public class IcebergCreateRoutineLoadStmtConfig {
         } else {
             icebergConsumePosition = ICEBERG_FROM_LATEST;
         }
+        String whereString = Strings.emptyToNull(dataSourceProperties.get(ICEBERG_WHERE_EXPR));
+        if (whereString != null) {
+            icebergWhereExpr = SqlParser.parseSqlToExpr(whereString, SqlModeHelper.MODE_DEFAULT);
+            customIcebergProperties.put(ICEBERG_WHERE_EXPR, whereString);
+        }
         analyzeIcebergCustomProperties(dataSourceProperties, customIcebergProperties);
+    }
+
+    public static Expr getIcebergWhereExprFromCustomIcebergProperties(Map<String, String> customIcebergProperties) {
+        String whereString = customIcebergProperties.get(ICEBERG_WHERE_EXPR);
+        return whereString != null ? SqlParser.parseSqlToExpr(whereString, SqlModeHelper.MODE_DEFAULT) : null;
     }
 
     private String getDataSourceProperty(String key) throws AnalysisException {

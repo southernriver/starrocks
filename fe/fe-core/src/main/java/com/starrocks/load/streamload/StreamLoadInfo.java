@@ -106,6 +106,10 @@ public class StreamLoadInfo {
         return whereExpr;
     }
 
+    public void setWhereExpr(Expr whereExpr) {
+        this.whereExpr = whereExpr;
+    }
+
     public String getMergeConditionStr() {
         return mergeConditionStr;
     }
