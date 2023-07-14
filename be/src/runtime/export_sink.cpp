@@ -224,12 +224,8 @@ Status ExportSink::send_chunk(RuntimeState* state, vectorized::Chunk* chunk) {
     if (_file_builder == nullptr) {
         RETURN_IF_ERROR(open_file_writer(timeout_ms - timer.elapsed_time() / MICROS_PER_SEC));
     }
-    Status status = _file_builder->add_chunk(chunk);
-    if (!status.ok()) {
-        Status status;
-        close(state, status);
-        return status;
-    }
+
+    RETURN_IF_ERROR(_file_builder->add_chunk(chunk));
     _number_written_rows += chunkNumRows;
     StarRocksMetrics::instance()->exported_rows_total.increment(chunkNumRows);
     if ((max_file_size_rows > 0 && num_rows >= max_file_size_rows) ||
@@ -238,12 +234,12 @@ Status ExportSink::send_chunk(RuntimeState* state, vectorized::Chunk* chunk) {
         int64_t size = _file_builder->file_size();
         _number_written_bytes += size;
         StarRocksMetrics::instance()->exported_bytes_total.increment(size);
-        RETURN_IF_ERROR(open_file_writer(timeout_ms - timer.elapsed_time() / MICROS_PER_SEC));
+        _file_builder.reset();
         num_rows = 0;
     }
 
     num_rows += chunkNumRows;
-    return status;
+    return Status::OK();
 }
 
 } // namespace starrocks

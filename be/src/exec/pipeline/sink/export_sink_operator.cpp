@@ -152,10 +152,7 @@ void ExportSinkIOBuffer::_process_chunk(bthread::TaskIterator<ChunkPtr>& iter) {
         int64_t size = _file_builder->file_size();
         _number_written_bytes += size;
         StarRocksMetrics::instance()->exported_bytes_total.increment(size);
-        if (Status status = _open_file_writer(); !status.ok()) {
-            LOG(WARNING) << "open file write failed, error: " << status.to_string();
-            return;
-        }
+        _file_builder.reset();
         _num_rows = 0;
     }
     _num_rows += chunkNumRows;
