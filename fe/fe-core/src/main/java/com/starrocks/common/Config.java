@@ -1240,7 +1240,7 @@ public class Config extends ConfigBase {
      * iceberg routine load job check split interval
      */
     @ConfField(mutable = true)
-    public static long routine_load_iceberg_split_check_interval_second = 10;
+    public static long routine_load_iceberg_split_check_interval_second = 60;
 
     /**
      * the max concurrent routine load task num of a single iceberg routine load job per be

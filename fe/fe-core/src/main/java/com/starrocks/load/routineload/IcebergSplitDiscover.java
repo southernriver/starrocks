@@ -271,7 +271,7 @@ public class IcebergSplitDiscover {
         Snapshot snapshot = iceTbl.currentSnapshot();
         lock.writeLock().lock();
         try {
-            List<IcebergSplitMeta> splitMetas = icebergProgress.recoverLastSnapshots();
+            List<IcebergSplitMeta> splitMetas = icebergProgress.recoverLastSnapshots(iceTbl);
             splitsQueue.clear();
             addSplitsFromRecovery(splitMetas, snapshot);
             LOG.info("job {} recover end", jobName);

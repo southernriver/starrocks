@@ -114,7 +114,7 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
         this.icebergConsumePosition = config.getIcebergConsumePosition();
         this.icebergWhereExpr = config.getIcebergWhereExpr();
         this.brokerDesc = brokerDesc;
-        this.progress = new IcebergProgress(this);
+        this.progress = new IcebergProgress();
     }
 
     @Override

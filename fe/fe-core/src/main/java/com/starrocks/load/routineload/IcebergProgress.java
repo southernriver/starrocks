@@ -3,13 +3,16 @@
 package com.starrocks.load.routineload;
 
 import com.google.common.base.Predicate;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.starrocks.common.Config;
 import com.starrocks.common.util.DebugUtil;
 import com.starrocks.connector.iceberg.IcebergMetadata;
+import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.thrift.TIcebergRLTaskProgress;
 import com.starrocks.thrift.TIcebergRLTaskProgressSplit;
+import org.apache.iceberg.Table;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -28,14 +31,44 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import static com.starrocks.load.routineload.RoutineLoadJob.JobState;
+
 public class IcebergProgress extends RoutineLoadProgress {
     private static final Logger LOG = LogManager.getLogger(IcebergProgress.class);
     private static final ScheduledExecutorService SCHEDULED_EXECUTOR_SERVICE = Executors
             .newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setDaemon(true)
                     .setNameFormat("iceberg-routine-load-expire-records-scheduler").build());
+
+    static {
+        SCHEDULED_EXECUTOR_SERVICE.scheduleWithFixedDelay(IcebergProgress::cleanJobExpiredSplitRecords,
+                Config.routine_load_iceberg_split_check_interval_second,
+                Config.routine_load_iceberg_split_check_interval_second, TimeUnit.SECONDS);
+    }
+
+    private static void cleanJobExpiredSplitRecords() {
+        List<RoutineLoadJob> icebergJobs = GlobalStateMgr.getCurrentState().getRoutineLoadManager()
+                .getRoutineLoadJobByState(
+                        ImmutableSet.of(JobState.RUNNING, JobState.PAUSED, JobState.NEED_SCHEDULE)
+                )
+                .stream()
+                .filter((Predicate<RoutineLoadJob>) j -> j instanceof IcebergRoutineLoadJob)
+                .collect(Collectors.toList());
+        for (RoutineLoadJob job : icebergJobs) {
+            IcebergProgress icebergProgress = ((IcebergProgress) job.progress);
+            try {
+                // usually, this fe is follower now
+                if (job.getState() == JobState.NEED_SCHEDULE) {
+                    LOG.info("job {} has {} records", job.getName(), icebergProgress.splitDoneRecords.size());
+                }
+                icebergProgress.cleanExpiredSplitRecords(((IcebergRoutineLoadJob) job).getIceTbl());
+            } catch (Exception e) {
+                LOG.error("job " + job.getName() + " failed to cleanExpiredSplitRecords", e);
+            }
+        }
+    }
+
     private IcebergSplitMeta lastSplitMeta;
     private IcebergSplitMeta lastCheckpointSplitMeta;
-    private IcebergRoutineLoadJob job;
 
     private Map<IcebergSplit, Boolean> splitDoneRecords = Maps.newConcurrentMap();
 
@@ -43,44 +76,11 @@ public class IcebergProgress extends RoutineLoadProgress {
         super(LoadDataSourceType.ICEBERG);
     }
 
-    public IcebergProgress(RoutineLoadJob job) {
-        super(LoadDataSourceType.ICEBERG);
-        this.job = (IcebergRoutineLoadJob) job;
-        SCHEDULED_EXECUTOR_SERVICE.schedule(this::scheduleCheckAndExpireRecords,
-                Config.routine_load_iceberg_split_check_interval_second, TimeUnit.SECONDS);
-    }
-
     public IcebergProgress(TIcebergRLTaskProgress tIcebergRLTaskProgress) {
         super(LoadDataSourceType.ICEBERG);
         for (TIcebergRLTaskProgressSplit split : tIcebergRLTaskProgress.splits) {
             IcebergSplit icebergSplit = new IcebergSplit(split);
             splitDoneRecords.put(icebergSplit, Boolean.TRUE);
-        }
-    }
-
-    private void scheduleCheckAndExpireRecords() {
-        try {
-            if (job.getState().isFinalState()) {
-                LOG.info("job {} abort progress expiring records", job.getName());
-                clear();
-                return;
-            }
-            if (job.getState() == RoutineLoadJob.JobState.PAUSED) {
-                SCHEDULED_EXECUTOR_SERVICE.schedule(this::scheduleCheckAndExpireRecords,
-                        Config.routine_load_iceberg_split_check_interval_second, TimeUnit.SECONDS);
-                return;
-            }
-            // usually, this fe is follower now
-            if (job.getState() == RoutineLoadJob.JobState.NEED_SCHEDULE) {
-                LOG.info("job {} has {} records", job.getName(), splitDoneRecords.size());
-            }
-            cleanExpiredSplitRecords();
-            SCHEDULED_EXECUTOR_SERVICE.schedule(this::scheduleCheckAndExpireRecords,
-                    Config.routine_load_iceberg_split_check_interval_second, TimeUnit.SECONDS);
-        } catch (Exception e) {
-            LOG.error("job " + job.getName() + " failed to scheduleCheckAndExpireRecords", e);
-            SCHEDULED_EXECUTOR_SERVICE.schedule(this::scheduleCheckAndExpireRecords,
-                    Config.routine_load_iceberg_split_check_interval_second, TimeUnit.SECONDS);
         }
     }
 
@@ -114,11 +114,11 @@ public class IcebergProgress extends RoutineLoadProgress {
         return splitsGroupedByMeta;
     }
 
-    public List<IcebergSplitMeta> recoverLastSnapshots() {
+    public List<IcebergSplitMeta> recoverLastSnapshots(Table iceTbl) {
         if (splitDoneRecords.isEmpty()) {
             return null;
         }
-        List<IcebergSplitMeta> splitMetas = cleanExpiredSplitRecords();
+        List<IcebergSplitMeta> splitMetas = cleanExpiredSplitRecords(iceTbl);
         lastSplitMeta = splitMetas.get(splitMetas.size() - 1);
         return splitMetas;
     }
@@ -137,7 +137,7 @@ public class IcebergProgress extends RoutineLoadProgress {
         if (splitDoneRecords.isEmpty()) {
             return true;
         }
-        List<IcebergSplitMeta> splitMetas = cleanExpiredSplitRecords();
+        List<IcebergSplitMeta> splitMetas = cleanExpiredSplitRecords(null);
         for (IcebergSplitMeta splitMeta : splitMetas) {
             if (!splitMeta.isAllDone()) {
                 return false;
@@ -146,7 +146,16 @@ public class IcebergProgress extends RoutineLoadProgress {
         return true;
     }
 
-    private void setLastCheckpointSplitMeta(Iterable<IcebergSplitMeta> splitMetas) {
+    private void setLastCheckpointSplitMeta(Iterable<IcebergSplitMeta> splitMetas, Table iceTbl) {
+        if (iceTbl != null) {
+            try {
+                IcebergMetadata.refreshTable(iceTbl);
+            } catch (Exception e) {
+                LOG.warn(e.getMessage(), e);
+                // this method will be called again later, so just break here
+                return;
+            }
+        }
         // `last` is either last done meta or last running meta
         IcebergSplitMeta last = null;
         for (IcebergSplitMeta splitMeta : splitMetas) {
@@ -161,18 +170,13 @@ public class IcebergProgress extends RoutineLoadProgress {
             if (splitMeta.getStartSnapshotId() == -1) {
                 break;
             }
-            org.apache.iceberg.Table table;
-            try {
-                table = job.getIceTbl();
-                IcebergMetadata.refreshTable(table);
-            } catch (Exception e) {
-                LOG.warn(e.getMessage(), e);
-                // this method will be called again later, so just break here
-                break;
+            // called from toJsonString() or allDone()
+            if (iceTbl == null) {
+                return;
             }
             try {
                 // verify it is still a valid range
-                table.newScan().appendsBetween(splitMeta.getStartSnapshotId(), splitMeta.getEndSnapshotId());
+                iceTbl.newScan().appendsBetween(splitMeta.getStartSnapshotId(), splitMeta.getEndSnapshotId());
                 break;
             } catch (IllegalArgumentException e) {
                 // range [splitMeta.getStartSnapshotId(), splitMeta.getEndSnapshotId()] is illegal
@@ -186,14 +190,14 @@ public class IcebergProgress extends RoutineLoadProgress {
     /**
      * return sorted splitMetas
      */
-    public synchronized List<IcebergSplitMeta> cleanExpiredSplitRecords() {
+    private synchronized List<IcebergSplitMeta> cleanExpiredSplitRecords(Table iceTbl) {
         Map<IcebergSplitMeta, List<IcebergSplit>> unsortedSplits = markSplitMetaDone();
         // the order is important to make recovery correct
         Map<IcebergSplitMeta, List<IcebergSplit>> sortedSplits = new TreeMap<>(
                 Comparator.comparingLong(IcebergSplitMeta::getEndSnapshotTimestamp));
         sortedSplits.putAll(unsortedSplits);
         List<IcebergSplitMeta> splitMetas = new ArrayList<>(sortedSplits.keySet());
-        setLastCheckpointSplitMeta(sortedSplits.keySet());
+        setLastCheckpointSplitMeta(sortedSplits.keySet(), iceTbl);
         for (Map.Entry<IcebergSplitMeta, List<IcebergSplit>> entry : sortedSplits.entrySet()) {
             // keep at least on split meta in memory so that it can recover from records correctly when allDone
             if (entry.getKey().equals(lastCheckpointSplitMeta)) {
@@ -218,7 +222,7 @@ public class IcebergProgress extends RoutineLoadProgress {
 
     @Override
     public String toJsonString() {
-        cleanExpiredSplitRecords();
+        cleanExpiredSplitRecords(null);
         return toString();
     }
 
