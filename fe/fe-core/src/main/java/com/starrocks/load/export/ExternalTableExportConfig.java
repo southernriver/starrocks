@@ -461,13 +461,17 @@ public class ExternalTableExportConfig {
             }
             for (int i = 0; i < files.size(); i++) {
                 String filePath = files.get(i);
+                FileFormat fileFormat = FileFormat.fromFileName(filePath);
+                if (fileFormat == null) {
+                    throw new StarRocksConnectorException("Invalid file format from file " + filePath);
+                }
                 try {
                     Pair<Metrics, Long> pair = futures.get(i).get();
                     PartitionKey partitionKey = new PartitionKey(partitionSpec, table.schema());
                     fillFromPath(partitionSpec, removeSlash(targetPartitionName), partitionKey);
                     DataFile file = DataFiles.builder(partitionSpec)
                             .withPath(filePath)
-                            .withFormat(FileFormat.fromFileName(filePath))
+                            .withFormat(fileFormat)
                             .withMetrics(pair.first)
                             .withFileSizeInBytes(pair.second)
                             .withPartition(partitionKey)
