@@ -142,7 +142,7 @@ public class Optimizer {
         collectAllScanOperators(memo, rootTaskContext);
 
         if (rootTaskContext.isHybridScanIncluded()) {
-            connectContext.getState().setDataSource(QueryState.DataSource.AUTO_HYBRID);
+            connectContext.getState().setDataSource(QueryState.DataSource.AUTO);
         }
 
         // Currently, we cache output columns in logic property.

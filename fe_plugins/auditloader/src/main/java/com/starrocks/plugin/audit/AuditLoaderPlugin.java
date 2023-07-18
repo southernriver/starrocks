@@ -117,6 +117,7 @@ public class AuditLoaderPlugin extends Plugin implements AuditPlugin {
         this.auditBuffer.append(event.resourceGroup).append("\t");
         this.auditBuffer.append(event.catalog).append("\t");
         this.auditBuffer.append(event.db).append("\t");
+        this.auditBuffer.append(event.table).append("\t");
         this.auditBuffer.append(event.state).append("\t");
         this.auditBuffer.append(event.errorCode).append("\t");
         this.auditBuffer.append(event.queryTime).append("\t");
@@ -127,13 +128,16 @@ public class AuditLoaderPlugin extends Plugin implements AuditPlugin {
         this.auditBuffer.append(event.memCostBytes).append("\t");
         this.auditBuffer.append(event.stmtId).append("\t");
         this.auditBuffer.append(event.isQuery ? 1 : 0).append("\t");
+        this.auditBuffer.append(event.dataSource).append("\t");
+        this.auditBuffer.append(event.requestType).append("\t");
         this.auditBuffer.append(event.feIp).append("\t");
         String stmt = truncateByBytes(event.stmt).replace("\t", " ").replace("\n", " ");
         LOG.debug("receive audit event with stmt: {}", stmt);
         this.auditBuffer.append(stmt).append("\t");
         this.auditBuffer.append(event.digest).append("\t");
         this.auditBuffer.append(event.planCpuCosts).append("\t");
-        this.auditBuffer.append(event.planMemCosts).append("\n");
+        this.auditBuffer.append(event.planMemCosts).append("\t");
+        this.auditBuffer.append(event.exception).append("\n");
     }
 
     private String truncateByBytes(String str) {

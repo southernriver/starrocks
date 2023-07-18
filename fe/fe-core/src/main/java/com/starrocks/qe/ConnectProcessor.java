@@ -187,10 +187,10 @@ public class ConnectProcessor {
                 case EXTERNAL:
                     MetricRepo.COUNTER_QUERY_DATA_SOURCE_EXTERNAL.increase(1L);
                     break;
-                case AUTO_HYBRID:
+                case AUTO:
                     MetricRepo.COUNTER_QUERY_DATA_SOURCE_AUTO_HYBRID.increase(1L);
                     break;
-                case MANUAL_HYBRID:
+                case MANUAL:
                     MetricRepo.COUNTER_QUERY_DATA_SOURCE_MANUAL_HYBRID.increase(1L);
                     break;
             }
@@ -210,10 +210,10 @@ public class ConnectProcessor {
                     case EXTERNAL:
                         MetricRepo.HISTO_QUERY_LATENCY_EXTERNAL.update(elapseMs);
                         break;
-                    case AUTO_HYBRID:
+                    case AUTO:
                         MetricRepo.HISTO_QUERY_LATENCY_AUTO_HYBRID.update(elapseMs);
                         break;
-                    case MANUAL_HYBRID:
+                    case MANUAL:
                         MetricRepo.HISTO_QUERY_LATENCY_MANUAL_HYBRID.update(elapseMs);
                         break;
                 }

@@ -56,7 +56,7 @@ public class StarrocksStreamLoader {
         conn.addRequestProperty("Content-Type", "text/plain; charset=UTF-8");
         conn.addRequestProperty("label", label);
         conn.addRequestProperty("max_filter_ratio", "1.0");
-        conn.addRequestProperty("columns", "query_id, time, client_ip, user, resource_group, catalog, db, state, error_code, query_time, scan_bytes, scan_rows, return_rows, cpu_cost_ns, mem_cost_bytes, stmt_id, is_query, frontend_ip, stmt, digest, plan_cpu_costs, plan_mem_costs");
+        conn.addRequestProperty("columns", "query_id, time, client_ip, user, resource_group, catalog, db, query_table, state, error_code, query_time, scan_bytes, scan_rows, return_rows, cpu_cost_ns, mem_cost_bytes, stmt_id, is_query, data_source, request_type, frontend_ip, stmt, digest, plan_cpu_costs, plan_mem_costs, exception");
         conn.setDoOutput(true);
         conn.setDoInput(true);
         return conn;
@@ -69,7 +69,7 @@ public class StarrocksStreamLoader {
         sb.append("-H \"").append("Expect\":").append("\"100-continue\" \\\n  ");
         sb.append("-H \"").append("Content-Type\":").append("\"text/plain; charset=UTF-8\" \\\n  ");
         sb.append("-H \"").append("max_filter_ratio\":").append("\"1.0\" \\\n  ");
-        sb.append("-H \"").append("columns\":").append("\"query_id, time, client_ip, user, resource_group, catalog, db, state, error_code, query_time, scan_bytes, scan_rows, return_rows, cpu_cost_ns, mem_cost_bytes, stmt_id, is_query, frontend_ip, stmt, digest, plan_cpu_costs, plan_mem_costs\" \\\n  ");
+        sb.append("-H \"").append("columns\":").append("\"query_id, time, client_ip, user, resource_group, catalog, db, query_table, state, error_code, query_time, scan_bytes, scan_rows, return_rows, cpu_cost_ns, mem_cost_bytes, stmt_id, is_query, data_source, request_type, frontend_ip, stmt, digest, plan_cpu_costs, plan_mem_costs, exception\" \\\n  ");
         sb.append("\"").append(conn.getURL()).append("\"");
         return sb.toString();
     }
