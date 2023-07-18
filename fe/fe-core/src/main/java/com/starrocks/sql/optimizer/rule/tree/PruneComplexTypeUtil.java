@@ -158,6 +158,9 @@ public class PruneComplexTypeUtil {
                 while (tmpType.isArrayType()) {
                     tmpType = ((ArrayType) tmpType).getItemType();
                 }
+                if (!tmpType.isComplexType()) {
+                    break;
+                }
                 ComplexTypeAccessPath accessPath = accessPaths.get(i);
                 if (i == accessPaths.size() - 1) {
                     // last one, select children's all subfields
