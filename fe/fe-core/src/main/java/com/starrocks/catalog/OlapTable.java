@@ -179,6 +179,8 @@ public class OlapTable extends Table implements GsonPostProcessable {
     @SerializedName(value = "tableProperty")
     protected TableProperty tableProperty;
 
+    private int maxColUniqueId = -1;
+
     public OlapTable() {
         this(TableType.OLAP);
     }
@@ -246,6 +248,21 @@ public class OlapTable extends Table implements GsonPostProcessable {
 
     public TableProperty getTableProperty() {
         return this.tableProperty;
+    }
+
+
+    //take care: only use at create olap table.
+    public int incAndGetMaxColUniqueId() {
+        this.maxColUniqueId++;
+        return this.maxColUniqueId;
+    }
+
+    public int getMaxColUniqueId() {
+        return this.maxColUniqueId;
+    }
+
+    public void setMaxColUniqueId(int maxColUniqueId) {
+        this.maxColUniqueId = maxColUniqueId;
     }
 
     public boolean dynamicPartitionExists() {
@@ -1220,6 +1237,8 @@ public class OlapTable extends Table implements GsonPostProcessable {
         }
 
         tempPartitions.write(out);
+
+        out.writeInt(maxColUniqueId);
     }
 
     @Override
@@ -1362,6 +1381,12 @@ public class OlapTable extends Table implements GsonPostProcessable {
                 }
                 tempPartitions.unsetPartitionInfo();
             }
+        }
+
+
+        // reserve
+        if (GlobalStateMgr.getCurrentStateJournalVersion() >= FeMetaVersion.VERSION_96) {
+            maxColUniqueId = in.readInt();
         }
 
         // In the present, the fullSchema could be rebuilt by schema change while the properties is changed by MV.
