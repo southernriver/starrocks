@@ -190,7 +190,7 @@ public class IcebergProgress extends RoutineLoadProgress {
     /**
      * return sorted splitMetas
      */
-    private synchronized List<IcebergSplitMeta> cleanExpiredSplitRecords(Table iceTbl) {
+    public synchronized List<IcebergSplitMeta> cleanExpiredSplitRecords(Table iceTbl) {
         Map<IcebergSplitMeta, List<IcebergSplit>> unsortedSplits = markSplitMetaDone();
         // the order is important to make recovery correct
         Map<IcebergSplitMeta, List<IcebergSplit>> sortedSplits = new TreeMap<>(

@@ -587,6 +587,11 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
 
     @Override
     public void write(DataOutput out) throws IOException {
+        try {
+            ((IcebergProgress) progress).cleanExpiredSplitRecords(getIceTbl());
+        } catch (Exception e) {
+            LOG.error("job " + name + " failed to cleanExpiredSplitRecords while writing to out, ignore", e);
+        }
         super.write(out);
         Text.writeString(out, icebergCatalogType);
         if (IcebergCreateRoutineLoadStmtConfig.isHiveCatalogType(icebergCatalogType)) {
