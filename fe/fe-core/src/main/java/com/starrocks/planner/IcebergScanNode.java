@@ -419,6 +419,8 @@ public class IcebergScanNode extends ScanNode {
 
     @Override
     public boolean canUsePipeLine() {
-        return true;
+        // we have noticed that sql like 'select * from iceberg.test_hive.export_test_sr_iceberg limit 2' is much faster
+        // if not using pipeline
+        return !hasLimit();
     }
 }
