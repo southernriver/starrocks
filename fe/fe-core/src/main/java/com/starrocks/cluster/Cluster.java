@@ -161,7 +161,10 @@ public class Cluster implements Writable {
         }
 
         int dbCount = dbIds.size();
-        if (dbNames.contains(InfoSchemaDb.DATABASE_NAME)) {
+        // BugFix: if this cluster dump more than one time, dbCount would be wrong
+        boolean dbCountDuplicated = dbNameToIDs.entrySet().stream()
+                .anyMatch(e -> dbIds.contains(e.getValue()) && e.getKey().equals(InfoSchemaDb.DATABASE_NAME));
+        if (dbCountDuplicated) {
             dbCount--;
         }
 
