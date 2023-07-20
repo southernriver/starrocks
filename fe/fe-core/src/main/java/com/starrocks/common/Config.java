@@ -1387,12 +1387,12 @@ public class Config extends ConfigBase {
     /**
      * If set to true, enable TDW Authentication
      */
-    @ConfField(mutable = true)
+    @ConfField
     public static boolean enable_tdw_authentication = false;
     /**
      * TDW server for authentication and privilege
      */
-    @ConfField(mutable = true)
+    @ConfField
     public static String tdw_privilege_api_url = "";
     @ConfField
     public static long tdw_user_cache_ttl_s = 60L * 5L;
@@ -1400,9 +1400,9 @@ public class Config extends ConfigBase {
     public static long tdw_user_cache_count = 100L;
     @ConfField
     public static int tdw_check_priv_timeout = 3000;
-    @ConfField(mutable = true)
+    @ConfField
     public static boolean enable_check_tdw_pri = true;
-    @ConfField(mutable = true)
+    @ConfField
     public static String tdw_pri_username = "";
 
     @ConfField
