@@ -22,7 +22,6 @@
 package com.starrocks.load.routineload;
 
 import com.google.common.collect.Lists;
-import com.starrocks.common.Config;
 import com.starrocks.common.UserException;
 import com.starrocks.common.util.DebugUtil;
 import com.starrocks.common.util.TimeUtils;
@@ -92,7 +91,7 @@ public abstract class RoutineLoadTaskInfo {
         this.jobId = jobId;
         this.createTimeMs = System.currentTimeMillis();
         this.taskScheduleIntervalMs = taskScheduleIntervalMs;
-        this.timeoutMs = 1000 * Config.routine_load_task_timeout_second;
+        this.timeoutMs = 1000 * routineLoadManager.getJob(jobId).getTimeoutSecond();
         this.timeToExecuteMs = timeToExecuteMs;
     }
 

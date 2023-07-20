@@ -96,6 +96,8 @@ public class CreateRoutineLoadStmt extends DdlStmt {
     public static final String STRIP_OUTER_ARRAY = "strip_outer_array";
     public static final String JSONPATHS = "jsonpaths";
     public static final String JSONROOT = "json_root";
+    public static final String TIMEOUT_SECOND = "task_timeout_second";
+    public static final String CONSUME_SECOND = "task_consume_second";
 
     // kafka type properties
     public static final String KAFKA_BROKER_LIST_PROPERTY = "kafka_broker_list";
@@ -142,6 +144,8 @@ public class CreateRoutineLoadStmt extends DdlStmt {
             .add(FORMAT)
             .add(JSONPATHS)
             .add(STRIP_OUTER_ARRAY)
+            .add(TIMEOUT_SECOND)
+            .add(CONSUME_SECOND)
             .add(JSONROOT)
             .add(RECOVER_OFFSETS_FROM_LAST_JOB)
             .add(JOB_THAT_RECOVER_OFFSETS_FROM)
@@ -150,6 +154,7 @@ public class CreateRoutineLoadStmt extends DdlStmt {
             .add(LoadStmt.SKIP_UTF8_CHECK)
             .add(LoadStmt.TASK_NUM_EXCEED_BE_NUM)
             .add(LoadStmt.TIMEZONE)
+
             .add(LoadStmt.PARTIAL_UPDATE)
             .add(LoadStmt.MERGE_CONDITION)
             .add(SessionVariable.EXEC_MEM_LIMIT)
@@ -199,6 +204,8 @@ public class CreateRoutineLoadStmt extends DdlStmt {
     private boolean skipUtf8Check = false;
     private boolean taskNumExceedBeNum = false;
     private String timezone = TimeUtils.DEFAULT_TIME_ZONE;
+    private int timeoutSecond = (int) Config.routine_load_task_timeout_second;
+    private int consumeSecond = (int) Config.routine_load_task_consume_second;
     private boolean partialUpdate = false;
     private boolean recoverOffsetsFromLastJob = false;
     private String jobThatRecoverOffsetsFrom;
@@ -249,6 +256,8 @@ public class CreateRoutineLoadStmt extends DdlStmt {
     public static final Predicate<Long> MAX_ERROR_NUMBER_PRED = (v) -> v >= 0L;
     public static final Predicate<Long> MAX_BATCH_INTERVAL_PRED = (v) -> v >= 5;
     public static final Predicate<Long> MAX_BATCH_ROWS_PRED = (v) -> v >= 200000;
+    public static final Predicate<Long> TASK_TIMEOUT_SECOND_PRED = (v) -> v > 10L;
+    public static final Predicate<Long> CONSUME_SECOND_PRED = (v) -> v > 5L;
 
     public CreateRoutineLoadStmt(LabelName labelName, String tableName, List<ParseNode> loadPropertyList,
                                  Map<String, String> jobProperties,
@@ -336,6 +345,14 @@ public class CreateRoutineLoadStmt extends DdlStmt {
 
     public String getTimezone() {
         return timezone;
+    }
+
+    public int getTimeoutSecond() {
+        return timeoutSecond;
+    }
+
+    public int getConsumeSecond() {
+        return consumeSecond;
     }
 
     public boolean isPartialUpdate() {
@@ -576,6 +593,17 @@ public class CreateRoutineLoadStmt extends DdlStmt {
             timezone = ConnectContext.get().getSessionVariable().getTimeZone();
         }
         timezone = TimeUtils.checkTimeZoneValidAndStandardize(jobProperties.getOrDefault(LoadStmt.TIMEZONE, timezone));
+
+        timeoutSecond = (int) Util.getLongPropertyOrDefault(jobProperties.get(TIMEOUT_SECOND),
+                Config.routine_load_task_timeout_second, TASK_TIMEOUT_SECOND_PRED,
+                TIMEOUT_SECOND + " should > 10");
+
+        consumeSecond = (int) Util.getLongPropertyOrDefault(jobProperties.get(CONSUME_SECOND),
+                Config.routine_load_task_consume_second, CONSUME_SECOND_PRED, CONSUME_SECOND + " should > 5");
+
+        if (consumeSecond >= timeoutSecond) {
+            throw new AnalysisException(CONSUME_SECOND + " should <= " + TIMEOUT_SECOND);
+        }
 
         format = jobProperties.get(FORMAT);
         if (format != null) {

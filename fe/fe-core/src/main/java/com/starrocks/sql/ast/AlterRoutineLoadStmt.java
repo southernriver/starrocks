@@ -8,6 +8,7 @@ import com.starrocks.analysis.LabelName;
 import com.starrocks.analysis.ParseNode;
 import com.starrocks.analysis.RoutineLoadDataSourceProperties;
 import com.starrocks.common.AnalysisException;
+import com.starrocks.common.Config;
 import com.starrocks.common.UserException;
 import com.starrocks.common.util.TimeUtils;
 import com.starrocks.common.util.Util;
@@ -40,6 +41,8 @@ public class AlterRoutineLoadStmt extends DdlStmt {
             .add(CreateRoutineLoadStmt.JSONPATHS)
             .add(CreateRoutineLoadStmt.JSONROOT)
             .add(CreateRoutineLoadStmt.STRIP_OUTER_ARRAY)
+            .add(CreateRoutineLoadStmt.TIMEOUT_SECOND)
+            .add(CreateRoutineLoadStmt.CONSUME_SECOND)
             .add(LoadStmt.STRICT_MODE)
             .add(LoadStmt.IGNORE_TAIL_COLUMNS)
             .add(LoadStmt.SKIP_UTF8_CHECK)
@@ -173,6 +176,22 @@ public class AlterRoutineLoadStmt extends DdlStmt {
         if (jobProperties.containsKey(LoadStmt.TIMEZONE)) {
             String timezone = TimeUtils.checkTimeZoneValidAndStandardize(jobProperties.get(LoadStmt.TIMEZONE));
             analyzedJobProperties.put(LoadStmt.TIMEZONE, timezone);
+        }
+
+        if (jobProperties.containsKey(CreateRoutineLoadStmt.TIMEOUT_SECOND)) {
+            long timeoutSecond = Util.getLongPropertyOrDefault(
+                    jobProperties.get(CreateRoutineLoadStmt.TIMEOUT_SECOND),
+                    Config.routine_load_task_timeout_second, CreateRoutineLoadStmt.TASK_TIMEOUT_SECOND_PRED,
+                    CreateRoutineLoadStmt.TIMEOUT_SECOND + " should > 10");
+            analyzedJobProperties.put(CreateRoutineLoadStmt.TIMEOUT_SECOND, String.valueOf(timeoutSecond));
+        }
+
+        if (jobProperties.containsKey(CreateRoutineLoadStmt.CONSUME_SECOND)) {
+            long consumeSecond = Util.getLongPropertyOrDefault(
+                    jobProperties.get(CreateRoutineLoadStmt.CONSUME_SECOND),
+                    Config.routine_load_task_consume_second, CreateRoutineLoadStmt.CONSUME_SECOND_PRED,
+                    CreateRoutineLoadStmt.CONSUME_SECOND + " should > 5");
+            analyzedJobProperties.put(CreateRoutineLoadStmt.CONSUME_SECOND, String.valueOf(consumeSecond));
         }
 
         if (jobProperties.containsKey(CreateRoutineLoadStmt.JSONPATHS)) {

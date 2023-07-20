@@ -299,6 +299,8 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
         jobProperties.put(LoadStmt.IGNORE_TAIL_COLUMNS, String.valueOf(stmt.isIgnoreTailColumns()));
         jobProperties.put(LoadStmt.SKIP_UTF8_CHECK, String.valueOf(stmt.isSkipUtf8Check()));
         jobProperties.put(LoadStmt.TASK_NUM_EXCEED_BE_NUM, String.valueOf(stmt.isTaskNumExceedBeNum()));
+        jobProperties.put(CreateRoutineLoadStmt.TIMEOUT_SECOND, String.valueOf(stmt.getTimeoutSecond()));
+        jobProperties.put(CreateRoutineLoadStmt.CONSUME_SECOND, String.valueOf(stmt.getConsumeSecond()));
         if (Strings.isNullOrEmpty(stmt.getFormat()) || stmt.getFormat().equals("csv")) {
             jobProperties.put(PROPS_FORMAT, "csv");
             jobProperties.put(PROPS_STRIP_OUTER_ARRAY, "false");
@@ -522,6 +524,22 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
             return TimeUtils.DEFAULT_TIME_ZONE;
         }
         return value;
+    }
+
+    public int getTimeoutSecond() {
+        String value = jobProperties.get(CreateRoutineLoadStmt.TIMEOUT_SECOND);
+        if (value == null) {
+            return (int) Config.routine_load_task_timeout_second;
+        }
+        return Integer.parseInt(value);
+    }
+
+    public int getConsumeSecond() {
+        String value = jobProperties.get(CreateRoutineLoadStmt.CONSUME_SECOND);
+        if (value == null) {
+            return (int) Config.routine_load_task_consume_second;
+        }
+        return Integer.parseInt(value);
     }
 
     public boolean isPartialUpdate() {

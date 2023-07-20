@@ -391,7 +391,7 @@ public class StreamLoadInfo {
         ignoreTailColumns = routineLoadJob.isIgnoreTailColumns();
         skipUtf8Check = routineLoadJob.isSkipUtf8Check();
         timezone = routineLoadJob.getTimezone();
-        timeout = (int) Config.routine_load_task_timeout_second;
+        timeout = routineLoadJob.getTimeoutSecond();
         if (!routineLoadJob.getJsonPaths().isEmpty()) {
             jsonPaths = routineLoadJob.getJsonPaths();
         }

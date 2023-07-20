@@ -180,7 +180,7 @@ public class IcebergTaskInfo extends RoutineLoadTaskInfo {
         tRoutineLoadTask.setIceberg_load_info(tIcebergLoadInfo);
         tRoutineLoadTask.setType(TLoadSourceType.ICEBERG);
         tRoutineLoadTask.setParams(plan(routineLoadJob, splits));
-        tRoutineLoadTask.setMax_interval_s(Config.routine_load_task_consume_second);
+        tRoutineLoadTask.setMax_interval_s(routineLoadJob.getConsumeSecond());
         tRoutineLoadTask.setMax_batch_rows(routineLoadJob.getMaxBatchRows());
         tRoutineLoadTask.setMax_batch_size(Config.max_routine_load_batch_size);
         tRoutineLoadTask.setFormat(splits.get(0).getFormatType());

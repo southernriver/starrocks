@@ -131,7 +131,7 @@ public class PulsarTaskInfo extends RoutineLoadTaskInfo {
         tRoutineLoadTask.setPulsar_load_info(tPulsarLoadInfo);
         tRoutineLoadTask.setType(TLoadSourceType.PULSAR);
         tRoutineLoadTask.setParams(plan(routineLoadJob));
-        tRoutineLoadTask.setMax_interval_s(Config.routine_load_task_consume_second);
+        tRoutineLoadTask.setMax_interval_s(routineLoadJob.getConsumeSecond());
         tRoutineLoadTask.setMax_batch_rows(routineLoadJob.getMaxBatchRows());
         tRoutineLoadTask.setMax_batch_size(Config.max_routine_load_batch_size);
         if (!routineLoadJob.getFormat().isEmpty() && routineLoadJob.getFormat().equalsIgnoreCase("json")) {
