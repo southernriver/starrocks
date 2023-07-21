@@ -405,7 +405,8 @@ public class Load {
         }
         Set<String> exprArgsColumns = Sets.newTreeSet(String.CASE_INSENSITIVE_ORDER);
         for (ImportColumnDesc importColumnDesc : copiedColumnExprs) {
-            if (importColumnDesc.isColumn()) {
+            if (importColumnDesc.isColumn() ||
+                    (!importColumnDesc.isColumn() && importColumnDesc.getExpr() instanceof SlotRef)) {
                 continue;
             }
             List<SlotRef> slots = Lists.newArrayList();
