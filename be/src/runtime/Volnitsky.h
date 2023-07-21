@@ -115,6 +115,10 @@ public:
 
         const auto haystack_end = haystack + haystack_size;
 
+#ifdef __SSE4_1__
+        return fallback_searcher.search(haystack, haystack_end);
+#endif
+
         if (fallback || haystack_size <= needle_size) return fallback_searcher.search(haystack, haystack_end);
 
         /// Let's "apply" the needle to the haystack and compare the n-gram from the end of the needle.
