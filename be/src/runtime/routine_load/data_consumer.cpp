@@ -175,6 +175,7 @@ Status KafkaDataConsumer::assign_topic_partitions(const std::map<int32_t, int64_
     // assign partition
     RdKafka::ErrorCode err = _k_consumer->assign(topic_partitions);
     if (err) {
+        StarRocksMetrics::instance()->assign_failed_kafka_consumer_num.increment(1);
         LOG(WARNING) << "failed to assign topic partitions: " << ctx->brief(true) << ", err: " << RdKafka::err2str(err);
         return Status::InternalError("failed to assign topic partitions");
     }
@@ -564,6 +565,7 @@ Status PulsarDataConsumer::assign_partition(const std::string& partition, Stream
 
     result = _p_client->subscribe(partition, _subscription, config, _p_consumer);
     if (result != pulsar::ResultOk) {
+        StarRocksMetrics::instance()->assign_failed_pulsar_consumer_num.increment(1);
         LOG(WARNING) << "PAUSE: failed to create pulsar consumer: " << ctx->brief(true) << ", err: " << result;
         return Status::InternalError("PAUSE: failed to create pulsar consumer: " +
                                      std::string(pulsar::strResult(result)));
@@ -800,6 +802,7 @@ Status TubeDataConsumer::set_group_consume_target(StreamLoadContext* ctx) {
         std::set<std::string> topic_set;
         topic_set.insert(_topic);
         if (!_t_consumer_config.SetGroupConsumeTarget(err_info, _group_name, topic_set)) {
+            StarRocksMetrics::instance()->assign_failed_tube_consumer_num.increment(1);
             LOG(WARNING) << "PAUSE: failed to set group consume target: " << ctx->brief(true) << ", err: " << err_info;
             return Status::InternalError("PAUSE: failed to set group consume target: " + err_info);
         }
@@ -827,6 +830,7 @@ Status TubeDataConsumer::set_group_consume_target(StreamLoadContext* ctx) {
         }
     }
 
+    StarRocksMetrics::instance()->assign_failed_tube_consumer_num.increment(1);
     LOG(WARNING) << "PAUSE: failed to start tube consumer: " << ctx->brief(true) << ", err: " << err_info;
     return Status::InternalError("PAUSE: failed to start tube consumer: " + err_info);
 }

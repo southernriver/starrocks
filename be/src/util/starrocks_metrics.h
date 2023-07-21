@@ -187,6 +187,9 @@ public:
     METRIC_DEFINE_INT_GAUGE(bg_clean_kafka_consumer_num, MetricUnit::NOUNIT);
     METRIC_DEFINE_INT_GAUGE(bg_clean_pulsar_consumer_num, MetricUnit::NOUNIT);
     METRIC_DEFINE_INT_GAUGE(bg_clean_tube_consumer_num, MetricUnit::NOUNIT);
+    METRIC_DEFINE_INT_GAUGE(assign_failed_kafka_consumer_num, MetricUnit::NOUNIT);
+    METRIC_DEFINE_INT_GAUGE(assign_failed_pulsar_consumer_num, MetricUnit::NOUNIT);
+    METRIC_DEFINE_INT_GAUGE(assign_failed_tube_consumer_num, MetricUnit::NOUNIT);
 
     IntGaugeMetricsMap disks_total_capacity;
     IntGaugeMetricsMap disks_avail_capacity;
