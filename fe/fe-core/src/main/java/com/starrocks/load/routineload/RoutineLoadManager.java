@@ -80,7 +80,7 @@ public class RoutineLoadManager implements Writable {
     private Map<Long, RoutineLoadJob> idToRoutineLoadJob = Maps.newConcurrentMap();
     private Map<Long, Map<String, List<RoutineLoadJob>>> dbToNameToRoutineLoadJob = Maps.newConcurrentMap();
 
-    private ReentrantReadWriteLock lock = new ReentrantReadWriteLock(true);
+    private ReentrantReadWriteLock lock = new ReentrantReadWriteLock(Config.routine_load_manager_fair_lock);
 
     private void writeLock() {
         lock.writeLock().lock();

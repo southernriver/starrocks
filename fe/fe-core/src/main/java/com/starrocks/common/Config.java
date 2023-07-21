@@ -2041,4 +2041,7 @@ public class Config extends ConfigBase {
     @ConfField(mutable = true)
     public static boolean support_print_query_before = false;
 
+    @ConfField(mutable = true)
+    public static boolean routine_load_manager_fair_lock = true;
+
 }
