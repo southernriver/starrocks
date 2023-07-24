@@ -86,18 +86,19 @@ public abstract class RoutineLoadTaskInfo {
     protected String msg;
 
     public RoutineLoadTaskInfo(UUID id, long jobId, long taskScheduleIntervalMs,
-                               long timeToExecuteMs) {
+                               long timeToExecuteMs, long timeoutMs) {
         this.id = id;
         this.jobId = jobId;
         this.createTimeMs = System.currentTimeMillis();
         this.taskScheduleIntervalMs = taskScheduleIntervalMs;
-        this.timeoutMs = 1000 * routineLoadManager.getJob(jobId).getTimeoutSecond();
         this.timeToExecuteMs = timeToExecuteMs;
+        this.timeoutMs = timeoutMs;
     }
 
     public RoutineLoadTaskInfo(UUID id, long jobId, long taskSchedulerIntervalMs,
-                               long timeToExecuteMs, long previousBeId, RoutineLoadTaskStatistics previousStatistics) {
-        this(id, jobId, taskSchedulerIntervalMs, timeToExecuteMs);
+                               long timeToExecuteMs, long timeoutMs, long previousBeId,
+                               RoutineLoadTaskStatistics previousStatistics) {
+        this(id, jobId, taskSchedulerIntervalMs, timeToExecuteMs, timeoutMs);
         this.previousBeId = previousBeId;
         this.statistics = previousStatistics;
     }

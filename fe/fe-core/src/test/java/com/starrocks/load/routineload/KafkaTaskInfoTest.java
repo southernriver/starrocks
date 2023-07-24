@@ -47,6 +47,7 @@ public class KafkaTaskInfoTest {
                 1L,
                 System.currentTimeMillis(),
                 System.currentTimeMillis(),
+                kafkaRoutineLoadJob.getTimeoutSecond() * 1000,
                 offset1);
         Assert.assertTrue(kafkaTaskInfo1.readyToExecute());
 
@@ -56,6 +57,7 @@ public class KafkaTaskInfoTest {
                 1L,
                 System.currentTimeMillis(),
                 System.currentTimeMillis(),
+                kafkaRoutineLoadJob.getTimeoutSecond() * 1000,
                 offset2);
         Assert.assertFalse(kafkaTaskInfo2.readyToExecute());
     }
@@ -87,6 +89,7 @@ public class KafkaTaskInfoTest {
                 1L,
                 System.currentTimeMillis(),
                 System.currentTimeMillis(),
+                kafkaRoutineLoadJob.getTimeoutSecond() * 1000,
                 offset);
         // call readyExecute to cache latestPartOffset
         kafkaTaskInfo.readyToExecute();

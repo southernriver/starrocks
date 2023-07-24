@@ -33,12 +33,6 @@ import java.util.stream.Collectors;
 
 public class IcebergTaskInfo extends RoutineLoadTaskInfo {
     private static final Logger LOG = LogManager.getLogger(IcebergTaskInfo.class);
-    // Different to kafka routine load which can stop consuming when reaches the deadline and commit,
-    // an iceberg routine task can only commit when all files are read or task is failed.
-    // Iceberg routine task's rangeDesc.file_type is FILE_BROKER,
-    // so that the underline implement on be is file_connector, it can't just read some files and skip the left.
-    // Thus, if there is a small timeout set, a task may be always timeout and can never succeed.
-    private static final int DEFAULT_TIMEOUT = 900;
     private RoutineLoadManager routineLoadManager = GlobalStateMgr.getCurrentState().getRoutineLoadManager();
 
     private final Queue<Pair<IcebergSplitMeta, CombinedScanTask>> splitsQueue;
@@ -47,21 +41,19 @@ public class IcebergTaskInfo extends RoutineLoadTaskInfo {
     private List<IcebergSplit> splits;
     private int renewCount;
 
-    public IcebergTaskInfo(UUID id, long jobId, long taskScheduleIntervalMs, long timeToExecuteMs,
+    public IcebergTaskInfo(UUID id, long jobId, long taskScheduleIntervalMs, long timeToExecuteMs, long timeoutMs,
                            String consumePosition, Queue<Pair<IcebergSplitMeta, CombinedScanTask>> splitsQueue,
                            IcebergProgress progress) {
-        super(id, jobId, taskScheduleIntervalMs, timeToExecuteMs);
-        this.timeoutMs = DEFAULT_TIMEOUT * 1000;
+        super(id, jobId, taskScheduleIntervalMs, timeToExecuteMs, timeoutMs);
         this.splitsQueue = splitsQueue;
         this.consumePosition = consumePosition;
         this.progress = progress;
     }
 
-    public IcebergTaskInfo(long timeToExecuteMs, IcebergTaskInfo icebergTaskInfo) {
+    public IcebergTaskInfo(long timeToExecuteMs, long timeoutMs, IcebergTaskInfo icebergTaskInfo) {
         super(UUID.randomUUID(), icebergTaskInfo.getJobId(), icebergTaskInfo.getTaskScheduleIntervalMs(),
-                resetTimeToExecuteMs(icebergTaskInfo, timeToExecuteMs), icebergTaskInfo.getBeId(),
+                resetTimeToExecuteMs(icebergTaskInfo, timeToExecuteMs), timeoutMs, icebergTaskInfo.getBeId(),
                 icebergTaskInfo.getStatistics());
-        this.timeoutMs = DEFAULT_TIMEOUT * 1000;
         this.splitsQueue = icebergTaskInfo.splitsQueue;
         this.consumePosition = icebergTaskInfo.consumePosition;
         this.progress = icebergTaskInfo.progress;
@@ -206,7 +198,7 @@ public class IcebergTaskInfo extends RoutineLoadTaskInfo {
         TUniqueId loadId = new TUniqueId(id.getMostSignificantBits(), id.getLeastSignificantBits());
         // plan for each task, in case table has change(rollup or schema change)
         TExecPlanFragmentParams tExecPlanFragmentParams =
-                routineLoadJob.plan(loadId, txnId, beId, DEFAULT_TIMEOUT, splits);
+                routineLoadJob.plan(loadId, txnId, beId, routineLoadJob.getTimeoutSecond(), splits);
         TPlanFragment tPlanFragment = tExecPlanFragmentParams.getFragment();
         tPlanFragment.getOutput_sink().getOlap_table_sink().setTxn_id(txnId);
         return tExecPlanFragmentParams;

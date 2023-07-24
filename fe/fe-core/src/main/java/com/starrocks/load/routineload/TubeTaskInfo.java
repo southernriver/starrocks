@@ -46,16 +46,16 @@ public class TubeTaskInfo extends RoutineLoadTaskInfo {
     private String filters = null;
     private Integer consumePosition = null;
 
-    public TubeTaskInfo(UUID id, long jobId, long taskScheduleIntervalMs, long timeToExecuteMs, String filters,
-                        Integer consumePosition) {
-        super(id, jobId, taskScheduleIntervalMs, timeToExecuteMs);
+    public TubeTaskInfo(UUID id, long jobId, long taskScheduleIntervalMs, long timeToExecuteMs, long timeoutMs,
+                        String filters, Integer consumePosition) {
+        super(id, jobId, taskScheduleIntervalMs, timeToExecuteMs, timeoutMs);
         this.filters = filters;
         this.consumePosition = consumePosition;
     }
 
-    public TubeTaskInfo(long timeToExecuteMs, TubeTaskInfo tubeTaskInfo) {
+    public TubeTaskInfo(long timeToExecuteMs, long timeoutMs, TubeTaskInfo tubeTaskInfo) {
         super(UUID.randomUUID(), tubeTaskInfo.getJobId(), tubeTaskInfo.getTaskScheduleIntervalMs(), timeToExecuteMs,
-                tubeTaskInfo.getBeId(), tubeTaskInfo.getStatistics());
+                timeoutMs, tubeTaskInfo.getBeId(), tubeTaskInfo.getStatistics());
         this.filters = tubeTaskInfo.getFilters();
     }
 

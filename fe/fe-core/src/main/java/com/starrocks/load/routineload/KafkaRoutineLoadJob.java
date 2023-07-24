@@ -197,8 +197,8 @@ public class KafkaRoutineLoadJob extends RoutineLoadJob {
                     }
                     long timeToExecuteMs = System.currentTimeMillis() + taskSchedIntervalS * 1000;
                     KafkaTaskInfo kafkaTaskInfo = new KafkaTaskInfo(UUID.randomUUID(), id,
-                            taskSchedIntervalS * 1000,
-                            timeToExecuteMs, taskKafkaProgress);
+                            taskSchedIntervalS * 1000, timeToExecuteMs,
+                            getTimeoutSecond() * 1000, taskKafkaProgress);
                     routineLoadTaskInfoList.add(kafkaTaskInfo);
                     result.add(kafkaTaskInfo);
                 }
@@ -282,7 +282,7 @@ public class KafkaRoutineLoadJob extends RoutineLoadJob {
     protected RoutineLoadTaskInfo unprotectRenewTask(long timeToExecuteMs, RoutineLoadTaskInfo routineLoadTaskInfo) {
         KafkaTaskInfo oldKafkaTaskInfo = (KafkaTaskInfo) routineLoadTaskInfo;
         // add new task
-        KafkaTaskInfo kafkaTaskInfo = new KafkaTaskInfo(timeToExecuteMs, oldKafkaTaskInfo,
+        KafkaTaskInfo kafkaTaskInfo = new KafkaTaskInfo(timeToExecuteMs, getTimeoutSecond() * 1000, oldKafkaTaskInfo,
                 ((KafkaProgress) progress).getPartitionIdToOffset(oldKafkaTaskInfo.getPartitions()));
         // remove old task
         routineLoadTaskInfoList.remove(routineLoadTaskInfo);

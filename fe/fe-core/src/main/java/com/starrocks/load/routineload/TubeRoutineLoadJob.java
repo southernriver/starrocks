@@ -103,8 +103,8 @@ public class TubeRoutineLoadJob extends RoutineLoadJob {
                 for (int i = 0; i < currentConcurrentTaskNum; i++) {
                     long timeToExecuteMs = System.currentTimeMillis() + taskSchedIntervalS * 1000;
                     TubeTaskInfo tubeTaskInfo =
-                            new TubeTaskInfo(UUID.randomUUID(), id, taskSchedIntervalS * 1000, timeToExecuteMs, filters,
-                                    consumePosition);
+                            new TubeTaskInfo(UUID.randomUUID(), id, taskSchedIntervalS * 1000,
+                                    timeToExecuteMs, getTimeoutSecond() * 1000, filters, consumePosition);
                     LOG.debug("tube routine load task created: " + tubeTaskInfo);
                     routineLoadTaskInfoList.add(tubeTaskInfo);
                     result.add(tubeTaskInfo);
@@ -190,7 +190,7 @@ public class TubeRoutineLoadJob extends RoutineLoadJob {
     protected RoutineLoadTaskInfo unprotectRenewTask(long timeToExecuteMs, RoutineLoadTaskInfo routineLoadTaskInfo) {
         TubeTaskInfo oldTubeTaskInfo = (TubeTaskInfo) routineLoadTaskInfo;
         // add new task
-        TubeTaskInfo tubeTaskInfo = new TubeTaskInfo(timeToExecuteMs, oldTubeTaskInfo);
+        TubeTaskInfo tubeTaskInfo = new TubeTaskInfo(timeToExecuteMs, getTimeoutSecond() * 1000, oldTubeTaskInfo);
         // remove old task
         routineLoadTaskInfoList.remove(routineLoadTaskInfo);
         // add new task

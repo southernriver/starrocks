@@ -79,6 +79,12 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
 
     public static final String ICEBERG_FILE_CATALOG = "iceberg";
     private static final long DEFAULT_SPLIT_SIZE = 2L * 1024 * 1024 * 1024; // 2 GB
+    // Different to kafka routine load which can stop consuming when reaches the deadline and commit,
+    // an iceberg routine task can only commit when all files are read or task is failed.
+    // Iceberg routine task's rangeDesc.file_type is FILE_BROKER,
+    // so that the underline implement on be is file_connector, it can't just read some files and skip the left.
+    // Thus, if there is a small timeout set, a task may be always timeout and can never succeed.
+    private static final int DEFAULT_TIMEOUT = 900;
 
     private String icebergCatalogType;
     private String icebergCatalogHiveMetastoreUris;
@@ -228,6 +234,11 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
     }
 
     @Override
+    public int getTimeoutSecond() {
+        return DEFAULT_TIMEOUT;
+    }
+
+    @Override
     public void divideRoutineLoadJob(int currentConcurrentTaskNum) throws UserException {
         getIceTbl();
         IcebergProgress icebergProgress = (IcebergProgress) progress;
@@ -258,8 +269,8 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
                 for (int i = 0; i < currentConcurrentTaskNum; i++) {
                     long timeToExecuteMs = System.currentTimeMillis() + taskSchedIntervalS * 1000;
                     IcebergTaskInfo icebergTaskInfo = new IcebergTaskInfo(UUID.randomUUID(), id,
-                            taskSchedIntervalS * 1000, timeToExecuteMs, icebergConsumePosition, splitsQueue,
-                            icebergProgress);
+                            taskSchedIntervalS * 1000, timeToExecuteMs, getTimeoutSecond() * 1000,
+                            icebergConsumePosition, splitsQueue, icebergProgress);
                     LOG.debug("iceberg routine load task created: " + icebergTaskInfo);
                     routineLoadTaskInfoList.add(icebergTaskInfo);
                     result.add(icebergTaskInfo);
@@ -376,7 +387,8 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
     protected RoutineLoadTaskInfo unprotectRenewTask(long timeToExecuteMs, RoutineLoadTaskInfo routineLoadTaskInfo) {
         IcebergTaskInfo oldIcebergTaskInfo = (IcebergTaskInfo) routineLoadTaskInfo;
         // add new task
-        IcebergTaskInfo icebergTaskInfo = new IcebergTaskInfo(timeToExecuteMs, oldIcebergTaskInfo);
+        IcebergTaskInfo icebergTaskInfo =
+                new IcebergTaskInfo(timeToExecuteMs, getTimeoutSecond() * 1000, oldIcebergTaskInfo);
         // remove old task
         routineLoadTaskInfoList.remove(routineLoadTaskInfo);
         // add new task

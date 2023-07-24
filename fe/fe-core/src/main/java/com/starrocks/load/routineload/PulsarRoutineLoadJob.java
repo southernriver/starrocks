@@ -171,7 +171,8 @@ public class PulsarRoutineLoadJob extends RoutineLoadJob {
                     }
                     long timeToExecuteMs = System.currentTimeMillis() + taskSchedIntervalS * 1000;
                     PulsarTaskInfo pulsarTaskInfo = new PulsarTaskInfo(UUID.randomUUID(), id,
-                            taskSchedIntervalS * 1000, timeToExecuteMs, partitions, initialPositions);
+                            taskSchedIntervalS * 1000, timeToExecuteMs,
+                            getTimeoutSecond() * 1000, partitions, initialPositions);
                     LOG.debug("pulsar routine load task created: " + pulsarTaskInfo);
                     routineLoadTaskInfoList.add(pulsarTaskInfo);
                     result.add(pulsarTaskInfo);
@@ -265,8 +266,9 @@ public class PulsarRoutineLoadJob extends RoutineLoadJob {
     protected RoutineLoadTaskInfo unprotectRenewTask(long timeToExecuteMs, RoutineLoadTaskInfo routineLoadTaskInfo) {
         PulsarTaskInfo oldPulsarTaskInfo = (PulsarTaskInfo) routineLoadTaskInfo;
         // add new task
-        PulsarTaskInfo pulsarTaskInfo = new PulsarTaskInfo(timeToExecuteMs, oldPulsarTaskInfo,
-                ((PulsarProgress) progress).getPartitionToInitialPosition(oldPulsarTaskInfo.getPartitions()));
+        PulsarTaskInfo pulsarTaskInfo =
+                new PulsarTaskInfo(timeToExecuteMs, getTimeoutSecond() * 1000, oldPulsarTaskInfo,
+                        ((PulsarProgress) progress).getPartitionToInitialPosition(oldPulsarTaskInfo.getPartitions()));
         // remove old task
         routineLoadTaskInfoList.remove(routineLoadTaskInfo);
         // add new task

@@ -54,7 +54,7 @@ public class RoutineLoadTaskSchedulerTest {
 
         Queue<RoutineLoadTaskInfo> routineLoadTaskInfoQueue = Queues.newLinkedBlockingQueue();
         KafkaTaskInfo routineLoadTaskInfo1 = new KafkaTaskInfo(new UUID(1, 1), 1L, 20000,
-                System.currentTimeMillis(), partitionIdToOffset);
+                System.currentTimeMillis(), routineLoadJob.getTimeoutSecond() * 1000, partitionIdToOffset);
         routineLoadTaskInfoQueue.add(routineLoadTaskInfo1);
 
         Map<Long, RoutineLoadTaskInfo> idToRoutineLoadTask = Maps.newHashMap();
