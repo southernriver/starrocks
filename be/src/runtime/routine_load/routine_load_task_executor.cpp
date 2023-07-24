@@ -164,8 +164,8 @@ Status RoutineLoadTaskExecutor::get_pulsar_partition_meta(const PPulsarMetaProxy
     return st;
 }
 
-Status RoutineLoadTaskExecutor::get_pulsar_partition_backlog(const PPulsarBacklogProxyRequest& request,
-                                                             std::vector<int64_t>* backlog_num) {
+Status RoutineLoadTaskExecutor::get_pulsar_partition_position(const PPulsarPositionProxyRequest& request,
+                                                              std::vector<pulsar::MessageId>* message_ids) {
     DCHECK(request.has_pulsar_info());
 
     // This context is meaningless, just for unifing the interface
@@ -196,17 +196,17 @@ Status RoutineLoadTaskExecutor::get_pulsar_partition_backlog(const PPulsarBacklo
         partitions.push_back(p);
     }
 
-    backlog_num->reserve(partitions.size());
+    message_ids->reserve(partitions.size());
 
     Status st;
     std::shared_ptr<DataConsumer> consumer;
     RETURN_IF_ERROR(_data_consumer_pool.get_consumer(&ctx, &consumer));
     for (const auto& p : partitions) {
-        int64_t backlog = 0;
-        RETURN_IF_ERROR(std::static_pointer_cast<PulsarDataConsumer>(consumer)->assign_partition(&ctx, p));
-        st = std::static_pointer_cast<PulsarDataConsumer>(consumer)->get_partition_backlog(&backlog);
+        pulsar::MessageId message_id;
+        RETURN_IF_ERROR(std::static_pointer_cast<PulsarDataConsumer>(consumer)->tmp_assign_partition(&ctx, p));
+        st = std::static_pointer_cast<PulsarDataConsumer>(consumer)->get_last_message_id(message_id);
         std::static_pointer_cast<PulsarDataConsumer>(consumer).reset();
-        backlog_num->push_back(backlog);
+        message_ids->push_back(message_id);
     }
 
     if (st.ok()) {
@@ -490,37 +490,7 @@ void RoutineLoadTaskExecutor::exec_task(StreamLoadContext* ctx, DataConsumerPool
         DeferOp delete_tp([tp_deleter] { return tp_deleter(); });
     } break;
     case TLoadSourceType::PULSAR: {
-        for (auto& kv : ctx->pulsar_info->ack_offset) {
-            Status st;
-            // get consumer
-            std::shared_ptr<DataConsumer> consumer;
-            st = _data_consumer_pool.get_consumer(ctx, &consumer);
-            if (!st.ok()) {
-                // Pulsar Offset Acknowledgement is idempotent, Failure should not block the normal process
-                // So just print a warning
-                LOG(WARNING) << st.get_error_msg();
-                break;
-            }
-
-            // assign partition for consumer
-            st = std::static_pointer_cast<PulsarDataConsumer>(consumer)->assign_partition(ctx, kv.first);
-            if (!st.ok()) {
-                // Pulsar Offset Acknowledgement is idempotent, Failure should not block the normal process
-                // So just print a warning
-                LOG(WARNING) << st.get_error_msg();
-            }
-
-            // do ack
-            st = std::static_pointer_cast<PulsarDataConsumer>(consumer)->acknowledge_cumulative(kv.second);
-            if (!st.ok()) {
-                // Pulsar Offset Acknowledgement is idempotent, Failure should not block the normal process
-                // So just print a warning
-                LOG(WARNING) << st.get_error_msg();
-            }
-
-            // return consumer
-            _data_consumer_pool.return_consumer(consumer);
-        }
+        // No need to do message confirm for reader mode
     } break;
     case TLoadSourceType::TUBE: {
         // Cumulative confirm is not supported by tubemq, but we need to break here and

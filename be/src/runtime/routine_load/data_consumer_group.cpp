@@ -291,14 +291,13 @@ Status KafkaDataConsumerGroup::get_data_items(const RdKafka::Message* msg, std::
 Status PulsarDataConsumerGroup::assign_topic_partitions(StreamLoadContext* ctx) {
     DCHECK(ctx->pulsar_info);
     DCHECK(_consumers.size() >= 1);
-    // Cumulative acknowledgement when consuming partitioned topics is not supported by pulsar
     DCHECK(_consumers.size() == ctx->pulsar_info->initial_positions.size());
 
     // assign partition to consumers
     int i = 0;
     for (auto& initial_position : ctx->pulsar_info->initial_positions) {
-        RETURN_IF_ERROR(std::static_pointer_cast<PulsarDataConsumer>(_consumers[i])
-                                ->assign_partition_and_seek_position(ctx, initial_position));
+        RETURN_IF_ERROR(
+                std::static_pointer_cast<PulsarDataConsumer>(_consumers[i])->assign_partition(ctx, initial_position));
         i++;
     }
 
@@ -486,8 +485,8 @@ Status PulsarDataConsumerGroup::start_all(StreamLoadContext* ctx) {
                 }
             } else {
                 LOG(WARNING) << "Redelivering pulsar message, partition: " << partition
-                             << ", message id[received]: " << msg_id << ", message id[already_consumed]: "
-                             << ack_offset[partition];
+                             << ", message id[received]: " << msg_id
+                             << ", message id[already_consumed]: " << ack_offset[partition];
             }
             delete msg;
         } else {
@@ -528,19 +527,6 @@ void PulsarDataConsumerGroup::update_ctx_info(StreamLoadContext* ctx) {
         std::string current_position;
         cur_msg_id.second.serialize(current_position);
         ctx->pulsar_info->current_positions[cur_msg_id.first] = current_position;
-    }
-
-    for (auto& consumer : _consumers) {
-        // get backlog num
-        int64_t backlog_num;
-        Status st = std::static_pointer_cast<PulsarDataConsumer>(consumer)->get_partition_backlog(&backlog_num);
-        if (!st.ok()) {
-            LOG(WARNING) << st.get_error_msg();
-        } else {
-            ctx->pulsar_info
-                    ->partition_backlog[std::static_pointer_cast<PulsarDataConsumer>(consumer)->get_partition()] =
-                    backlog_num;
-        }
     }
 }
 

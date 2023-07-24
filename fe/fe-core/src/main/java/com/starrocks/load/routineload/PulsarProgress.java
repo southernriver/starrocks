@@ -7,6 +7,7 @@ import com.google.common.collect.Maps;
 import com.google.gson.Gson;
 import com.starrocks.common.FeMetaVersion;
 import com.starrocks.common.Pair;
+import com.starrocks.common.UserException;
 import com.starrocks.common.io.Text;
 import com.starrocks.common.util.DebugUtil;
 import com.starrocks.server.GlobalStateMgr;
@@ -39,7 +40,7 @@ public class PulsarProgress extends RoutineLoadProgress {
         super(LoadDataSourceType.PULSAR);
     }
 
-    public PulsarProgress(TPulsarRLTaskProgress tPulsarRLTaskProgress) {
+    public PulsarProgress(TPulsarRLTaskProgress tPulsarRLTaskProgress) throws UserException {
         super(LoadDataSourceType.PULSAR);
         this.partitionToBacklogNum = tPulsarRLTaskProgress.getPartitionBacklogNum();
         for (Map.Entry<String, ByteBuffer> initialPosition : tPulsarRLTaskProgress.getPartitionInitialPositions()
@@ -48,7 +49,8 @@ public class PulsarProgress extends RoutineLoadProgress {
                 partitionToInitialPosition.put(initialPosition.getKey(),
                         MessageId.fromByteArray(initialPosition.getValue().array()));
             } catch (IOException e) {
-                throw new RuntimeException(e);
+                throw new UserException(
+                        "Failed to deserialize messageId for partition: " + initialPosition.getKey(), e);
             }
         }
     }

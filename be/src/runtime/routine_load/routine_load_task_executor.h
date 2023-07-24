@@ -93,7 +93,8 @@ public:
 
     Status get_pulsar_partition_meta(const PPulsarMetaProxyRequest& request, std::vector<std::string>* partitions);
 
-    Status get_pulsar_partition_backlog(const PPulsarBacklogProxyRequest& request, std::vector<int64_t>* backlog_num);
+    Status get_pulsar_partition_position(const PPulsarPositionProxyRequest& request,
+                                         std::vector<pulsar::MessageId>* message_ids);
 
 private:
     // execute the task

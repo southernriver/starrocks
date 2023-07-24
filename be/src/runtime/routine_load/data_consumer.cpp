@@ -549,8 +549,8 @@ Status PulsarDataConsumer::init(StreamLoadContext* ctx) {
     return Status::OK();
 }
 
-Status PulsarDataConsumer::assign_partition_and_seek_position(
-        StreamLoadContext* ctx, const std::pair<std::string, std::string>& initial_position) {
+Status PulsarDataConsumer::assign_partition(StreamLoadContext* ctx,
+                                            const std::pair<std::string, std::string>& initial_position) {
     pulsar::MessageId p_initial_position = pulsar::MessageId::deserialize(initial_position.second);
 
     ctx->pulsar_info->ack_offset[initial_position.first] = p_initial_position;
@@ -560,33 +560,31 @@ Status PulsarDataConsumer::assign_partition_and_seek_position(
        << ", subscription: " << _subscription << ", initial_position: " << p_initial_position;
     LOG(INFO) << ss.str();
 
-    assign_partition(ctx, initial_position.first);
-
     pulsar::Result result;
-    result = _p_consumer.seek(p_initial_position);
+    pulsar::ReaderConfiguration config;
+    result = _p_client->createReader(initial_position.first, p_initial_position, config, _p_reader);
     if (result != pulsar::ResultOk) {
-        LOG(WARNING) << "PAUSE: failed to reset the subscription: " << ctx->brief(true) << ", err: " << result;
-        return Status::InternalError("PAUSE: failed to reset the subscription: " +
+        LOG(WARNING) << "PAUSE: failed to create pulsar reader: " << ctx->brief(true) << ", err: " << result;
+        return Status::InternalError("PAUSE: failed to create pulsar reader: " +
                                      std::string(pulsar::strResult(result)));
     }
 
     return Status::OK();
 }
 
-Status PulsarDataConsumer::assign_partition(StreamLoadContext* ctx, const std::string& partition) {
-    DCHECK(_p_client);
+Status PulsarDataConsumer::tmp_assign_partition(StreamLoadContext* ctx, const std::string& partition) {
+    std::stringstream ss;
+    ss << "consumer: " << _id << ", grp: " << _grp_id << " tmp assign partition: " << partition
+       << ", subscription: " << _subscription << ", initial_position: " << pulsar::MessageId::latest();
+    LOG(INFO) << ss.str();
 
-    // do subscribe
     pulsar::Result result;
-    pulsar::ConsumerConfiguration config;
-    config.setBatchIndexAckEnabled(true);
-    config.setStartMessageIdInclusive(false);
-
-    result = _p_client->subscribe(partition, _subscription, config, _p_consumer);
+    pulsar::ReaderConfiguration config;
+    result = _p_client->createReader(partition, pulsar::MessageId::latest(), config, _p_reader);
     if (result != pulsar::ResultOk) {
         StarRocksMetrics::instance()->assign_failed_pulsar_consumer_num.increment(1);
-        LOG(WARNING) << "PAUSE: failed to create pulsar consumer: " << ctx->brief(true) << ", err: " << result;
-        return Status::InternalError("PAUSE: failed to create pulsar consumer: " +
+        LOG(WARNING) << "PAUSE: failed to create pulsar reader: " << ctx->brief(true) << ", err: " << result;
+        return Status::InternalError("PAUSE: failed to create pulsar reader: " +
                                      std::string(pulsar::strResult(result)));
     }
 
@@ -620,7 +618,7 @@ Status PulsarDataConsumer::group_consume(TimedBlockingQueue<pulsar::Message*>* q
         auto msg = std::make_unique<pulsar::Message>();
         // consume 1 message at a time
         consumer_watch.start();
-        pulsar::Result res = _p_consumer.receive(*(msg.get()), config::routine_load_pulsar_timeout_second * 1000);
+        pulsar::Result res = _p_reader.readNext(*(msg.get()), config::routine_load_pulsar_timeout_second * 1000);
         consumer_watch.stop();
         switch (res) {
         case pulsar::ResultOk:
@@ -665,19 +663,17 @@ Status PulsarDataConsumer::group_consume(TimedBlockingQueue<pulsar::Message*>* q
 
 const std::string& PulsarDataConsumer::get_partition() {
     _last_visit_time = time(nullptr);
-    return _p_consumer.getTopic();
+    return _p_reader.getTopic();
 }
 
-Status PulsarDataConsumer::get_partition_backlog(int64_t* backlog) {
+Status PulsarDataConsumer::get_last_message_id(pulsar::MessageId& msg_id) {
     _last_visit_time = time(nullptr);
-    pulsar::BrokerConsumerStats broker_consumer_stats;
-    pulsar::Result result = _p_consumer.getBrokerConsumerStats(broker_consumer_stats);
+    pulsar::Result result = _p_reader.getLastMessageId(msg_id);
     if (result != pulsar::ResultOk) {
         LOG(WARNING) << "Failed to get broker consumer stats: "
                      << ", err: " << result;
         return Status::InternalError("Failed to get broker consumer stats: " + std::string(pulsar::strResult(result)));
     }
-    *backlog = broker_consumer_stats.getMsgBacklog();
 
     return Status::OK();
 }
@@ -707,7 +703,7 @@ Status PulsarDataConsumer::cancel(StreamLoadContext* ctx) {
 Status PulsarDataConsumer::reset() {
     std::unique_lock<std::mutex> l(_lock);
     _cancelled = false;
-    _p_consumer.close();
+    _p_reader.close();
     return Status::OK();
 }
 
@@ -718,16 +714,6 @@ void PulsarDataConsumer::return_metric() {
 void PulsarDataConsumer::clean_metric() {
     StarRocksMetrics::instance()->idle_pulsar_consumer_num.decrement(1);
     StarRocksMetrics::instance()->bg_clean_pulsar_consumer_num.increment(1);
-}
-
-Status PulsarDataConsumer::acknowledge_cumulative(pulsar::MessageId& message_id) {
-    pulsar::Result res = _p_consumer.acknowledgeCumulative(message_id);
-    if (res != pulsar::ResultOk) {
-        std::stringstream ss;
-        ss << "failed to acknowledge pulsar message : " << res;
-        return Status::InternalError(pulsar::strResult(res));
-    }
-    return Status::OK();
 }
 
 bool PulsarDataConsumer::match(StreamLoadContext* ctx) {

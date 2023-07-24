@@ -21,6 +21,7 @@
 
 package com.starrocks.transaction;
 
+import com.starrocks.common.UserException;
 import com.starrocks.common.io.Text;
 import com.starrocks.common.io.Writable;
 import com.starrocks.load.loadv2.LoadJobFinalOperation;
@@ -48,7 +49,7 @@ public abstract class TxnCommitAttachment implements Writable {
         this.isTypeRead = isTypeRead;
     }
 
-    public static TxnCommitAttachment fromThrift(TTxnCommitAttachment txnCommitAttachment) {
+    public static TxnCommitAttachment fromThrift(TTxnCommitAttachment txnCommitAttachment) throws UserException {
         if (txnCommitAttachment != null) {
             switch (txnCommitAttachment.getLoadType()) {
                 case ROUTINE_LOAD:

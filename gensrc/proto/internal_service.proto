@@ -361,40 +361,56 @@ message PPulsarMetaProxyRequest {
     optional PPulsarLoadInfo pulsar_info = 1;
 };
 
+// deprecated
 message PPulsarBacklogProxyRequest {
     optional PPulsarLoadInfo pulsar_info = 1;
     repeated string partitions = 2;
 };
 
+// deprecated
 message PPulsarBacklogBatchProxyRequest {
     repeated PPulsarBacklogProxyRequest requests = 1;
 };
 
+message PPulsarPositionProxyRequest {
+    optional PPulsarLoadInfo pulsar_info = 1;
+    repeated string partitions = 2;
+};
+
 message PPulsarProxyRequest {
     optional PPulsarMetaProxyRequest pulsar_meta_request = 1;
-    optional PPulsarBacklogProxyRequest pulsar_backlog_request = 101;
-    optional PPulsarBacklogBatchProxyRequest pulsar_backlog_batch_request = 102;
+    optional PPulsarBacklogProxyRequest pulsar_backlog_request = 101 [deprecated = true];
+    optional PPulsarBacklogBatchProxyRequest pulsar_backlog_batch_request = 102 [deprecated = true];
     optional int64 timeout = 103;
+    optional PPulsarPositionProxyRequest pulsar_position_request = 104;
 };
 
 message PPulsarMetaProxyResult {
     repeated string partitions = 1;
 };
 
+// deprecated
 message PPulsarBacklogProxyResult {
     repeated string partitions = 1;
     repeated int64 backlog_nums = 2;
 }
 
+// deprecated
 message PPulsarBacklogBatchProxyResult {
     repeated PPulsarBacklogProxyResult results = 1;
+}
+
+message PPulsarPositionProxyResult {
+    repeated string partitions = 1;
+    repeated bytes message_ids = 2;
 }
 
 message PPulsarProxyResult {
     required StatusPB status = 1;
     optional PPulsarMetaProxyResult pulsar_meta_result = 2;
-    optional PPulsarBacklogProxyResult pulsar_backlog_result = 101;
-    optional PPulsarBacklogBatchProxyResult pulsar_backlog_batch_result = 102;
+    optional PPulsarBacklogProxyResult pulsar_backlog_result = 101 [deprecated = true];
+    optional PPulsarBacklogBatchProxyResult pulsar_backlog_batch_result = 102 [deprecated = true];
+    optional PPulsarPositionProxyResult pulsar_position_result = 103;
 };
 
 message ExecuteCommandRequestPB {

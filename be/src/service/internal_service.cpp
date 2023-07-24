@@ -588,37 +588,21 @@ void PInternalServiceImplBase<T>::_get_pulsar_info_impl(
         st.to_protobuf(response->mutable_status());
         return;
     }
-    if (request->has_pulsar_backlog_request()) {
-        std::vector<int64_t> backlog_nums;
-        Status st = _exec_env->routine_load_task_executor()->get_pulsar_partition_backlog(
-                request->pulsar_backlog_request(), &backlog_nums);
+    if (request->has_pulsar_position_request()) {
+        std::vector<pulsar::MessageId> message_ids;
+        Status st = _exec_env->routine_load_task_executor()->get_pulsar_partition_position(
+                request->pulsar_position_request(), &message_ids);
         if (st.ok()) {
-            auto result = response->mutable_pulsar_backlog_result();
-            for (int i = 0; i < backlog_nums.size(); i++) {
-                result->add_partitions(request->pulsar_backlog_request().partitions(i));
-                result->add_backlog_nums(backlog_nums[i]);
+            auto result = response->mutable_pulsar_position_result();
+            for (int i = 0; i < message_ids.size(); i++) {
+                result->add_partitions(request->pulsar_position_request().partitions(i));
+                std::string message_id;
+                message_ids[i].serialize(message_id);
+                result->add_message_ids(message_id);
             }
         }
         st.to_protobuf(response->mutable_status());
         return;
-    }
-    if (request->has_pulsar_backlog_batch_request()) {
-        for (const auto& backlog_req : request->pulsar_backlog_batch_request().requests()) {
-            std::vector<int64_t> backlog_nums;
-            Status st =
-                    _exec_env->routine_load_task_executor()->get_pulsar_partition_backlog(backlog_req, &backlog_nums);
-            auto backlog_result = response->mutable_pulsar_backlog_batch_result()->add_results();
-            if (st.ok()) {
-                for (int i = 0; i < backlog_nums.size(); i++) {
-                    backlog_result->add_partitions(backlog_req.partitions(i));
-                    backlog_result->add_backlog_nums(backlog_nums[i]);
-                }
-            } else {
-                response->clear_pulsar_backlog_batch_result();
-                st.to_protobuf(response->mutable_status());
-                return;
-            }
-        }
     }
     Status::OK().to_protobuf(response->mutable_status());
 }

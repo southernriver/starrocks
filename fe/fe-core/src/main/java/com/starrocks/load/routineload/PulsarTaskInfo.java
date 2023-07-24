@@ -23,6 +23,7 @@ import com.starrocks.thrift.TRoutineLoadTask;
 import com.starrocks.thrift.TUniqueId;
 import org.apache.pulsar.client.api.MessageId;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
@@ -65,6 +66,7 @@ public class PulsarTaskInfo extends RoutineLoadTaskInfo {
 
     @Override
     public boolean readyToExecute() throws UserException {
+        boolean ready = false;
         RoutineLoadJob routineLoadJob = routineLoadManager.getJob(jobId);
         if (routineLoadJob == null) {
             return false;
@@ -73,17 +75,22 @@ public class PulsarTaskInfo extends RoutineLoadTaskInfo {
         List<String> partitions = new ArrayList<>(initialPositions.keySet());
 
         PulsarRoutineLoadJob pulsarRoutineLoadJob = (PulsarRoutineLoadJob) routineLoadJob;
-        Map<String, Long> backlogNums = PulsarUtil.getBacklogNums(pulsarRoutineLoadJob.getServiceUrl(),
+        Map<String, byte[]> latestPositions = PulsarUtil.getPositions(pulsarRoutineLoadJob.getServiceUrl(),
                 pulsarRoutineLoadJob.getTopic(), pulsarRoutineLoadJob.getSubscription(),
                 ImmutableMap.copyOf(pulsarRoutineLoadJob.getConvertedCustomProperties()), partitions);
         for (String partition : partitions) {
-            Long backlogNum = backlogNums.get(partition);
-            if (backlogNum != null && backlogNum > 0) {
-                return true;
+            MessageId latestPosition = null;
+            try {
+                latestPosition = MessageId.fromByteArray(latestPositions.get(partition));
+            } catch (IOException e) {
+                throw new RoutineLoadPauseException("Failed to deserialize messageId for partition: " + partition);
+            }
+            if (initialPositions.get(partition).compareTo(latestPosition) == -1) {
+                ready = true;
             }
         }
 
-        return false;
+        return ready;
     }
 
     // TODO(chen9t) there's no way to find out how many backlogs have been consumed in this round,
