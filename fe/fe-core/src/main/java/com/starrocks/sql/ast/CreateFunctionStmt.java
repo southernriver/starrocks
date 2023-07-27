@@ -281,8 +281,8 @@ public class CreateFunctionStmt extends DdlStmt {
 
     private void analyzeUdfClassInStarrocksJar() throws AnalysisException {
         String className = properties.get(SYMBOL_KEY);
-        isAllClassLoad = Boolean.parseBoolean(Optional.of(properties.get(ALL_CLASS_LOAD))
-                .map(String::toLowerCase).get());
+        isAllClassLoad = Optional.ofNullable(properties.get(ALL_CLASS_LOAD))
+                .map(Boolean::parseBoolean).orElse(false);
         if (Strings.isNullOrEmpty(className)) {
             throw new AnalysisException("No '" + SYMBOL_KEY + "' in properties");
         }
