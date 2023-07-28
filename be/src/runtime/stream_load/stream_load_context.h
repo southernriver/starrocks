@@ -102,7 +102,6 @@ public:
     void reset_position() {
         current_positions.clear();
         ack_offset.clear();
-        partition_backlog.clear();
     }
 
 public:
@@ -114,8 +113,6 @@ public:
 
     // partition -> acknowledge offset, inclusive.
     std::map<std::string, pulsar::MessageId> ack_offset;
-    // partition -> backlog num, inclusive.
-    std::map<std::string, int64_t> partition_backlog;
 
     // custom kafka property key -> value
     std::map<std::string, std::string> properties;

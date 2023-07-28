@@ -386,7 +386,6 @@ bool StreamLoadExecutor::collect_load_stat(StreamLoadContext* ctx, TTxnCommitAtt
         rl_attach.loadSourceType = TLoadSourceType::PULSAR;
 
         TPulsarRLTaskProgress pulsar_progress;
-        pulsar_progress.partitionBacklogNum = ctx->pulsar_info->partition_backlog;
         pulsar_progress.partitionInitialPositions = ctx->pulsar_info->current_positions;
 
         rl_attach.pulsarRLTaskProgress = pulsar_progress;

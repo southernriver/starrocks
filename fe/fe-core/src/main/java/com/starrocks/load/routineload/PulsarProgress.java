@@ -20,7 +20,6 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,8 +31,6 @@ import java.util.Map;
 public class PulsarProgress extends RoutineLoadProgress {
     private static final Logger LOG = LogManager.getLogger(PulsarProgress.class);
 
-    // (partition, backlog num)
-    private Map<String, Long> partitionToBacklogNum = Maps.newConcurrentMap();
     private Map<String, MessageId> partitionToInitialPosition = Maps.newConcurrentMap();
 
     public PulsarProgress() {
@@ -42,7 +39,6 @@ public class PulsarProgress extends RoutineLoadProgress {
 
     public PulsarProgress(TPulsarRLTaskProgress tPulsarRLTaskProgress) throws UserException {
         super(LoadDataSourceType.PULSAR);
-        this.partitionToBacklogNum = tPulsarRLTaskProgress.getPartitionBacklogNum();
         for (Map.Entry<String, ByteBuffer> initialPosition : tPulsarRLTaskProgress.getPartitionInitialPositions()
                 .entrySet()) {
             try {
@@ -74,10 +70,6 @@ public class PulsarProgress extends RoutineLoadProgress {
         return result;
     }
 
-    public List<Long> getBacklogNums() {
-        return new ArrayList<Long>(partitionToBacklogNum.values());
-    }
-
     public MessageId getInitialPositionByPartition(String partition) {
         // TODO: tmp code for compatibility
         if (!partitionToInitialPosition.containsKey(partition)) {
@@ -100,32 +92,31 @@ public class PulsarProgress extends RoutineLoadProgress {
         }
     }
 
-    private void getReadableProgress(Map<String, String> showPartitionIdToPosition) {
-        for (Map.Entry<String, Long> entry : partitionToBacklogNum.entrySet()) {
-            showPartitionIdToPosition.put(entry.getKey() + "(BacklogNum)", String.valueOf(entry.getValue()));
+    private void getReadableProgress(Map<String, String> showPartitionToPosition) {
+        for (Map.Entry<String, MessageId> entry : partitionToInitialPosition.entrySet()) {
+            showPartitionToPosition.put(entry.getKey(), entry.getValue().toString());
         }
     }
 
     @Override
     public String toString() {
-        Map<String, String> showPartitionToBacklogNum = Maps.newHashMap();
-        getReadableProgress(showPartitionToBacklogNum);
-        return "PulsarProgress [partitionToBacklogNum="
-                + Joiner.on("|").withKeyValueSeparator("_").join(showPartitionToBacklogNum) + "]";
+        Map<String, String> showPartitionToPosition = Maps.newHashMap();
+        getReadableProgress(showPartitionToPosition);
+        return "PulsarProgress [partitionToPosition="
+                + Joiner.on("|").withKeyValueSeparator("_").join(showPartitionToPosition) + "]";
     }
 
     @Override
     public String toJsonString() {
-        Map<String, String> showPartitionToBacklogNum = Maps.newHashMap();
-        getReadableProgress(showPartitionToBacklogNum);
+        Map<String, String> showPartitionToPosition = Maps.newHashMap();
+        getReadableProgress(showPartitionToPosition);
         Gson gson = new Gson();
-        return gson.toJson(showPartitionToBacklogNum);
+        return gson.toJson(showPartitionToPosition);
     }
 
     @Override
     public void update(RLTaskTxnCommitAttachment attachment) {
         PulsarProgress newProgress = (PulsarProgress) attachment.getProgress();
-        this.partitionToBacklogNum.putAll(newProgress.partitionToBacklogNum);
         this.partitionToInitialPosition.putAll(newProgress.partitionToInitialPosition);
         LOG.debug("update pulsar progress: {}, task: {}, job: {}",
                 newProgress.toJsonString(), DebugUtil.printId(attachment.getTaskId()), attachment.getJobId());
@@ -147,9 +138,9 @@ public class PulsarProgress extends RoutineLoadProgress {
         super.readFields(in);
         if (GlobalStateMgr.getCurrentStateJournalVersion() < FeMetaVersion.VERSION_95) {
             int backlogSize = in.readInt();
-            partitionToBacklogNum = new HashMap<>();
+            Map<String, Long> tmpPartitionToBacklogNum = new HashMap<>();
             for (int i = 0; i < backlogSize; i++) {
-                partitionToBacklogNum.put(Text.readString(in), in.readLong());
+                tmpPartitionToBacklogNum.put(Text.readString(in), in.readLong());
             }
         }
 
