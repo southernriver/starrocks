@@ -225,6 +225,13 @@ Status KafkaDataConsumerGroup::start_all(StreamLoadContext* ctx) {
                             }
                         }
                         cmt_offset[msg->partition()] = msg->offset();
+                        if (_consume_lags.find(msg->partition()) == _consume_lags.end()) {
+                            auto msg_timestamp = std::chrono::time_point<std::chrono::system_clock>(
+                                    std::chrono::milliseconds(msg->timestamp().timestamp));
+                            _consume_lags[msg->partition()] = std::chrono::duration_cast<std::chrono::seconds>(
+                                                                      std::chrono::system_clock::now() - msg_timestamp)
+                                                                      .count();
+                        }
                         VLOG(3) << "consume partition[" << msg->partition() << " - " << msg->offset() << "]";
                     } else {
                         LOG(WARNING) << "failed to append msg to pipe. grp: " << _grp_id
@@ -237,6 +244,13 @@ Status KafkaDataConsumerGroup::start_all(StreamLoadContext* ctx) {
                         received_rows++;
                         left_bytes -= msg->len();
                         cmt_offset[msg->partition()] = msg->offset();
+                        if (_consume_lags.find(msg->partition()) == _consume_lags.end()) {
+                            auto msg_timestamp = std::chrono::time_point<std::chrono::system_clock>(
+                                    std::chrono::milliseconds(msg->timestamp().timestamp));
+                            _consume_lags[msg->partition()] = std::chrono::duration_cast<std::chrono::seconds>(
+                                                                      std::chrono::system_clock::now() - msg_timestamp)
+                                                                      .count();
+                        }
                         VLOG(3) << "consume partition[" << msg->partition() << " - " << msg->offset() << "]";
                     } else {
                         // failed to append this msg, we must stop
@@ -454,6 +468,13 @@ Status PulsarDataConsumerGroup::start_all(StreamLoadContext* ctx) {
                             }
                         }
                         ack_offset[partition] = msg_id;
+                        if (_consume_lags.find(partition) == _consume_lags.end()) {
+                            auto msg_timestamp = std::chrono::time_point<std::chrono::system_clock>(
+                                    std::chrono::milliseconds(msg->getPublishTimestamp()));
+                            _consume_lags[partition] = std::chrono::duration_cast<std::chrono::seconds>(
+                                                               std::chrono::system_clock::now() - msg_timestamp)
+                                                               .count();
+                        }
                         VLOG(3) << "consume partition" << partition << " - " << msg_id;
                     } else {
                         LOG(WARNING) << "failed to append msg to pipe. grp: " << _grp_id
@@ -466,6 +487,13 @@ Status PulsarDataConsumerGroup::start_all(StreamLoadContext* ctx) {
                         received_rows++;
                         left_bytes -= len;
                         ack_offset[partition] = msg_id;
+                         if (_consume_lags.find(partition) == _consume_lags.end()) {
+                            auto msg_timestamp = std::chrono::time_point<std::chrono::system_clock>(
+                                    std::chrono::milliseconds(msg->getPublishTimestamp()));
+                            _consume_lags[partition] = std::chrono::duration_cast<std::chrono::seconds>(
+                                                               std::chrono::system_clock::now() - msg_timestamp)
+                                                               .count();
+                        }
                         VLOG(3) << "consume partition" << partition << " - " << msg_id;
                     } else {
                         // failed to append this msg, we must stop
