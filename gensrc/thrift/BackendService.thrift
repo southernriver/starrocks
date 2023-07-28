@@ -56,9 +56,8 @@ struct TPulsarLoadInfo {
     1: required string service_url;
     2: required string topic;
     3: required string subscription;
-    4: required list<string> partitions;
-    5: optional map<string, i64> initial_positions;
-    6: optional map<string, string> properties;
+    4: optional map<string, binary> initial_positions;
+    5: optional map<string, string> properties;
 }
 
 struct TTubeLoadInfo {

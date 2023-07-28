@@ -27,19 +27,16 @@ import com.google.common.collect.Maps;
 import com.google.gson.annotations.SerializedName;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Pair;
-import com.starrocks.common.util.Util;
 import com.starrocks.load.routineload.IcebergCreateRoutineLoadStmtConfig;
 import com.starrocks.load.routineload.LoadDataSourceType;
 import com.starrocks.sql.ast.CreateRoutineLoadStmt;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.pulsar.client.api.MessageId;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 public class RoutineLoadDataSourceProperties {
     private static final Logger LOG = LogManager.getLogger(RoutineLoadDataSourceProperties.class);
@@ -72,7 +69,7 @@ public class RoutineLoadDataSourceProperties {
     private Map<String, String> customKafkaProperties = Maps.newHashMap();
 
     @SerializedName(value = "pulsarPartitionInitialPositions")
-    private List<Pair<String, Long>> pulsarPartitionInitialPositions = Lists.newArrayList();
+    private List<Pair<String, MessageId>> pulsarPartitionInitialPositions = Lists.newArrayList();
     @SerializedName(value = "customPulsarProperties")
     private Map<String, String> customPulsarProperties = Maps.newHashMap();
     @SerializedName(value = "customIcebergProperties")
@@ -120,7 +117,7 @@ public class RoutineLoadDataSourceProperties {
         return customKafkaProperties;
     }
 
-    public List<Pair<String, Long>> getPulsarPartitionInitialPositions() {
+    public List<Pair<String, MessageId>> getPulsarPartitionInitialPositions() {
         return pulsarPartitionInitialPositions;
     }
 
@@ -206,7 +203,6 @@ public class RoutineLoadDataSourceProperties {
         CreateRoutineLoadStmt.analyzePulsarCustomProperties(properties, customPulsarProperties);
 
         // check partitions
-        List<String> pulsarPartitions = Lists.newArrayList();
         final String pulsarPartitionsString = properties.get(CreateRoutineLoadStmt.PULSAR_PARTITIONS_PROPERTY);
         if (pulsarPartitionsString != null) {
             if (!properties.containsKey(CreateRoutineLoadStmt.PULSAR_INITIAL_POSITIONS_PROPERTY) &&
@@ -214,7 +210,7 @@ public class RoutineLoadDataSourceProperties {
                 throw new AnalysisException("Partition and [default]position must be specified at the same time");
             }
             CreateRoutineLoadStmt.analyzePulsarPartitionProperty(pulsarPartitionsString,
-                    customPulsarProperties, pulsarPartitions, pulsarPartitionInitialPositions);
+                    customPulsarProperties, pulsarPartitionInitialPositions);
         } else {
             if (properties.containsKey(CreateRoutineLoadStmt.PULSAR_INITIAL_POSITIONS_PROPERTY)) {
                 throw new AnalysisException("Missing pulsar partition info");
@@ -224,8 +220,7 @@ public class RoutineLoadDataSourceProperties {
         // check position
         String pulsarPositionsString = properties.get(CreateRoutineLoadStmt.PULSAR_INITIAL_POSITIONS_PROPERTY);
         if (pulsarPositionsString != null) {
-            CreateRoutineLoadStmt.analyzePulsarPositionProperty(pulsarPositionsString,
-                    pulsarPartitions, pulsarPartitionInitialPositions);
+            CreateRoutineLoadStmt.analyzePulsarPositionProperty(pulsarPositionsString, pulsarPartitionInitialPositions);
         }
     }
 

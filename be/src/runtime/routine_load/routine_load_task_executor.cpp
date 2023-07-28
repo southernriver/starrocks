@@ -203,7 +203,7 @@ Status RoutineLoadTaskExecutor::get_pulsar_partition_backlog(const PPulsarBacklo
     RETURN_IF_ERROR(_data_consumer_pool.get_consumer(&ctx, &consumer));
     for (const auto& p : partitions) {
         int64_t backlog = 0;
-        RETURN_IF_ERROR(std::static_pointer_cast<PulsarDataConsumer>(consumer)->assign_partition(p, &ctx));
+        RETURN_IF_ERROR(std::static_pointer_cast<PulsarDataConsumer>(consumer)->assign_partition(&ctx, p));
         st = std::static_pointer_cast<PulsarDataConsumer>(consumer)->get_partition_backlog(&backlog);
         std::static_pointer_cast<PulsarDataConsumer>(consumer).reset();
         backlog_num->push_back(backlog);
@@ -503,7 +503,7 @@ void RoutineLoadTaskExecutor::exec_task(StreamLoadContext* ctx, DataConsumerPool
             }
 
             // assign partition for consumer
-            st = std::static_pointer_cast<PulsarDataConsumer>(consumer)->assign_partition(kv.first, ctx);
+            st = std::static_pointer_cast<PulsarDataConsumer>(consumer)->assign_partition(ctx, kv.first);
             if (!st.ok()) {
                 // Pulsar Offset Acknowledgement is idempotent, Failure should not block the normal process
                 // So just print a warning

@@ -620,6 +620,7 @@ struct TKafkaRLTaskProgress {
 
 struct TPulsarRLTaskProgress {
     1: required map<string,i64> partitionBacklogNum
+    2: required map<string,binary> partitionInitialPositions
 }
 
 struct TTubeRLTaskProgress {

@@ -98,7 +98,7 @@ Status StreamLoadExecutor::execute_plan_fragment(StreamLoadContext* ctx) {
                         ctx->kafka_info->reset_offset();
                         break;
                     case TLoadSourceType::PULSAR:
-                        ctx->pulsar_info->clear_backlog();
+                        ctx->pulsar_info->reset_position();
                         break;
                     case TLoadSourceType::TUBE:
                         ctx->tube_info->reset_offset();
@@ -387,6 +387,7 @@ bool StreamLoadExecutor::collect_load_stat(StreamLoadContext* ctx, TTxnCommitAtt
 
         TPulsarRLTaskProgress pulsar_progress;
         pulsar_progress.partitionBacklogNum = ctx->pulsar_info->partition_backlog;
+        pulsar_progress.partitionInitialPositions = ctx->pulsar_info->current_positions;
 
         rl_attach.pulsarRLTaskProgress = pulsar_progress;
         rl_attach.__isset.pulsarRLTaskProgress = true;

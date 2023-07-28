@@ -46,6 +46,10 @@ public class Pair<F, S> {
         return new Pair<F, S>(first, second);
     }
 
+    public F getFirst() {
+        return first;
+    }
+
     @Override
     /*
      * A pair is equal if both parts are equal().

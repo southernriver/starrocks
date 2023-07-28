@@ -258,7 +258,7 @@ public class RoutineLoadTaskScheduler extends LeaderDaemon {
                         tRoutineLoadTask.getJob_id());
             } else if (tRoutineLoadTask.isSetPulsar_load_info()) {
                 LOG.debug("send pulsar routine load task {} with partitions: {}, job: {}",
-                        tRoutineLoadTask.label, tRoutineLoadTask.pulsar_load_info.partitions,
+                        tRoutineLoadTask.label, tRoutineLoadTask.pulsar_load_info.initial_positions.keySet(),
                         tRoutineLoadTask.getJob_id());
             } else if (tRoutineLoadTask.isSetTube_load_info()) {
                 LOG.debug("send tube routine load task {} with topic: {}, job: {}",

@@ -105,7 +105,7 @@ private:
     void actual_consume(const std::shared_ptr<DataConsumer>& consumer, TimedBlockingQueue<pulsar::Message*>* queue,
                         int64_t max_running_time_ms, const ConsumeFinishCallback& cb);
 
-    void get_backlog_nums(StreamLoadContext* ctx);
+    void update_ctx_info(StreamLoadContext* ctx);
     Status get_data_items(const pulsar::Message* msg, std::list<tubemq::DataItem>* data_items);
 
 private:

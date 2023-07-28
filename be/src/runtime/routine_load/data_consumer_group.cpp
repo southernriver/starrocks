@@ -205,14 +205,15 @@ Status KafkaDataConsumerGroup::start_all(StreamLoadContext* ctx) {
                 }
             } else {
                 Status st;
-                if(ctx->format == TFileFormatType::FORMAT_TDMSG_KV || ctx->format == TFileFormatType::FORMAT_TDMSG_CSV){
+                if (ctx->format == TFileFormatType::FORMAT_TDMSG_KV ||
+                    ctx->format == TFileFormatType::FORMAT_TDMSG_CSV) {
                     std::list<tubemq::DataItem> data_items;
                     st = get_data_items(msg, &data_items);
                     if (st.ok()) {
                         for (auto& data_item : data_items) {
                             std::size_t len = data_item.GetLength();
                             st = (kafka_pipe.get()->*append_data)(static_cast<const char*>(data_item.GetData()),
-                                                                 static_cast<size_t>(len), row_delimiter);
+                                                                  static_cast<size_t>(len), row_delimiter);
                             if (st.ok()) {
                                 received_rows++;
                                 left_bytes -= len;
@@ -225,19 +226,19 @@ Status KafkaDataConsumerGroup::start_all(StreamLoadContext* ctx) {
                         }
                         cmt_offset[msg->partition()] = msg->offset();
                         VLOG(3) << "consume partition[" << msg->partition() << " - " << msg->offset() << "]";
-                    }else{
+                    } else {
                         LOG(WARNING) << "failed to append msg to pipe. grp: " << _grp_id
                                      << ", errmsg=" << st.get_error_msg();
                     }
-                }else {
+                } else {
                     st = (kafka_pipe.get()->*append_data)(static_cast<const char*>(msg->payload()),
-                                                                 static_cast<size_t>(msg->len()), row_delimiter);
+                                                          static_cast<size_t>(msg->len()), row_delimiter);
                     if (st.ok()) {
                         received_rows++;
                         left_bytes -= msg->len();
                         cmt_offset[msg->partition()] = msg->offset();
                         VLOG(3) << "consume partition[" << msg->partition() << " - " << msg->offset() << "]";
-                    }else{
+                    } else {
                         // failed to append this msg, we must stop
                         LOG(WARNING) << "failed to append msg to pipe. grp: " << _grp_id
                                      << ", errmsg=" << st.get_error_msg();
@@ -291,19 +292,14 @@ Status PulsarDataConsumerGroup::assign_topic_partitions(StreamLoadContext* ctx) 
     DCHECK(ctx->pulsar_info);
     DCHECK(_consumers.size() >= 1);
     // Cumulative acknowledgement when consuming partitioned topics is not supported by pulsar
-    DCHECK(_consumers.size() == ctx->pulsar_info->partitions.size());
+    DCHECK(_consumers.size() == ctx->pulsar_info->initial_positions.size());
 
     // assign partition to consumers
-    int consumer_size = _consumers.size();
-    for (int i = 0; i < consumer_size; ++i) {
-        auto iter = ctx->pulsar_info->initial_positions.find(ctx->pulsar_info->partitions[i]);
-        if (iter != ctx->pulsar_info->initial_positions.end()) {
-            RETURN_IF_ERROR(std::static_pointer_cast<PulsarDataConsumer>(_consumers[i])
-                                    ->assign_partition(ctx->pulsar_info->partitions[i], ctx, iter->second));
-        } else {
-            RETURN_IF_ERROR(std::static_pointer_cast<PulsarDataConsumer>(_consumers[i])
-                                    ->assign_partition(ctx->pulsar_info->partitions[i], ctx));
-        }
+    int i = 0;
+    for (auto& initial_position : ctx->pulsar_info->initial_positions) {
+        RETURN_IF_ERROR(std::static_pointer_cast<PulsarDataConsumer>(_consumers[i])
+                                ->assign_partition_and_seek_position(ctx, initial_position));
+        i++;
     }
 
     return Status::OK();
@@ -328,21 +324,20 @@ Status PulsarDataConsumerGroup::start_all(StreamLoadContext* ctx) {
     Status result_st = Status::OK();
     // start all consumers
     for (auto& consumer : _consumers) {
-        if (!_thread_pool.offer(
-                    [this, consumer, capture0 = &_queue, capture1 = ctx->max_interval_s * 1000,
-                     capture2 =
-                             [this, &result_st](const Status& st) {
-                                 std::unique_lock<std::mutex> lock(_mutex);
-                                 _counter--;
-                                 VLOG(1) << "group counter is: " << _counter << ", grp: " << _grp_id;
-                                 if (_counter == 0) {
-                                     _queue.shutdown();
-                                     LOG(INFO) << "all consumers are finished. shutdown queue. group id: " << _grp_id;
-                                 }
-                                 if (result_st.ok() && !st.ok()) {
-                                     result_st = st;
-                                 }
-                             }] { actual_consume(consumer, capture0, capture1, capture2); })) {
+        if (!_thread_pool.offer([this, consumer, capture0 = &_queue, capture1 = ctx->max_interval_s * 1000,
+                                 capture2 = [this, &result_st](const Status& st) {
+                                     std::unique_lock<std::mutex> lock(_mutex);
+                                     _counter--;
+                                     VLOG(1) << "group counter is: " << _counter << ", grp: " << _grp_id;
+                                     if (_counter == 0) {
+                                         _queue.shutdown();
+                                         LOG(INFO)
+                                                 << "all consumers are finished. shutdown queue. group id: " << _grp_id;
+                                     }
+                                     if (result_st.ok() && !st.ok()) {
+                                         result_st = st;
+                                     }
+                                 }] { actual_consume(consumer, capture0, capture1, capture2); })) {
             LOG(WARNING) << "failed to submit data consumer: " << consumer->id() << ", group id: " << _grp_id;
             return Status::InternalError("failed to submit data consumer");
         } else {
@@ -422,7 +417,7 @@ Status PulsarDataConsumerGroup::start_all(StreamLoadContext* ctx) {
                 ctx->rltask_statistics = RoutineLoadTaskStatistics(
                         ctx->max_interval_s * 1000 - left_time, _queue.total_get_wait_time() / 1000,
                         _queue.total_put_wait_time() / 1000, received_rows, ctx->receive_bytes, _consume_lags);
-                get_backlog_nums(ctx);
+                update_ctx_info(ctx);
                 return Status::OK();
             }
         }
@@ -437,54 +432,62 @@ Status PulsarDataConsumerGroup::start_all(StreamLoadContext* ctx) {
             VLOG(3) << "get pulsar message"
                     << ", partition: " << partition << ", message id: " << msg_id << ", len: " << len;
 
-            Status st;
-            if(ctx->format == TFileFormatType::FORMAT_TDMSG_KV || ctx->format == TFileFormatType::FORMAT_TDMSG_CSV){
-                std::list<tubemq::DataItem> data_items;
-                st = get_data_items(msg, &data_items);
-                if (st.ok()) {
-                    for (auto& data_item : data_items) {
-                        std::size_t tdmsg_len = data_item.GetLength();
-                        st = (pulsar_pipe.get()->*append_data)(static_cast<const char*>(data_item.GetData()),
-                                                              static_cast<size_t>(tdmsg_len), row_delimiter);
-                        if (st.ok()) {
-                            received_rows++;
-                            left_bytes -= tdmsg_len;
-                        } else {
-                            // failed to append this msg, we must stop
-                            LOG(WARNING) << "failed to append msg to pipe. grp: " << _grp_id
-                                         << ", errmsg=" << st.get_error_msg();
-                            break;
+            // Pulsar server might redeliver same messages when it's restart
+            if (ack_offset[partition] == pulsar::MessageId::latest() || msg_id > ack_offset[partition]) {
+                Status st;
+                if (ctx->format == TFileFormatType::FORMAT_TDMSG_KV ||
+                    ctx->format == TFileFormatType::FORMAT_TDMSG_CSV) {
+                    std::list<tubemq::DataItem> data_items;
+                    st = get_data_items(msg, &data_items);
+                    if (st.ok()) {
+                        for (auto& data_item : data_items) {
+                            std::size_t tdmsg_len = data_item.GetLength();
+                            st = (pulsar_pipe.get()->*append_data)(static_cast<const char*>(data_item.GetData()),
+                                                                   static_cast<size_t>(tdmsg_len), row_delimiter);
+                            if (st.ok()) {
+                                received_rows++;
+                                left_bytes -= tdmsg_len;
+                            } else {
+                                // failed to append this msg, we must stop
+                                LOG(WARNING) << "failed to append msg to pipe. grp: " << _grp_id
+                                             << ", errmsg=" << st.get_error_msg();
+                                break;
+                            }
+                        }
+                        ack_offset[partition] = msg_id;
+                        VLOG(3) << "consume partition" << partition << " - " << msg_id;
+                    } else {
+                        LOG(WARNING) << "failed to append msg to pipe. grp: " << _grp_id
+                                     << ", errmsg=" << st.get_error_msg();
+                    }
+                } else {
+                    st = (pulsar_pipe.get()->*append_data)(static_cast<const char*>(msg->getData()),
+                                                           static_cast<size_t>(len), row_delimiter);
+                    if (st.ok()) {
+                        received_rows++;
+                        left_bytes -= len;
+                        ack_offset[partition] = msg_id;
+                        VLOG(3) << "consume partition" << partition << " - " << msg_id;
+                    } else {
+                        // failed to append this msg, we must stop
+                        LOG(WARNING) << "failed to append msg to pipe. grp: " << _grp_id
+                                     << ", errmsg=" << st.get_error_msg();
+                    }
+                }
+
+                if (!st.ok()) {
+                    eos = true;
+                    {
+                        std::unique_lock<std::mutex> lock(_mutex);
+                        if (result_st.ok()) {
+                            result_st = st;
                         }
                     }
-                    ack_offset[partition] = msg_id;
-                    VLOG(3) << "consume partition" << partition << " - " << msg_id;
-                }else{
-                    LOG(WARNING) << "failed to append msg to pipe. grp: " << _grp_id
-                                 << ", errmsg=" << st.get_error_msg();
                 }
             } else {
-                st = (pulsar_pipe.get()->*append_data)(static_cast<const char*>(msg->getData()),
-                                                       static_cast<size_t>(len), row_delimiter);
-                if (st.ok()) {
-                    received_rows++;
-                    left_bytes -= len;
-                    ack_offset[partition] = msg_id;
-                    VLOG(3) << "consume partition" << partition << " - " << msg_id;
-                } else {
-                    // failed to append this msg, we must stop
-                    LOG(WARNING) << "failed to append msg to pipe. grp: " << _grp_id
-                                 << ", errmsg=" << st.get_error_msg();
-                }
-            }
-
-            if(!st.ok()){
-                eos = true;
-                {
-                    std::unique_lock<std::mutex> lock(_mutex);
-                    if (result_st.ok()) {
-                        result_st = st;
-                    }
-                }
+                LOG(WARNING) << "Redelivering pulsar message, partition: " << partition
+                             << ", message id[received]: " << msg_id << ", message id[already_consumed]: "
+                             << ack_offset[partition];
             }
             delete msg;
         } else {
@@ -520,7 +523,13 @@ Status PulsarDataConsumerGroup::get_data_items(const pulsar::Message* msg, std::
     return Status::OK();
 }
 
-void PulsarDataConsumerGroup::get_backlog_nums(StreamLoadContext* ctx) {
+void PulsarDataConsumerGroup::update_ctx_info(StreamLoadContext* ctx) {
+    for (auto& cur_msg_id : ctx->pulsar_info->ack_offset) {
+        std::string current_position;
+        cur_msg_id.second.serialize(current_position);
+        ctx->pulsar_info->current_positions[cur_msg_id.first] = current_position;
+    }
+
     for (auto& consumer : _consumers) {
         // get backlog num
         int64_t backlog_num;

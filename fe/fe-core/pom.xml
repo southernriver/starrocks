@@ -721,6 +721,13 @@ under the License.
             <version>1.1.5</version>
             <classifier>shaded</classifier>
         </dependency>
+
+        <!-- https://mvnrepository.com/artifact/org.apache.pulsar/pulsar-client -->
+        <dependency>
+            <groupId>org.apache.pulsar</groupId>
+            <artifactId>pulsar-client</artifactId>
+            <version>3.0.0</version>
+        </dependency>
     </dependencies>
 
     <build>

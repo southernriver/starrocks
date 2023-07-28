@@ -99,17 +99,23 @@ Status DataConsumerPool::get_consumer_grp(StreamLoadContext* ctx, std::shared_pt
     }
     if (ctx->load_src_type == TLoadSourceType::PULSAR) {
         DCHECK(ctx->pulsar_info);
-        DCHECK_GE(ctx->pulsar_info->partitions.size(), 1);
+
+        // Temp code for upgrading compatibility
+        if (ctx->pulsar_info->initial_positions.size() == 0) {
+            return Status::InternalError("PAUSE: for compatibility when upgrading");
+        }
+
+        DCHECK_GE(ctx->pulsar_info->initial_positions.size(), 1);
 
         // Cumulative acknowledge is not supported for multiple topic subscribtion,
         // so one consumer can only subscribe one topic/partition
         int max_consumer_num = config::max_pulsar_consumer_num_per_group;
-        if (max_consumer_num < ctx->pulsar_info->partitions.size()) {
+        if (max_consumer_num < ctx->pulsar_info->initial_positions.size()) {
             return Status::InternalError(
                     "PAUSE: Partition num is more than max consumer num in one data consumer group on some BEs, please "
                     "increase max_pulsar_consumer_num_per_group from BE side or just add more BEs");
         }
-        size_t consumer_num = ctx->pulsar_info->partitions.size();
+        size_t consumer_num = ctx->pulsar_info->initial_positions.size();
 
         std::shared_ptr<PulsarDataConsumerGroup> grp = std::make_shared<PulsarDataConsumerGroup>(consumer_num);
 

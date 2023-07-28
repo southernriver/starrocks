@@ -549,19 +549,38 @@ Status PulsarDataConsumer::init(StreamLoadContext* ctx) {
     return Status::OK();
 }
 
-Status PulsarDataConsumer::assign_partition(const std::string& partition, StreamLoadContext* ctx,
-                                            int64_t initial_position) {
-    DCHECK(_p_client);
+Status PulsarDataConsumer::assign_partition_and_seek_position(
+        StreamLoadContext* ctx, const std::pair<std::string, std::string>& initial_position) {
+    pulsar::MessageId p_initial_position = pulsar::MessageId::deserialize(initial_position.second);
+
+    ctx->pulsar_info->ack_offset[initial_position.first] = p_initial_position;
 
     std::stringstream ss;
-    ss << "consumer: " << _id << ", grp: " << _grp_id << " assign partition: " << partition
-       << ", subscription: " << _subscription << ", initial_position: " << initial_position;
+    ss << "consumer: " << _id << ", grp: " << _grp_id << " assign partition: " << initial_position.first
+       << ", subscription: " << _subscription << ", initial_position: " << p_initial_position;
     LOG(INFO) << ss.str();
+
+    assign_partition(ctx, initial_position.first);
+
+    pulsar::Result result;
+    result = _p_consumer.seek(p_initial_position);
+    if (result != pulsar::ResultOk) {
+        LOG(WARNING) << "PAUSE: failed to reset the subscription: " << ctx->brief(true) << ", err: " << result;
+        return Status::InternalError("PAUSE: failed to reset the subscription: " +
+                                     std::string(pulsar::strResult(result)));
+    }
+
+    return Status::OK();
+}
+
+Status PulsarDataConsumer::assign_partition(StreamLoadContext* ctx, const std::string& partition) {
+    DCHECK(_p_client);
 
     // do subscribe
     pulsar::Result result;
     pulsar::ConsumerConfiguration config;
     config.setBatchIndexAckEnabled(true);
+    config.setStartMessageIdInclusive(false);
 
     result = _p_client->subscribe(partition, _subscription, config, _p_consumer);
     if (result != pulsar::ResultOk) {
@@ -569,18 +588,6 @@ Status PulsarDataConsumer::assign_partition(const std::string& partition, Stream
         LOG(WARNING) << "PAUSE: failed to create pulsar consumer: " << ctx->brief(true) << ", err: " << result;
         return Status::InternalError("PAUSE: failed to create pulsar consumer: " +
                                      std::string(pulsar::strResult(result)));
-    }
-
-    if (initial_position == InitialPosition::LATEST || initial_position == InitialPosition::EARLIEST) {
-        pulsar::MessageId p_initial_position = initial_position == InitialPosition::LATEST
-                                                       ? pulsar::MessageId::latest()
-                                                       : pulsar::MessageId::earliest();
-        result = _p_consumer.seek(p_initial_position);
-        if (result != pulsar::ResultOk) {
-            LOG(WARNING) << "PAUSE: failed to reset the subscription: " << ctx->brief(true) << ", err: " << result;
-            return Status::InternalError("PAUSE: failed to reset the subscription: " +
-                                         std::string(pulsar::strResult(result)));
-        }
     }
 
     return Status::OK();
@@ -627,7 +634,7 @@ Status PulsarDataConsumer::group_consume(TimedBlockingQueue<pulsar::Message*>* q
             ++received_rows;
             break;
         case pulsar::ResultTimeout:
-            // leave the status as OK, because this may happened
+            // leave the status as OK, because this may happen
             // if there is no data in pulsar.
             LOG(INFO) << "pulsar consumer"
                       << "[" << _id << "]"
@@ -642,7 +649,6 @@ Status PulsarDataConsumer::group_consume(TimedBlockingQueue<pulsar::Message*>* q
             st = Status::InternalError(pulsar::strResult(res));
             break;
         }
-
         left_time = max_running_time_ms - watch.elapsed_time() / 1000 / 1000;
         if (done) {
             break;

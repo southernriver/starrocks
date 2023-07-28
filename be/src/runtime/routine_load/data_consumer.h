@@ -188,7 +188,9 @@ public:
     enum InitialPosition { LATEST, EARLIEST };
 
     Status init(StreamLoadContext* ctx) override;
-    Status assign_partition(const std::string& partition, StreamLoadContext* ctx, int64_t initial_position = -1);
+    Status assign_partition_and_seek_position(StreamLoadContext* ctx,
+                                              const std::pair<std::string, std::string>& initial_position);
+    Status assign_partition(StreamLoadContext* ctx, const std::string& partition);
     // TODO(cmy): currently do not implement single consumer start method, using group_consume
     Status consume(StreamLoadContext* ctx) override { return Status::OK(); }
     Status cancel(StreamLoadContext* ctx) override;
