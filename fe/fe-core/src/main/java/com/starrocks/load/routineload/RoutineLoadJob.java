@@ -299,8 +299,8 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
         jobProperties.put(LoadStmt.IGNORE_TAIL_COLUMNS, String.valueOf(stmt.isIgnoreTailColumns()));
         jobProperties.put(LoadStmt.SKIP_UTF8_CHECK, String.valueOf(stmt.isSkipUtf8Check()));
         jobProperties.put(LoadStmt.TASK_NUM_EXCEED_BE_NUM, String.valueOf(stmt.isTaskNumExceedBeNum()));
-        jobProperties.put(CreateRoutineLoadStmt.TIMEOUT_SECOND, String.valueOf(stmt.getTimeoutSecond()));
-        jobProperties.put(CreateRoutineLoadStmt.CONSUME_SECOND, String.valueOf(stmt.getConsumeSecond()));
+        jobProperties.put(CreateRoutineLoadStmt.TIMEOUT_SECOND, stmt.getTimeoutSecond());
+        jobProperties.put(CreateRoutineLoadStmt.CONSUME_SECOND, stmt.getConsumeSecond());
         if (Strings.isNullOrEmpty(stmt.getFormat()) || stmt.getFormat().equals("csv")) {
             jobProperties.put(PROPS_FORMAT, "csv");
             jobProperties.put(PROPS_STRIP_OUTER_ARRAY, "false");

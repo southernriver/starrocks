@@ -206,8 +206,8 @@ public class CreateRoutineLoadStmt extends DdlStmt {
     private boolean skipUtf8Check = false;
     private boolean taskNumExceedBeNum = false;
     private String timezone = TimeUtils.DEFAULT_TIME_ZONE;
-    private int timeoutSecond = (int) Config.routine_load_task_timeout_second;
-    private int consumeSecond = (int) Config.routine_load_task_consume_second;
+    private String timeoutSecond = null;
+    private String consumeSecond = null;
     private boolean partialUpdate = false;
     private boolean recoverOffsetsFromLastJob = false;
     private String jobThatRecoverOffsetsFrom;
@@ -347,11 +347,11 @@ public class CreateRoutineLoadStmt extends DdlStmt {
         return timezone;
     }
 
-    public int getTimeoutSecond() {
+    public String getTimeoutSecond() {
         return timeoutSecond;
     }
 
-    public int getConsumeSecond() {
+    public String getConsumeSecond() {
         return consumeSecond;
     }
 
@@ -594,16 +594,20 @@ public class CreateRoutineLoadStmt extends DdlStmt {
         }
         timezone = TimeUtils.checkTimeZoneValidAndStandardize(jobProperties.getOrDefault(LoadStmt.TIMEZONE, timezone));
 
-        timeoutSecond = (int) Util.getLongPropertyOrDefault(jobProperties.get(TIMEOUT_SECOND),
+        long tmpTimeoutSecond = Util.getLongPropertyOrDefault(jobProperties.get(TIMEOUT_SECOND),
                 Config.routine_load_task_timeout_second, TASK_TIMEOUT_SECOND_PRED,
                 TIMEOUT_SECOND + " should > 10");
 
-        consumeSecond = (int) Util.getLongPropertyOrDefault(jobProperties.get(CONSUME_SECOND),
+        long tmpConsumeSecond = Util.getLongPropertyOrDefault(jobProperties.get(CONSUME_SECOND),
                 Config.routine_load_task_consume_second, CONSUME_SECOND_PRED, CONSUME_SECOND + " should > 5");
 
-        if (consumeSecond >= timeoutSecond) {
+        if (tmpConsumeSecond >= tmpTimeoutSecond) {
             throw new AnalysisException(CONSUME_SECOND + " should <= " + TIMEOUT_SECOND);
         }
+
+        // The following properties could be null, and we should use value from Config
+        timeoutSecond = jobProperties.get(TIMEOUT_SECOND);
+        consumeSecond = jobProperties.get(CONSUME_SECOND);
 
         format = jobProperties.get(FORMAT);
         if (format != null) {
