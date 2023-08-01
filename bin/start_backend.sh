@@ -32,6 +32,8 @@ OPTS=$(getopt \
     -l 'be' \
     -l 'logconsole' \
     -l numa: \
+    -l 'debug' \
+    -l debugport: \
 -- "$@")
 
 eval set -- "$OPTS"
@@ -41,6 +43,8 @@ RUN_CN=0
 RUN_BE=0
 RUN_NUMA="-1"
 RUN_LOG_CONSOLE=0
+RUN_WITH_GDB_SERVER=0
+DEBUG_PORT=5555
 
 while true; do
     case "$1" in
@@ -49,6 +53,8 @@ while true; do
         --be) RUN_BE=1; RUN_CN=0; shift ;;
         --logconsole) RUN_LOG_CONSOLE=1 ; shift ;;
         --numa) RUN_NUMA=$2; shift 2 ;;
+	--debug) RUN_WITH_GDB_SERVER=1 ; shift;;
+	--debugport) DEBUG_PORT=$2; shift 2 ;;
         --) shift ;  break ;;
         *) echo "Internal error" ; exit 1 ;;
     esac
@@ -188,9 +194,14 @@ else
     exec &>> ${LOG_FILE}
 fi
 
+GDB_SERVER_CMD=""
+if [ ${RUN_WITH_GDB_SERVER} -eq 1 ] ; then
+    GDB_SERVER_CMD="gdbserver 0.0.0.0:${DEBUG_PORT}"
+fi
+
 echo "start time: "$(date)
 if [ ${RUN_DAEMON} -eq 1 ]; then
-    nohup ${START_BE_CMD} "$@" </dev/null &
+    nohup ${GDB_SERVER_CMD} ${START_BE_CMD} "$@" </dev/null &
 else
-    exec ${START_BE_CMD} "$@" </dev/null
+    exec ${GDB_SERVER_CMD} ${START_BE_CMD} "$@" </dev/null
 fi
