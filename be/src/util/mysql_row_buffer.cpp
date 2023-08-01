@@ -30,6 +30,7 @@
 
 #include "common/logging.h"
 #include "gutil/strings/fastmem.h"
+#include "runtime/large_int_value.h"
 #include "util/mysql_global.h"
 
 namespace starrocks {
@@ -64,12 +65,94 @@ static uint8_t* pack_vlen(uint8_t* packet, uint64_t length) {
     return packet + 8;
 }
 
-void MysqlRowBuffer::push_null() {
-    if (_array_level == 0) {
-        _data.push_back(0xfb);
+
+template <typename DateType>
+void MysqlRowBuffer::push_datetime(const DateType& date_value) {
+    if (_is_binary_format) {
+        char buff[12], *pos;
+        size_t length;
+        _field_pos++;
+        pos = buff + 1;
+
+        int year = 0;
+        int month = 0;
+        int day = 0;
+        int hour = 0;
+        int minute = 0;
+        int second = 0;
+        int microsecond = 0;
+        if constexpr (std::is_same_v<DateType, vectorized::DateValue>) {
+            date_value.to_date(&year, &month, &day);
+        } else {
+            date_value.to_timestamp(&year, &month, &day, &hour, &minute, &second, &microsecond);
+            int4store(pos + 7, microsecond);
+        }
+
+        int2store(pos, year);
+        pos[2] = (uchar)month;
+        pos[3] = (uchar)day;
+        pos[4] = (uchar)hour;
+        pos[5] = (uchar)minute;
+        pos[6] = (uchar)second;
+
+        if (microsecond > 0) {
+            length = 11;
+        } else if (hour > 0 || minute > 0 || second > 0) {
+            length = 7;
+        } else if (year > 0 || month > 0 || day > 0) {
+            length = 4;
+        } else {
+            length = 0;
+        }
+        buff[0] = (char)length; // Length is stored first
+        return _append(buff, length + 1);
     } else {
-        // lowercase 'null' is more convenient for JSON parsing
-        _data.append("null");
+        std::string s = date_value.to_string();
+        push_string(s.data(), s.size());
+    }
+}
+
+void MysqlRowBuffer::_append(const char* data, int64_t len) {
+    char* pos = _resize_extra(len);
+    memcpy(pos, data, len);
+}
+
+void MysqlRowBuffer::_append_var_string(const char* data, int64_t len) {
+    /*
+     The +9 comes from that strings of length longer than 16M require
+     9 bytes to be stored (see net_store_length).
+    */
+    char* pos = _resize_extra(len + 9);
+    pos = reinterpret_cast<char*>(pack_vlen(reinterpret_cast<uint8_t*>(pos), len));
+    memcpy(pos, data, len);
+}
+
+void MysqlRowBuffer::start_binary_row(uint32_t num_cols) {
+    assert(_is_binary_format);
+    int bit_fields = (num_cols + 9) / 8;
+    char* pos = _resize_extra(bit_fields + 1);
+//    reserve(bit_fields + 1);
+    memset(pos, 0, 1 + bit_fields);
+//    _pos += bit_fields + 1;
+    _field_pos = 0;
+}
+
+void MysqlRowBuffer::push_null() {
+    if (_is_binary_format) {
+        uint offset = (_field_pos + 2) / 8 + 1;
+        uint bit = (1 << ((_field_pos + 2) & 7));
+        /* Room for this as it's allocated start_binary_row */
+        char* pos = _data.data();
+        char* to = pos + offset;
+        *to = (char)((uchar)*to | (uchar)bit);
+        _field_pos++;
+    } else {
+        if (_array_level == 0) {
+            _data.push_back(0xfb);
+        } else {
+            // lowercase 'null' is more convenient for JSON parsing
+            _data.append("null");
+        }
     }
 }
 
@@ -81,30 +164,79 @@ void MysqlRowBuffer::push_number(T data) {
     char* pos = nullptr;
     const int length_prefix_bytes = _array_level == 0 ? 1 : 0;
     if constexpr (std::is_same_v<T, float>) {
+        if (_is_binary_format) {
+            char buff[4];
+            _field_pos++;
+            float4store(buff, data);
+            _append(buff, 4);
+            return;
+        }
         // 1 for length, 1 for sign, other for digits.
         pos = _resize_extra(2 + MAX_FLOAT_STR_LENGTH);
         length = f2s_buffered_n(data, pos + length_prefix_bytes);
     } else if constexpr (std::is_same_v<T, double>) {
+        if (_is_binary_format) {
+            char buff[8];
+            _field_pos++;
+            float8store(buff, data);
+            _append(buff, 8);
+            return;
+        }
         // 1 for string trail, 1 for length, 1 for sign, other for digits
         pos = _resize_extra(2 + MAX_DOUBLE_STR_LENGTH);
         length = d2s_buffered_n(data, pos + length_prefix_bytes);
     } else if constexpr (std::is_same_v<std::make_signed_t<T>, int8_t>) {
+        if (_is_binary_format) {
+            char buff[1];
+            _field_pos++;
+            int1store(buff, data);
+            _append(buff, 1);
+            return;
+        }
         pos = _resize_extra(2 + MAX_TINYINT_WIDTH);
         end = fmt::format_to(pos + length_prefix_bytes, FMT_COMPILE("{}"), data);
         length = end - pos - length_prefix_bytes;
     } else if constexpr (std::is_same_v<std::make_signed_t<T>, int16_t>) {
+        if (_is_binary_format) {
+            char buff[2];
+            _field_pos++;
+            int2store(buff, data);
+            _append(buff, 2);
+            return;
+        }
         pos = _resize_extra(2 + MAX_SMALLINT_WIDTH);
         end = fmt::format_to(pos + length_prefix_bytes, FMT_COMPILE("{}"), data);
         length = end - pos - length_prefix_bytes;
     } else if constexpr (std::is_same_v<std::make_signed_t<T>, int32_t>) {
+        if (_is_binary_format) {
+            char buff[4];
+            _field_pos++;
+            int4store(buff, data);
+            _append(buff, 4);
+            return;
+        }
         pos = _resize_extra(2 + MAX_INT_WIDTH);
         end = fmt::format_to(pos + length_prefix_bytes, FMT_COMPILE("{}"), data);
         length = end - pos - length_prefix_bytes;
     } else if constexpr (std::is_same_v<std::make_signed_t<T>, int64_t>) {
+        if (_is_binary_format) {
+            char buff[8];
+            _field_pos++;
+            int8store(buff, data);
+            _append(buff, 8);
+            return;
+        }
         pos = _resize_extra(2 + MAX_BIGINT_WIDTH);
         end = fmt::format_to(pos + length_prefix_bytes, FMT_COMPILE("{}"), data);
         length = end - pos - length_prefix_bytes;
     } else if constexpr (std::is_same_v<std::make_signed_t<T>, __int128>) {
+        if (_is_binary_format) {
+            // large int as type string
+            std::string value = LargeIntValue::to_string(data);
+            _field_pos++;
+            _append_var_string(value.data(), value.size());
+            return;
+        }
         pos = _resize_extra(2 + 40);
         end = fmt::format_to(pos + length_prefix_bytes, FMT_COMPILE("{}"), data);
         length = end - pos - length_prefix_bytes;
@@ -143,6 +275,9 @@ void MysqlRowBuffer::push_string(const char* str, size_t length, char escape_cha
 
 void MysqlRowBuffer::push_decimal(const Slice& s) {
     if (_array_level == 0) {
+        if (_is_binary_format) {
+            ++_field_pos;
+        }
         _push_string_normal(s.data, s.size);
     } else {
         char* pos = _resize_extra(s.size);
@@ -219,6 +354,9 @@ char* MysqlRowBuffer::_escape(char* dst, const char* src, size_t length, char es
 }
 
 void MysqlRowBuffer::_push_string_normal(const char* str, size_t length) {
+    if (_is_binary_format) {
+        ++_field_pos;
+    }
     char* pos = _resize_extra(9 + length);
     pos = reinterpret_cast<char*>(pack_vlen(reinterpret_cast<uint8_t*>(pos), length));
     strings::memcpy_inlined(pos, str, length);
@@ -238,6 +376,8 @@ template void MysqlRowBuffer::push_number<uint64_t>(uint64_t);
 template void MysqlRowBuffer::push_number<__int128>(__int128);
 template void MysqlRowBuffer::push_number<float>(float);
 template void MysqlRowBuffer::push_number<double>(double);
+template void MysqlRowBuffer::push_datetime<vectorized::DateValue>(const vectorized::DateValue&);
+template void MysqlRowBuffer::push_datetime<vectorized::TimestampValue>(const vectorized::TimestampValue&);
 
 } // namespace starrocks
 

@@ -1,10 +1,17 @@
 // This file is licensed under the Elastic License 2.0. Copyright 2021-present, StarRocks Inc.
 package com.starrocks.sql;
 
+import com.starrocks.analysis.ExecuteStmt;
+import com.starrocks.analysis.PrepareStatement;
 import com.starrocks.catalog.Database;
+import com.starrocks.common.AnalysisException;
+import com.starrocks.common.Config;
+import com.starrocks.common.UserException;
+import com.starrocks.mysql.MysqlCommand;
 import com.starrocks.planner.PlanFragment;
 import com.starrocks.planner.ResultSink;
 import com.starrocks.qe.ConnectContext;
+import com.starrocks.qe.PrepareStmtContext;
 import com.starrocks.sql.analyzer.Analyzer;
 import com.starrocks.sql.analyzer.AnalyzerUtils;
 import com.starrocks.sql.analyzer.PrivilegeChecker;
@@ -13,8 +20,10 @@ import com.starrocks.sql.ast.InsertStmt;
 import com.starrocks.sql.ast.QueryRelation;
 import com.starrocks.sql.ast.QueryStatement;
 import com.starrocks.sql.ast.Relation;
+import com.starrocks.sql.ast.SetStmt;
 import com.starrocks.sql.ast.StatementBase;
 import com.starrocks.sql.ast.UpdateStmt;
+import com.starrocks.sql.common.UnsupportedException;
 import com.starrocks.sql.optimizer.OptExpression;
 import com.starrocks.sql.optimizer.Optimizer;
 import com.starrocks.sql.optimizer.OptimizerTraceUtil;
@@ -26,6 +35,8 @@ import com.starrocks.sql.optimizer.transformer.RelationTransformer;
 import com.starrocks.sql.plan.ExecPlan;
 import com.starrocks.sql.plan.PlanFragmentBuilder;
 import com.starrocks.thrift.TResultSinkType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
@@ -33,12 +44,34 @@ import java.util.stream.Collectors;
 
 public class StatementPlanner {
 
-    public static ExecPlan plan(StatementBase stmt, ConnectContext session) {
+    private static final Logger LOG = LoggerFactory.getLogger(StatementPlanner.class);
+
+    public static ExecPlan plan(StatementBase stmt, ConnectContext session) throws AnalysisException {
         return plan(stmt, session, true, TResultSinkType.MYSQL_PROTOCAL);
     }
 
     public static ExecPlan plan(StatementBase stmt, ConnectContext session, boolean lockDb,
                                 TResultSinkType resultSinkType) {
+        PrepareStmtContext preparedStmtCtx = null;
+        boolean skipAnalysis = false;
+        if (stmt instanceof ExecuteStmt) {
+            try {
+                ExecuteStmt execStmt = (ExecuteStmt) stmt;
+                preparedStmtCtx = session.getPreparedStmt(execStmt.getStmtId());
+                if (preparedStmtCtx == null) {
+                    UnsupportedException.unsupportedException(
+                            "Could not execute, since `" + execStmt.getStmtId() + "` not exist");
+                }
+                // parsedStmt may already be set when constructing this StmtExecutor();
+                preparedStmtCtx.getStmt().assignValues(execStmt.getArgs());
+                stmt = preparedStmtCtx.getStmt().getInnerStmt();
+                LOG.debug("already prepared stmt: {}", preparedStmtCtx.getStmtId());
+                skipAnalysis = true;
+            } catch (Exception e) {
+                throw new UserException("ExecuteStatement analysis error", e);
+            }
+        }
+
         if (stmt instanceof QueryStatement) {
             OptimizerTraceUtil.logQueryStatement(session, "after parse:\n%s", (QueryStatement) stmt);
         }
@@ -50,13 +83,42 @@ public class StatementPlanner {
         }
         try {
             lock(dbLocks);
-            try (PlannerProfile.ScopedTimer ignored = PlannerProfile.getScopedTimer("Analyzer")) {
-                Analyzer.analyze(stmt, session);
+
+            // Has been analyzed in prepared stage
+            if (!skipAnalysis) {
+                // prepared statement
+                if (session.getCommand() == MysqlCommand.COM_STMT_PREPARE) {
+                    if (!Config.support_server_side_prepared_statement) {
+                        UnsupportedException.unsupportedException(
+                                "Do not support server-side prepared statement, Please contact with OE");
+                    }
+                    PrepareStmtContext psc = new PrepareStmtContext(session, session.getStmtId());
+                    session.addPreparedStmt(session.getStmtId(), psc);
+
+                    try (PlannerProfile.ScopedTimer ignored = PlannerProfile.getScopedTimer("Analyzer")) {
+                        Analyzer.analyze(stmt, session);
+                    }
+
+                    PrepareStatement prepStmt = new PrepareStatement(stmt, session.getStmtId());
+                    prepStmt.setContext(session);
+                    prepStmt.setOrigStmt(stmt.getOrigStmt());
+                    psc.setPreparedStmt(prepStmt);
+                    psc.finishPrepare();
+                    return null;
+                } else {
+                    try (PlannerProfile.ScopedTimer ignored = PlannerProfile.getScopedTimer("Analyzer")) {
+                        Analyzer.analyze(stmt, session);
+                    }
+                }
             }
 
             PrivilegeChecker.check(stmt, session);
             if (stmt instanceof QueryStatement) {
                 OptimizerTraceUtil.logQueryStatement(session, "after analyze:\n%s", (QueryStatement) stmt);
+            }
+
+            if (skipAnalysis && !(stmt instanceof QueryStatement) && !(stmt instanceof SetStmt)) {
+                throw new UnsupportedOperationException("PreparedStatement only support in DQL");
             }
 
             session.updateQueryDataSource();

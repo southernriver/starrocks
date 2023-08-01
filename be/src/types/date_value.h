@@ -105,6 +105,10 @@ DateValue DateValue::add(int count) const {
     return DateValue{date::add<UNIT>(_julian, count)};
 }
 
+inline void DateValue::to_date(int* year, int* month, int* day) const {
+    date::to_date_with_cache(_julian, year, month, day);
+}
+
 inline bool operator==(const DateValue& lhs, const DateValue& rhs) {
     return lhs._julian == rhs._julian;
 }

@@ -28,8 +28,12 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.starrocks.analysis.Analyzer;
 import com.starrocks.analysis.DescriptorTable;
+import com.starrocks.analysis.ExecuteStmt;
 import com.starrocks.analysis.Expr;
+import com.starrocks.analysis.ParamPlaceHolderExpr;
+import com.starrocks.analysis.PrepareStatement;
 import com.starrocks.analysis.RedirectStatus;
+import com.starrocks.analysis.SlotRef;
 import com.starrocks.analysis.StringLiteral;
 import com.starrocks.analysis.TableName;
 import com.starrocks.analysis.VariableExpr;
@@ -43,6 +47,7 @@ import com.starrocks.catalog.ResourceGroupClassifier;
 import com.starrocks.catalog.ScalarType;
 import com.starrocks.catalog.SchemaTable;
 import com.starrocks.catalog.Table;
+import com.starrocks.catalog.Type;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Config;
 import com.starrocks.common.DdlException;
@@ -187,6 +192,8 @@ public class StmtExecutor {
     private List<ByteBuffer> proxyResultBuffer = null;
     private ShowResultSet proxyResultSet = null;
     private PQueryStatistics statisticsForAuditLog;
+    private PrepareStatement prepareStmt;
+    private long executeStmtId = -1;
 
     // this constructor is mainly for proxy
     public StmtExecutor(ConnectContext context, OriginStatement originStmt, boolean isProxy) {
@@ -372,8 +379,11 @@ public class StmtExecutor {
             try (PlannerProfile.ScopedTimer _ = PlannerProfile.getScopedTimer("Total")) {
                 redirectStatus = parsedStmt.getRedirectStatus();
                 if (!isForwardToLeader()) {
-                    context.getDumpInfo().reset();
-                    context.getDumpInfo().setOriginStmt(parsedStmt.getOrigStmt().originStmt);
+                    // Not need to reset dumpInfo when execute preparedStatement
+                    if (!(parsedStmt instanceof ExecuteStmt)) {
+                        context.getDumpInfo().reset();
+                        context.getDumpInfo().setOriginStmt(parsedStmt.getOrigStmt().originStmt);
+                    }
                     if (parsedStmt instanceof ShowStmt) {
                         com.starrocks.sql.analyzer.Analyzer.analyze(parsedStmt, context);
                         PrivilegeChecker.check(parsedStmt, context);
@@ -413,6 +423,21 @@ public class StmtExecutor {
             } else {
                 LOG.debug("no need to transfer to Leader. stmt: {}", context.getStmtId());
             }
+            PrepareStmtContext psContext;
+            if ((psContext = context.getPreparedStmt(context.getStmtId())) != null) {
+                this.prepareStmt = psContext.getStmt();
+                handlePrepareStmt();
+                return;
+            }
+
+            if (parsedStmt instanceof ExecuteStmt) {
+                long executeStmtId = ((ExecuteStmt) parsedStmt).getStmtId();
+                PrepareStmtContext preparedStmtCtx = context.getPreparedStmt(executeStmtId);
+                Preconditions.checkArgument(preparedStmtCtx != null, "Before executing statement, it must has been prepared");
+                parsedStmt = preparedStmtCtx.getStmt().getInnerStmt();
+                this.executeStmtId = executeStmtId;
+            }
+
 
             if (parsedStmt instanceof QueryStatement) {
                 if (isNotVariableSelect()) {
@@ -594,6 +619,87 @@ public class StmtExecutor {
         }
     }
 
+
+    private void sendStmtPrepareOK() throws IOException {
+        // https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_stmt_prepare.html#sect_protocol_com_stmt_prepare_response
+        serializer.reset();
+        // 0x00 OK
+        serializer.writeInt1(0);
+        // statement_id
+        serializer.writeInt4((int) prepareStmt.getStmtId());
+        // num_columns
+        int numColumns = 0;
+        // for query
+        if (prepareStmt.getInnerStmt() instanceof QueryStatement) {
+            numColumns = ((QueryStatement) prepareStmt.getInnerStmt())
+                    .getQueryRelation().getColumnOutputNames().size();
+        }
+        serializer.writeInt2(numColumns);
+        // num_params
+        int numParams = prepareStmt.getParamCount();
+        serializer.writeInt2(numParams);
+        if (!context.getMysqlChannel().is41Protocol()) {
+            // reserved_1
+            serializer.writeInt1(0);
+
+            // warnings
+            serializer.writeInt2(0);
+        }
+        context.getMysqlChannel().sendOnePacket(serializer.toByteBuffer());
+        if (numParams > 0) {
+            // send field one by one
+            List<Type> types = prepareStmt.getSlotRefOfPlaceHolders().stream()
+                    .map(Expr::getType).collect(Collectors.toList());
+            List<String> colNames = prepareStmt.getColLabelsOfPlaceHolders();
+            List<Pair<SlotRef, List<ParamPlaceHolderExpr>>> originHolderPairs = prepareStmt.getOriginPlaceHolderPairs();
+            LOG.debug("sendFields {}, {}", colNames, types);
+            for (int i = 0; i < colNames.size(); ++i) {
+                int repeatedCount = originHolderPairs.get(i).second.size();
+                for (int r = 0; r < repeatedCount; r++) {
+                    serializer.reset();
+                    serializer.writeField(colNames.get(i), types.get(i));
+                    context.getMysqlChannel().sendOnePacket(serializer.toByteBuffer());
+                }
+            }
+            context.getState().setEof();
+            MysqlEofPacket eofPacket = new MysqlEofPacket(context.getState());
+            serializer.reset();
+            eofPacket.writeTo(serializer);
+            context.getMysqlChannel().sendOnePacket(serializer.toByteBuffer());
+        }
+        if (numColumns > 0) {
+            List<Type> types = ((QueryStatement) prepareStmt.getInnerStmt())
+                    .getQueryRelation().getOutputExpression().stream().map(Expr::getType)
+                    .collect(Collectors.toList());
+            List<String> colNames = ((QueryStatement) prepareStmt.getInnerStmt())
+                    .getQueryRelation().getColumnOutputNames();
+
+            for (int i = 0; i < colNames.size(); ++i) {
+                serializer.reset();
+                serializer.writeField(colNames.get(i), types.get(i));
+                context.getMysqlChannel().sendOnePacket(serializer.toByteBuffer());
+            }
+            context.getState().setEof();
+            MysqlEofPacket eofPacket = new MysqlEofPacket(context.getState());
+            serializer.reset();
+            eofPacket.writeTo(serializer);
+            context.getMysqlChannel().sendOnePacket(serializer.toByteBuffer());
+        }
+        context.getMysqlChannel().flush();
+        context.getState().setNoop();
+    }
+
+    private void handlePrepareStmt() throws Exception {
+        // register prepareStmt
+        LOG.debug("add prepared statement {}",
+                prepareStmt.getStmtId());
+        if (context.getPreparedStmt(prepareStmt.getStmtId()) == null) {
+            context.addPreparedStmt(prepareStmt.getStmtId(),
+                    new PrepareStmtContext(prepareStmt, context, prepareStmt.getStmtId()));
+        }
+        sendStmtPrepareOK();
+    }
+
     private void refreshExternalTable(ExecPlan execPlan) {
         for (Map.Entry<Table, List<DescriptorTable.ReferencedPartitionInfo>> entry
                 : execPlan.getDescTbl().getReferencedPartitionsPerTable().entrySet()) {
@@ -647,7 +753,7 @@ public class StmtExecutor {
         // and for other cases the exception will throw and the rest of the code will not be executed.
         try {
             InsertStmt insertStmt = createTableAsSelectStmt.getInsertStmt();
-            ExecPlan execPlan = new StatementPlanner().plan(insertStmt, context);
+            ExecPlan execPlan = StatementPlanner.plan(insertStmt, context);
             handleDMLStmt(execPlan, ((CreateTableAsSelectStmt) parsedStmt).getInsertStmt());
             if (context.getSessionVariable().isEnableProfile()) {
                 writeProfile(beginTimeInNanoSecond);
@@ -1679,6 +1785,10 @@ public class StmtExecutor {
             return "";
         }
         return originStmt.originStmt;
+    }
+
+    public long getExecuteStmtId() {
+        return executeStmtId;
     }
 
     public Pair<List<TResultBatch>, Status> executeStmtWithExecPlan(ConnectContext context, ExecPlan plan) {

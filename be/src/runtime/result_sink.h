@@ -78,6 +78,8 @@ private:
     std::shared_ptr<ResultWriter> _writer;
     RuntimeProfile* _profile = nullptr; // Allocated from _pool
     int _buf_size;                      // Allocated from _pool
+
+    bool _is_binary_format;
 };
 
 } // namespace starrocks

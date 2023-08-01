@@ -33,6 +33,7 @@ import com.starrocks.thrift.TStringLiteral;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
@@ -229,6 +230,7 @@ public class StringLiteral extends LiteralExpr {
         Text.writeString(out, value);
     }
 
+    @Override
     public void readFields(DataInput in) throws IOException {
         super.readFields(in);
         value = Text.readString(in);
@@ -243,5 +245,17 @@ public class StringLiteral extends LiteralExpr {
     @Override
     public int hashCode() {
         return Objects.hash(super.hashCode(), value);
+    }
+
+
+    @Override
+    public void setupParamFromBinary(ByteBuffer data) {
+        int strLen = getParmLen(data);
+        if (strLen > data.remaining()) {
+            strLen = data.remaining();
+        }
+        byte[] bytes = new byte[strLen];
+        data.get(bytes);
+        value = new String(bytes);
     }
 }

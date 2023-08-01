@@ -14,7 +14,4 @@ inline TimestampValue::operator DateValue() const {
     return DateValue{timestamp::to_julian(_timestamp)};
 }
 
-inline void DateValue::to_date(int* year, int* month, int* day) const {
-    date::to_date_with_cache(_julian, year, month, day);
-}
 } // namespace starrocks::vectorized

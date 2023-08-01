@@ -2044,4 +2044,10 @@ public class Config extends ConfigBase {
     @ConfField(mutable = true)
     public static boolean routine_load_manager_fair_lock = true;
 
+    /**
+     * support server-side prepared statement
+     */
+    @ConfField(mutable = true)
+    public static boolean support_server_side_prepared_statement = false;
+
 }

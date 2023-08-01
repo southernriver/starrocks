@@ -37,7 +37,7 @@ using TFetchDataResultPtrs = std::vector<TFetchDataResultPtr>;
 class MysqlResultWriter final : public ResultWriter {
 public:
     MysqlResultWriter(BufferControlBlock* sinker, const std::vector<ExprContext*>& output_expr_ctxs,
-                      RuntimeProfile* parent_profile);
+                      RuntimeProfile* parent_profile, bool is_binary_format);
 
     ~MysqlResultWriter() override;
 
@@ -71,6 +71,7 @@ private:
     RuntimeProfile::Counter* _sent_rows_counter = nullptr;
 
     const size_t _max_row_buffer_size = 1024 * 1024 * 1024;
+    bool _is_binary_format;
 };
 
 } // namespace starrocks

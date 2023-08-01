@@ -129,6 +129,7 @@ struct TMultiCastDataStreamSink {
 struct TResultSink {
     1: optional TResultSinkType type;
     2: optional TResultFileSinkOptions file_options;
+    3: optional bool is_binary_format = false;
 }
 
 struct TMysqlTableSink {

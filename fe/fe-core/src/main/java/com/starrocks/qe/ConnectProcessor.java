@@ -23,6 +23,9 @@ package com.starrocks.qe;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
+import com.starrocks.analysis.ExecuteStmt;
+import com.starrocks.analysis.LiteralExpr;
+import com.starrocks.analysis.NullLiteral;
 import com.starrocks.analysis.UserIdentity;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
@@ -69,10 +72,12 @@ import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.channels.AsynchronousCloseException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -354,6 +359,7 @@ public class ConnectProcessor {
         StatementBase parsedStmt = null;
         try {
             ctx.setQueryId(UUIDUtil.genUUID());
+
             List<StatementBase> stmts;
             try {
                 stmts = com.starrocks.sql.parser.SqlParser.parse(originStmt, ctx.getSessionVariable());
@@ -510,6 +516,7 @@ public class ConnectProcessor {
                 handleQuit();
                 break;
             case COM_QUERY:
+            case COM_STMT_PREPARE:
                 handleQuery();
                 ctx.setStartTime();
                 break;
@@ -525,6 +532,17 @@ public class ConnectProcessor {
             case COM_PING:
                 handlePing();
                 break;
+            case COM_STMT_EXECUTE:
+                handleExecute();
+                break;
+            case COM_STMT_RESET:
+                handleStmtReset();
+                break;
+
+            case COM_STMT_CLOSE:
+                handleStmtClose();
+                break;
+
             default:
                 ctx.getState().setError("Unsupported command(" + command + ")");
                 LOG.warn("Unsupported command(" + command + ")");
@@ -605,6 +623,92 @@ public class ConnectProcessor {
             ctx.setQueryId(null);
         }
     }
+
+    private static boolean isNull(byte[] bitmap, int position) {
+        return (bitmap[position / 8] & (1 << (position & 7))) != 0;
+    }
+
+    private void handleStmtReset() {
+        handleStmtClose();
+        ctx.getState().setOk();
+    }
+
+    private void handleStmtClose() {
+        packetBuf = packetBuf.order(ByteOrder.LITTLE_ENDIAN);
+        int stmtId = packetBuf.getInt();
+        ctx.removePreparedStmt(stmtId);
+        ctx.getState().setNoop();
+    }
+
+    // process COM_EXECUTE, parse binary row data
+    // https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_stmt_execute.html
+    private void handleExecute() {
+        // debugPacket();
+        packetBuf = packetBuf.order(ByteOrder.LITTLE_ENDIAN);
+        // parse stmt_id, flags, params
+        int stmtId = packetBuf.getInt();
+        // flag
+        packetBuf.get();
+        // iteration_count always 1,
+        packetBuf.getInt();
+        LOG.debug("execute prepared statement {}", stmtId);
+        PrepareStmtContext prepareCtx = ctx.getPreparedStmt(stmtId);
+        if (prepareCtx == null) {
+            LOG.debug("No such statement in context, stmtId:{}", stmtId);
+            ctx.getState().setError("msg: Not supported such prepared statement");
+            return;
+        }
+        ctx.setStartTime();
+        if (prepareCtx.getStmt().getInnerStmt() instanceof QueryStatement) {
+            ctx.getState().setIsQuery(true);
+        }
+        prepareCtx.getStmt().setIsPrepared();
+        int paramCount = prepareCtx.getStmt().getParamCount();
+        byte[] nullBitmapData = new byte[(paramCount + 7) / 8];
+        String stmtStr = "";
+        try {
+            List<LiteralExpr> realValueExprs = new ArrayList<>();
+
+            if (paramCount > 0) {
+                // null bitmap
+                packetBuf.get(nullBitmapData);
+                // new_params_bind_flag
+                if ((int) packetBuf.get() != 0) {
+                    // parse params's types
+                    for (int i = 0; i < paramCount; ++i) {
+                        int typeCode = packetBuf.getChar();
+                        LOG.debug("code {}", typeCode);
+                        prepareCtx.getStmt().placeholders().get(i).setTypeCode(typeCode);
+                    }
+                }
+                // parse param data
+                for (int i = 0; i < paramCount; ++i) {
+                    if (isNull(nullBitmapData, i)) {
+                        realValueExprs.add(new NullLiteral());
+                        continue;
+                    }
+                    LiteralExpr l = prepareCtx.getStmt().placeholders().get(i).createLiteralFromType();
+                    l.setupParamFromBinary(packetBuf);
+                    realValueExprs.add(l);
+                }
+            }
+            ExecuteStmt executeStmt = new ExecuteStmt(stmtId, realValueExprs);
+            // TODO set real origin statement
+            executeStmt.setOrigStmt(new OriginStatement("null", 0));
+            LOG.debug("executeStmt {}", executeStmt);
+            executor = new StmtExecutor(ctx, executeStmt);
+            ctx.setExecutor(executor);
+            executor.execute();
+            stmtStr = executeStmt.toSql();
+        } catch (Throwable e) {
+            // Catch all throwable.
+            // If reach here, maybe palo bug.
+            LOG.warn("Process one query failed because unknown reason: ", e);
+            ctx.getState().setError(e.getClass().getSimpleName() + ", msg: " + e.getMessage());
+        }
+        auditAfterExec(stmtStr, prepareCtx.getStmt().getInnerStmt(), null);
+    }
+
 
     public TMasterOpResult proxyExecute(TMasterOpRequest request) {
         ctx.setCurrentCatalog(request.catalog);

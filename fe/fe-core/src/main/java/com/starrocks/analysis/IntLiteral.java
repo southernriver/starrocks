@@ -372,4 +372,25 @@ public class IntLiteral extends LiteralExpr {
     public int hashCode() {
         return Objects.hash(super.hashCode(), value);
     }
+
+
+    @Override
+    public void setupParamFromBinary(ByteBuffer data) {
+        switch (type.getPrimitiveType()) {
+            case TINYINT:
+                value = data.get();
+                break;
+            case SMALLINT:
+                value = data.getChar();
+                break;
+            case INT:
+                value = data.getInt();
+                break;
+            case BIGINT:
+                value = data.getLong();
+                break;
+            default:
+                Preconditions.checkState(false);
+        }
+    }
 }

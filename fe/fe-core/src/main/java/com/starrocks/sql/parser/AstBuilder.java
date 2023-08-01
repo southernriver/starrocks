@@ -49,6 +49,7 @@ import com.starrocks.analysis.NullLiteral;
 import com.starrocks.analysis.OdbcScalarFunctionCall;
 import com.starrocks.analysis.OrderByElement;
 import com.starrocks.analysis.OutFileClause;
+import com.starrocks.analysis.ParamPlaceHolderExpr;
 import com.starrocks.analysis.ParseNode;
 import com.starrocks.analysis.Predicate;
 import com.starrocks.analysis.RoutineLoadDataSourceProperties;
@@ -354,6 +355,7 @@ import com.starrocks.sql.ast.ValueList;
 import com.starrocks.sql.ast.ValuesRelation;
 import com.starrocks.sql.common.ErrorType;
 import com.starrocks.sql.common.StarRocksPlannerException;
+import com.starrocks.sql.parser.StarRocksParser.ParamPlaceHolderExprContext;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.RuleContext;
 import org.antlr.v4.runtime.Token;
@@ -4839,6 +4841,11 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
         } catch (NumberFormatException | AnalysisException e) {
             throw new ParsingException("Invalid numeric literal: " + context.getText());
         }
+    }
+
+    @Override
+    public ParseNode visitParamPlaceHolderExpr(ParamPlaceHolderExprContext ctx) {
+        return new ParamPlaceHolderExpr();
     }
 
     @Override

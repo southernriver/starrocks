@@ -21,6 +21,7 @@
 
 package com.starrocks.analysis;
 
+import com.starrocks.catalog.PrimitiveType;
 import com.starrocks.catalog.Type;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.NotImplementedException;
@@ -214,6 +215,18 @@ public class FloatLiteral extends LiteralExpr {
     @Override
     public int hashCode() {
         return Objects.hash(super.hashCode(), value);
+    }
+
+    @Override
+    public void setupParamFromBinary(ByteBuffer data) {
+        if (type.getPrimitiveType() == PrimitiveType.FLOAT) {
+            value = data.getFloat();
+            return;
+        }
+        if (type.getPrimitiveType() == PrimitiveType.DOUBLE) {
+            value = data.getDouble();
+            return;
+        }
     }
 }
 

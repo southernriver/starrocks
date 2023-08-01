@@ -24,6 +24,7 @@ package com.starrocks.analysis;
 import com.google.common.base.Preconditions;
 import com.starrocks.catalog.PrimitiveType;
 import com.starrocks.catalog.Type;
+import com.starrocks.common.Pair;
 import com.starrocks.common.io.Text;
 import com.starrocks.common.io.Writable;
 import com.starrocks.sql.ast.AstVisitor;
@@ -219,6 +220,20 @@ public class BinaryPredicate extends Predicate implements Writable {
                 throw new IllegalStateException("Not implemented");
         }
         return new BinaryPredicate(newOp, getChild(0), getChild(1));
+    }
+
+    // Expr only support Literal
+    public Pair<SlotRef, Expr> extract() {
+        Expr lexpr = getChild(0);
+        Expr rexpr = getChild(1);
+        if (lexpr instanceof SlotRef && (rexpr instanceof LiteralExpr)) {
+            SlotRef slot = (SlotRef) lexpr;
+            return Pair.create(slot, rexpr);
+        } else if (rexpr instanceof SlotRef && (lexpr instanceof LiteralExpr)) {
+            SlotRef slot = (SlotRef) rexpr;
+            return Pair.create(slot, lexpr);
+        }
+        return null;
     }
 
     @Override

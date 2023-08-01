@@ -22,17 +22,32 @@
 #pragma once
 
 #include "storage/uint24.h"
+#include "types/date_value.h"
+#include "types/timestamp_value.h"
 #include "util/raw_container.h"
 #include "util/slice.h"
 
 namespace starrocks {
 
 // Reference:
+//  when _is_binary_format = false
 //   https://dev.mysql.com/doc/internals/en/com-query-response.html#text-resultset-row
+//  when _is_binary_format = true
+//   https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_binary_resultset.html
+//
 class MysqlRowBuffer final {
 public:
+
+    template <typename DateType>
+    void push_datetime(const DateType& dateValue);
+
     MysqlRowBuffer() = default;
+    MysqlRowBuffer(bool is_binary_format): _is_binary_format(is_binary_format){};
     ~MysqlRowBuffer() = default;
+
+    // Prepare for binary row buffer
+    // init bitmap
+    void start_binary_row(uint32_t num_cols);
 
     void reset() { _data.clear(); }
 
@@ -70,7 +85,9 @@ public:
 
     const std::string& data() const { return reinterpret_cast<const std::string&>(_data); }
 
-    void reserve(size_t count) { _data.reserve(count); }
+    void reserve(size_t count) {
+        _data.reserve(count);
+    }
 
 private:
     char* _resize_extra(size_t n) {
@@ -78,6 +95,13 @@ private:
         _data.resize(old_sz + n);
         return _data.data() + old_sz;
     }
+
+    // append data into buffer
+    void _append(const char* data, int64_t len);
+    // the same as mysql net_store_data
+    // the first few bytes is length, followed by data
+    void _append_var_string(const char* data, int64_t len);
+
 
     void _enter_scope(char c);
     void _leave_scope(char c);
@@ -88,6 +112,11 @@ private:
     raw::RawString _data;
     uint32_t _array_level = 0;
     uint32_t _array_offset = 0;
+
+    // for binary format
+    // TODO: Refactor to be constexpr
+    bool _is_binary_format = false;
+    uint32_t _field_pos = 0;
 };
 
 } // namespace starrocks

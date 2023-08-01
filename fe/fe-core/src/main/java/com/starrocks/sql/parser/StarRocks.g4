@@ -1794,6 +1794,7 @@ literalExpression
     | string                                                                              #stringLiteral
     | interval                                                                            #intervalLiteral
     | unitBoundary                                                                        #unitBoundaryLiteral
+    | paramPlaceHolder                                                                    #paramPlaceHolderExpr
     ;
 
 functionCall
@@ -2066,6 +2067,10 @@ unitIdentifier
 
 unitBoundary
     : FLOOR | CEIL
+    ;
+
+paramPlaceHolder
+    : QUESTION_MARK
     ;
 
 type

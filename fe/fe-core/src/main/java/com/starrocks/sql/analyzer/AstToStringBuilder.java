@@ -29,6 +29,7 @@ import com.starrocks.analysis.LikePredicate;
 import com.starrocks.analysis.LimitElement;
 import com.starrocks.analysis.LiteralExpr;
 import com.starrocks.analysis.OrderByElement;
+import com.starrocks.analysis.ParamPlaceHolderExpr;
 import com.starrocks.analysis.ParseNode;
 import com.starrocks.analysis.SlotRef;
 import com.starrocks.analysis.StringLiteral;
@@ -761,6 +762,8 @@ public class AstToStringBuilder {
                 } else {
                     return visitExpression(node, context);
                 }
+            } else if (node instanceof ParamPlaceHolderExpr) {
+                return ((ParamPlaceHolderExpr) node).getOriginSqlString();
             } else {
                 return visitExpression(node, context);
             }

@@ -213,6 +213,14 @@ public class MysqlProto {
         context.setCapability(context.getServerCapability());
         serializer.setCapability(context.getCapability());
 
+
+        context.getMysqlChannel().setIs41Protocol(
+                context.getCapability().isProtocol41());
+
+        if (context.getCapability().isDeprecatedEOF()) {
+            context.getMysqlChannel().setClientDeprecatedEOF();
+        }
+
         // NOTE: when we behind proxy, we need random string sent by proxy.
         byte[] randomString = handshakePacket.getAuthPluginData();
         // check authenticate

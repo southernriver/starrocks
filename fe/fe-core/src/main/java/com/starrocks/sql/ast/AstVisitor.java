@@ -26,6 +26,7 @@ import com.starrocks.analysis.LimitElement;
 import com.starrocks.analysis.LiteralExpr;
 import com.starrocks.analysis.OrderByElement;
 import com.starrocks.analysis.ParseNode;
+import com.starrocks.analysis.PrepareStatement;
 import com.starrocks.analysis.SlotRef;
 import com.starrocks.analysis.SubfieldExpr;
 import com.starrocks.analysis.Subquery;
@@ -56,6 +57,10 @@ public abstract class AstVisitor<R, C> {
     }
 
     public R visitQueryStatement(QueryStatement statement, C context) {
+        return visitStatement(statement, context);
+    }
+
+    public R visitPreparedStatement(PrepareStatement statement, C context) {
         return visitStatement(statement, context);
     }
 

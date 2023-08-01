@@ -20,14 +20,16 @@ public:
     ResultSinkOperator(OperatorFactory* factory, int32_t id, int32_t plan_node_id, int32_t driver_sequence,
                        TResultSinkType::type sink_type, const std::vector<ExprContext*>& output_expr_ctxs,
                        const std::shared_ptr<BufferControlBlock>& sender, std::atomic<int32_t>& num_result_sinks,
-                       std::atomic<int64_t>& num_written_rows, FragmentContext* const fragment_ctx)
+                       std::atomic<int64_t>& num_written_rows, FragmentContext* const fragment_ctx,
+                       bool is_binary_format)
             : Operator(factory, id, "result_sink", plan_node_id, driver_sequence),
               _sink_type(sink_type),
               _output_expr_ctxs(output_expr_ctxs),
               _sender(sender),
               _num_result_sinkers(num_result_sinks),
               _num_written_rows(num_written_rows),
-              _fragment_ctx(fragment_ctx) {}
+              _fragment_ctx(fragment_ctx),
+              _is_binary_format(is_binary_format) {}
 
     ~ResultSinkOperator() override = default;
 
@@ -73,15 +75,17 @@ private:
     bool _is_finished = false;
 
     FragmentContext* const _fragment_ctx;
+    bool _is_binary_format;
 };
 
 class ResultSinkOperatorFactory final : public OperatorFactory {
 public:
     ResultSinkOperatorFactory(int32_t id, TResultSinkType::type sink_type, std::vector<TExpr> t_output_expr,
-                              FragmentContext* const fragment_ctx)
+                              FragmentContext* const fragment_ctx, bool is_binary_format)
             : OperatorFactory(id, "result_sink", Operator::s_pseudo_plan_node_id_for_result_sink),
               _sink_type(sink_type),
               _t_output_expr(std::move(t_output_expr)),
+              _is_binary_format(is_binary_format),
               _fragment_ctx(fragment_ctx) {}
 
     ~ResultSinkOperatorFactory() override = default;
@@ -94,7 +98,7 @@ public:
         _increment_num_result_sinkers_no_barrier();
         return std::make_shared<ResultSinkOperator>(this, _id, _plan_node_id, driver_sequence, _sink_type,
                                                     _output_expr_ctxs, _sender, _num_result_sinkers, _num_written_rows,
-                                                    _fragment_ctx);
+                                                    _fragment_ctx, _is_binary_format);
     }
 
     Status prepare(RuntimeState* state) override;
@@ -107,6 +111,7 @@ private:
     TResultSinkType::type _sink_type;
     std::vector<TExpr> _t_output_expr;
     std::vector<ExprContext*> _output_expr_ctxs;
+    bool _is_binary_format;
 
     /// The followings are shared by all the ResultSinkOperators created by this ResultSinkOperatorFactory.
     // A fragment_instance_id can only have ONE sender, because result_mgr saves the mapping from fragment_instance_id

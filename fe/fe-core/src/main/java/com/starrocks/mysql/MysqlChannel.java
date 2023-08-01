@@ -62,6 +62,18 @@ public class MysqlChannel {
     protected boolean isSend;
     protected boolean closed;
 
+    // mysql flag CLIENT_DEPRECATE_EOF
+    private boolean clientDeprecatedEOF;
+
+    /*
+    defined in php-src/ext/mysqlnd/mysqlnd_wireprotocol.c
+    1 + 4 (id) + 2 (field_c) + 2 (param_c) + 1 (filler) + 2 (warnings )
+    #define PREPARE_RESPONSE_SIZE_41 9
+    #define PREPARE_RESPONSE_SIZE_50 12
+     */
+    // is41 protocol
+    private boolean is41Protocol;
+
     protected MysqlChannel() {
         this(null);
     }
@@ -129,6 +141,22 @@ public class MysqlChannel {
         } finally {
             closed = true;
         }
+    }
+
+    public void setClientDeprecatedEOF() {
+        clientDeprecatedEOF = true;
+    }
+
+    public boolean clientDeprecatedEOF() {
+        return clientDeprecatedEOF;
+    }
+
+    public boolean is41Protocol() {
+        return is41Protocol;
+    }
+
+    public void setIs41Protocol(boolean is41Protocol) {
+        this.is41Protocol = is41Protocol;
     }
 
     public void setSSLChannel(SSLChannel sslChannel) {

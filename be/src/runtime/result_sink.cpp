@@ -52,6 +52,9 @@ ResultSink::ResultSink(const RowDescriptor& row_desc, const std::vector<TExpr>& 
         CHECK(sink.__isset.file_options);
         _file_opts = std::make_shared<ResultFileOptions>(sink.file_options);
     }
+
+    _is_binary_format = sink.is_binary_format;
+
 }
 
 Status ResultSink::prepare_exprs(RuntimeState* state) {
@@ -81,7 +84,8 @@ Status ResultSink::prepare(RuntimeState* state) {
     // create writer based on sink type
     switch (_sink_type) {
     case TResultSinkType::MYSQL_PROTOCAL:
-        _writer.reset(new (std::nothrow) MysqlResultWriter(_sender.get(), _output_expr_ctxs, _profile));
+        _writer.reset(new (std::nothrow) MysqlResultWriter(_sender.get(), _output_expr_ctxs, _profile,
+                                                           _is_binary_format));
         break;
     case TResultSinkType::FILE:
         CHECK(_file_opts.get() != nullptr);

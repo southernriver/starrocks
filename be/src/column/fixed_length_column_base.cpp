@@ -256,8 +256,12 @@ void FixedLengthColumnBase<T>::put_mysql_row_buffer(MysqlRowBuffer* buf, size_t 
         buf->push_number(_data[idx]);
     } else {
         // date/datetime or something else.
-        std::string s = _data[idx].to_string();
-        buf->push_string(s.data(), s.size());
+        if constexpr (std::is_same_v<T, DateValue> || std::is_same_v<T, TimestampValue>) {
+            buf->push_datetime(_data[idx]);
+        } else {
+            std::string s = _data[idx].to_string();
+            buf->push_string(s.data(), s.size());
+        }
     }
 }
 

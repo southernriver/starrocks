@@ -43,6 +43,8 @@ public abstract class StatementBase implements ParseNode {
     // True if this QueryStmt is the top level query from an EXPLAIN <query>
     protected boolean isExplain = false;
 
+    private boolean isPrepared = false;
+
     private OriginStatement origStmt;
 
     public void setIsExplain(boolean isExplain, ExplainLevel explainLevel) {
@@ -72,6 +74,15 @@ public abstract class StatementBase implements ParseNode {
     public OriginStatement getOrigStmt() {
         return origStmt;
     }
+
+    public void setIsPrepared() {
+        this.isPrepared = true;
+    }
+
+    public boolean isPrepared() {
+        return this.isPrepared;
+    }
+
 
     // Override this method and return true
     // if the stmt contains some information which need to be encrypted in audit log

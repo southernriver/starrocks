@@ -121,6 +121,10 @@ public class QueryState {
         this.errorMessage = errorMsg;
     }
 
+    public void setNoop() {
+        this.stateType = MysqlStateType.NOOP;
+    }
+
     public boolean isError() {
         return stateType == MysqlStateType.ERR;
     }

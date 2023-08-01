@@ -25,6 +25,9 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.starrocks.analysis.Expr;
 import com.starrocks.analysis.OutFileClause;
+import com.starrocks.qe.ConnectContext;
+import com.starrocks.qe.PrepareStmtContext;
+import com.starrocks.qe.StmtExecutor;
 import com.starrocks.sql.ast.QueryStatement;
 import com.starrocks.thrift.TDataSink;
 import com.starrocks.thrift.TDataSinkType;
@@ -35,6 +38,7 @@ import com.starrocks.thrift.TResultSink;
 import com.starrocks.thrift.TResultSinkType;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Result sink that forwards data to
@@ -67,6 +71,14 @@ public class ResultSink extends DataSink {
         if (fileSinkOptions != null) {
             tResultSink.setFile_options(fileSinkOptions);
         }
+
+        boolean isExecuteStmt = Optional.ofNullable(ConnectContext.get().getExecutor())
+                .filter(se -> se.getExecuteStmtId() >= 0)
+                .filter(se -> ConnectContext.get().getPreparedStmt(se.getExecuteStmtId()) != null)
+                .isPresent();
+
+        tResultSink.setIs_binary_format(isExecuteStmt);
+
         result.setResult_sink(tResultSink);
         return result;
     }

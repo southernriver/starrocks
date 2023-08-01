@@ -2,6 +2,7 @@
 package com.starrocks.sql.analyzer;
 
 import com.starrocks.analysis.LimitElement;
+import com.starrocks.analysis.PrepareStatement;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.OriginStatement;
@@ -539,6 +540,7 @@ public class Analyzer {
             return null;
         }
 
+        @Override
         public Void visitAlterRoutineLoadStatement(AlterRoutineLoadStmt statement, ConnectContext session) {
             AlterRoutineLoadAnalyzer.analyze(statement, session);
             return null;
@@ -590,6 +592,7 @@ public class Analyzer {
             return null;
         }
 
+        @Override
         public Void visitCreateAnalyzeJobStatement(CreateAnalyzeJobStmt statement, ConnectContext session) {
             AnalyzeStmtAnalyzer.analyze(statement, session);
             return null;
@@ -755,11 +758,13 @@ public class Analyzer {
 
         // ------------------------------------------- Plugin Statement ------------------------------------------------
 
+        @Override
         public Void visitInstallPluginStatement(InstallPluginStmt statement, ConnectContext context) {
             PluginAnalyzer.analyze(statement, context);
             return null;
         }
 
+        @Override
         public Void visitUninstallPluginStatement(UninstallPluginStmt statement, ConnectContext context) {
             PluginAnalyzer.analyze(statement, context);
             return null;
@@ -767,18 +772,30 @@ public class Analyzer {
 
         // --------------------------------------- File Statement ------------------------------------------------------
 
+        @Override
         public Void visitCreateFileStatement(CreateFileStmt statement, ConnectContext context) {
             FileAnalyzer.analyze(statement, context);
             return null;
         }
 
+        @Override
         public Void visitDropFileStatement(DropFileStmt statement, ConnectContext context) {
             FileAnalyzer.analyze(statement, context);
             return null;
         }
 
+        @Override
         public Void visitShowSmallFilesStatement(ShowSmallFilesStmt statement, ConnectContext context) {
             FileAnalyzer.analyze(statement, context);
+            return null;
+        }
+
+        // --------------------------------------- Prepared Statement ------------------------------------------------------
+
+
+        @Override
+        public Void visitPreparedStatement(PrepareStatement statement, ConnectContext context) {
+            PreparedStmtAnalyzer.analyze(statement, context);
             return null;
         }
     }

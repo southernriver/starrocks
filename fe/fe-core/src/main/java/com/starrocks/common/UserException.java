@@ -26,7 +26,7 @@ import com.google.common.base.Strings;
 /**
  * Thrown for internal server errors.
  */
-public class UserException extends Exception {
+public class UserException extends RuntimeException {
     private final InternalErrorCode errorCode;
 
     public UserException(String msg, Throwable cause) {

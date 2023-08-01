@@ -32,6 +32,7 @@ import com.starrocks.analysis.LikePredicate;
 import com.starrocks.analysis.LiteralExpr;
 import com.starrocks.analysis.NullLiteral;
 import com.starrocks.analysis.OrderByElement;
+import com.starrocks.analysis.ParamPlaceHolderExpr;
 import com.starrocks.analysis.PlaceHolderExpr;
 import com.starrocks.analysis.Predicate;
 import com.starrocks.analysis.SlotRef;
@@ -55,7 +56,9 @@ import com.starrocks.catalog.Type;
 import com.starrocks.cluster.ClusterNamespace;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.DdlException;
+import com.starrocks.common.Pair;
 import com.starrocks.qe.ConnectContext;
+import com.starrocks.qe.PrepareStmtContext;
 import com.starrocks.qe.SessionVariable;
 import com.starrocks.qe.SqlModeHelper;
 import com.starrocks.qe.VariableMgr;
@@ -71,9 +74,12 @@ import com.starrocks.sql.optimizer.base.ColumnRefFactory;
 import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
 import com.starrocks.sql.optimizer.transformer.ExpressionMapping;
 import com.starrocks.sql.optimizer.transformer.SqlToScalarOperatorTranslator;
+import org.apache.commons.collections.CollectionUtils;
 
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -416,15 +422,35 @@ public class ExpressionAnalyzer {
         @Override
         public Void visitBetweenPredicate(BetweenPredicate node, Scope scope) {
             predicateBaseAndCheck(node);
+            List<Expr> childrenExpr = node.getChildren();
+            Expr slot = childrenExpr.get(0);
+            Expr left = childrenExpr.get(1);
+            Expr right = childrenExpr.get(2);
+            boolean leftIsHolder = left instanceof ParamPlaceHolderExpr;
+            boolean rightIsHolder = right instanceof ParamPlaceHolderExpr;
 
-            List<Type> list = node.getChildren().stream().map(Expr::getType).collect(Collectors.toList());
-            Type compatibleType = TypeManager.getCompatibleTypeForBetweenAndIn(list);
+            if (leftIsHolder || rightIsHolder) {
+                PrepareStmtContext preparedStmtCtx = session.getPreparedStmt(session.getStmtId());
+                Preconditions.checkArgument(preparedStmtCtx != null, "PreparedCtx must not null");
+                List<ParamPlaceHolderExpr> params = new ArrayList<>();
+                if (leftIsHolder) {
+                    params.add((ParamPlaceHolderExpr) left);
+                }
+                if (rightIsHolder) {
+                    params.add((ParamPlaceHolderExpr) right);
+                }
+                preparedStmtCtx.addParamPlaceHolder(Pair.create((SlotRef) slot, params));
+            } else {
 
-            for (Type type : list) {
-                if (!Type.canCastTo(type, compatibleType)) {
-                    throw new SemanticException(
-                            "between predicate type " + type.toSql() + " with type " + compatibleType.toSql()
-                                    + " is invalid.");
+                List<Type> list = node.getChildren().stream().map(Expr::getType).collect(Collectors.toList());
+                Type compatibleType = TypeManager.getCompatibleTypeForBetweenAndIn(list);
+
+                for (Type type : list) {
+                    if (!Type.canCastTo(type, compatibleType)) {
+                        throw new SemanticException(
+                                "between predicate type " + type.toSql() + " with type " + compatibleType.toSql()
+                                        + " is invalid.");
+                    }
                 }
             }
 
@@ -433,19 +459,31 @@ public class ExpressionAnalyzer {
 
         @Override
         public Void visitBinaryPredicate(BinaryPredicate node, Scope scope) {
-            Type type1 = node.getChild(0).getType();
-            Type type2 = node.getChild(1).getType();
+            Expr leftChild = node.getChild(0);
+            Expr rightChild = node.getChild(1);
 
-            Type compatibleType =
-                    TypeManager.getCompatibleTypeForBinary(node.getOp().isNotRangeComparison(), type1, type2);
-            // check child type can be cast
-            final String ERROR_MSG = "Column type %s does not support binary predicate operation.";
-            if (!Type.canCastTo(type1, compatibleType)) {
-                throw new SemanticException(String.format(ERROR_MSG, type1.toSql()));
-            }
+            if (leftChild instanceof ParamPlaceHolderExpr || rightChild instanceof ParamPlaceHolderExpr) {
+                Pair<SlotRef, Expr> placeHolderPair = node.extract();
+                PrepareStmtContext preparedStmtCtx = session.getPreparedStmt(session.getStmtId());
+                Preconditions.checkArgument(preparedStmtCtx != null, "PreparedCtx must not null");
+                preparedStmtCtx.addParamPlaceHolder(
+                        Pair.create(placeHolderPair.first,
+                                Collections.singletonList((ParamPlaceHolderExpr) placeHolderPair.second)));
+            } else {
+                Type type1 = leftChild.getType();
+                Type type2 = rightChild.getType();
 
-            if (!Type.canCastTo(type2, compatibleType)) {
-                throw new SemanticException(String.format(ERROR_MSG, type1.toSql()));
+                Type compatibleType =
+                        TypeManager.getCompatibleTypeForBinary(node.getOp().isNotRangeComparison(), type1, type2);
+                // check child type can be cast
+                final String ERROR_MSG = "Column type %s does not support binary predicate operation.";
+                if (!Type.canCastTo(type1, compatibleType)) {
+                    throw new SemanticException(String.format(ERROR_MSG, type1.toSql()));
+                }
+
+                if (!Type.canCastTo(type2, compatibleType)) {
+                    throw new SemanticException(String.format(ERROR_MSG, type1.toSql()));
+                }
             }
 
             node.setType(Type.BOOLEAN);
@@ -598,32 +636,47 @@ public class ExpressionAnalyzer {
         @Override
         public Void visitExistsPredicate(ExistsPredicate node, Scope scope) {
             predicateBaseAndCheck(node);
+            checkDoNotSupportParamPlaceHolders(node);
             return null;
         }
 
         @Override
         public Void visitInPredicate(InPredicate node, Scope scope) {
             predicateBaseAndCheck(node);
+            List<Expr> paramsExpr = node.getListChildren().stream()
+                    .filter(expr -> expr instanceof ParamPlaceHolderExpr)
+                    .collect(Collectors.toList());
+            if (CollectionUtils.isNotEmpty(paramsExpr)) {
+                PrepareStmtContext preparedStmtCtx = session.getPreparedStmt(session.getStmtId());
+                Preconditions.checkArgument(preparedStmtCtx != null, "PreparedCtx must not null");
+                Expr slotRef = node.getChild(0);
+                Preconditions.checkArgument(slotRef instanceof SlotRef, "Left expr in preparedStatement must not slotRef");
 
-            List<Expr> queryExpressions = Lists.newArrayList();
-            node.collect(arg -> arg instanceof Subquery, queryExpressions);
-            if (queryExpressions.size() > 0 && node.getChildren().size() > 2) {
-                throw new SemanticException("In Predicate only support literal expression list");
-            }
+                preparedStmtCtx.addParamPlaceHolder(
+                        Pair.create((SlotRef) slotRef,
+                                paramsExpr.stream().map(e -> (ParamPlaceHolderExpr) e).collect(Collectors.toList())));
+            } else {
 
-            // check compatible type
-            List<Type> list = node.getChildren().stream().map(Expr::getType).collect(Collectors.toList());
-            Type compatibleType = TypeManager.getCompatibleTypeForBetweenAndIn(list);
-
-            for (Type type : list) {
-                // TODO(mofei) support it
-                if (type.isJsonType()) {
-                    throw new SemanticException("InPredicate of JSON is not supported");
+                List<Expr> queryExpressions = Lists.newArrayList();
+                node.collect(arg -> arg instanceof Subquery, queryExpressions);
+                if (queryExpressions.size() > 0 && node.getChildren().size() > 2) {
+                    throw new SemanticException("In Predicate only support literal expression list");
                 }
-                if (!Type.canCastTo(type, compatibleType)) {
-                    throw new SemanticException(
-                            "in predicate type " + type.toSql() + " with type " + compatibleType.toSql()
-                                    + " is invalid.");
+
+                // check compatible type
+                List<Type> list = node.getChildren().stream().map(Expr::getType).collect(Collectors.toList());
+                Type compatibleType = TypeManager.getCompatibleTypeForBetweenAndIn(list);
+
+                for (Type type : list) {
+                    // TODO(mofei) support it
+                    if (type.isJsonType()) {
+                        throw new SemanticException("InPredicate of JSON is not supported");
+                    }
+                    if (!Type.canCastTo(type, compatibleType)) {
+                        throw new SemanticException(
+                                "in predicate type " + type.toSql() + " with type " + compatibleType.toSql()
+                                        + " is invalid.");
+                    }
                 }
             }
 
@@ -651,28 +704,44 @@ public class ExpressionAnalyzer {
         @Override
         public Void visitLikePredicate(LikePredicate node, Scope scope) {
             predicateBaseAndCheck(node);
+            Expr leftChild = node.getChild(0);
+            Expr rightChild = node.getChild(1);
+            Type type1 = leftChild.getType();
+            Type type2 = rightChild.getType();
 
-            Type type1 = node.getChild(0).getType();
-            Type type2 = node.getChild(1).getType();
+            if (rightChild instanceof ParamPlaceHolderExpr) {
+                if (!(leftChild instanceof SlotRef)) {
+                    throw new SemanticException(String.format(
+                            "left operand %s in prepared statement must be of type SlotRef", leftChild.explain()));
+                }
+                SlotRef slot = (SlotRef) leftChild;
+                Pair<SlotRef, Expr> placeHolderPair = Pair.create(slot, rightChild);
 
-            if (!type1.isStringType() && !type1.isNull()) {
-                throw new SemanticException(
-                        "left operand of " + node.getOp().toString() + " must be of type STRING: " +
-                                AstToStringBuilder.toString(node));
-            }
+                PrepareStmtContext preparedStmtCtx = session.getPreparedStmt(session.getStmtId());
+                Preconditions.checkArgument(preparedStmtCtx != null, "PreparedCtx must not null");
+                preparedStmtCtx.addParamPlaceHolder(
+                        Pair.create(placeHolderPair.first,
+                                Collections.singletonList((ParamPlaceHolderExpr) placeHolderPair.second)));
+            } else {
+                if (!type1.isStringType() && !type1.isNull()) {
+                    throw new SemanticException(
+                            "left operand of " + node.getOp().toString() + " must be of type STRING: " +
+                                    AstToStringBuilder.toString(node));
+                }
 
-            if (!type2.isStringType() && !type2.isNull()) {
-                throw new SemanticException(
-                        "right operand of " + node.getOp().toString() + " must be of type STRING: " +
-                                AstToStringBuilder.toString(node));
-            }
+                if (!type2.isStringType() && !type2.isNull()) {
+                    throw new SemanticException(
+                            "right operand of " + node.getOp().toString() + " must be of type STRING: " +
+                                    AstToStringBuilder.toString(node));
+                }
 
-            // check pattern
-            if (LikePredicate.Operator.REGEXP.equals(node.getOp()) && !type2.isNull() && node.getChild(1).isLiteral()) {
-                try {
-                    Pattern.compile(((StringLiteral) node.getChild(1)).getValue());
-                } catch (PatternSyntaxException e) {
-                    throw new SemanticException("Invalid regular expression in '" + AstToStringBuilder.toString(node) + "'");
+                // check pattern
+                if (LikePredicate.Operator.REGEXP.equals(node.getOp()) && !type2.isNull() && node.getChild(1).isLiteral()) {
+                    try {
+                        Pattern.compile(((StringLiteral) node.getChild(1)).getValue());
+                    } catch (PatternSyntaxException e) {
+                        throw new SemanticException("Invalid regular expression in '" + AstToStringBuilder.toString(node) + "'");
+                    }
                 }
             }
 
@@ -687,6 +756,14 @@ public class ExpressionAnalyzer {
             for (Expr expr : node.getChildren()) {
                 if (expr.getType().isOnlyMetricType() ||
                         (expr.getType().isComplexType() && !(node instanceof IsNullPredicate))) {
+                    throw new SemanticException("HLL, BITMAP, PERCENTILE and ARRAY, MAP, STRUCT type couldn't as Predicate");
+                }
+            }
+        }
+
+        private void checkDoNotSupportParamPlaceHolders(Predicate node) {
+            for (Expr expr : node.getChildren()) {
+                if (expr instanceof ParamPlaceHolderExpr) {
                     throw new SemanticException("HLL, BITMAP, PERCENTILE and ARRAY, MAP, STRUCT type couldn't as Predicate");
                 }
             }

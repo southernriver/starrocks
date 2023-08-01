@@ -22,6 +22,7 @@
 package com.starrocks.qe;
 
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.starrocks.analysis.UserIdentity;
 import com.starrocks.catalog.InternalCatalog;
@@ -175,6 +176,8 @@ public class ConnectContext {
 
     protected SSLContext sslContext;
 
+    private final Map<Long, PrepareStmtContext> preparedStmtCtxs = Maps.newHashMap();
+
     public StmtExecutor getExecutor() {
         return executor;
     }
@@ -297,6 +300,18 @@ public class ConnectContext {
 
     public void setCurrentRoleIds(Set<Long> roleIds) {
         this.currentRoleIds = roleIds;
+    }
+
+    public void addPreparedStmt(long stmtId, PrepareStmtContext ctx) {
+        this.preparedStmtCtxs.put(stmtId, ctx);
+    }
+
+    public PrepareStmtContext getPreparedStmt(long stmtId) {
+        return this.preparedStmtCtxs.get(stmtId);
+    }
+
+    public void removePreparedStmt(int stmtId) {
+        this.preparedStmtCtxs.remove((long) stmtId);
     }
 
     public void modifySessionVariable(SetVar setVar, boolean onlySetSessionVar) throws DdlException {
