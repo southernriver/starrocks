@@ -159,6 +159,10 @@ public abstract class AlterJobV2 implements Writable {
         return finishedTimeMs;
     }
 
+    public long getCreateTimeMs() {
+        return this.createTimeMs;
+    }
+
     public void setFinishedTimeMs(long finishedTimeMs) {
         this.finishedTimeMs = finishedTimeMs;
     }
