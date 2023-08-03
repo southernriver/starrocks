@@ -423,6 +423,23 @@ message ExecuteCommandResultPB {
     optional string result = 2;
 };
 
+message PFetchColIdsRequest {
+    message PFetchColIdParam {
+        required int64 indexId = 1;
+        repeated int64 tablet_ids = 2;
+    };
+    repeated PFetchColIdParam params = 1;
+};
+
+message PFetchColIdsResponse {
+    message PFetchColIdsResultEntry {
+        required int64 index_id = 1;
+        map<string, int32> col_name_to_id = 2;
+    };
+    optional StatusPB status = 1;
+    repeated PFetchColIdsResultEntry entries = 2;
+};
+
 // NOTE(zc): If you want to add new method here,
 // you must add same method to 'doris_internal_service.proto'.
 service PInternalService {
@@ -436,7 +453,8 @@ service PInternalService {
     rpc tablet_writer_cancel(PTabletWriterCancelRequest) returns (PTabletWriterCancelResult);
     rpc trigger_profile_report(PTriggerProfileReportRequest) returns (PTriggerProfileReportResult);
     rpc get_info(PProxyRequest) returns (PProxyResult); 
-    rpc get_pulsar_info(PPulsarProxyRequest) returns (PPulsarProxyResult); 
+    rpc get_pulsar_info(PPulsarProxyRequest) returns (PPulsarProxyResult);
+    rpc get_column_ids_by_tablet_ids(PFetchColIdsRequest) returns (PFetchColIdsResponse);
 
     // Transmit vectorized data between backends.
     rpc transmit_chunk(PTransmitChunkParams) returns (PTransmitChunkResult);

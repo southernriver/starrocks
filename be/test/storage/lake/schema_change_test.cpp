@@ -67,7 +67,7 @@ public:
         }
 
         _base_tablet_schema = TabletSchema::create(*base_schema);
-        _base_schema = std::make_shared<VSchema>(ChunkHelper::convert_schema(*_base_tablet_schema));
+        _base_schema = std::make_shared<VSchema>(ChunkHelper::convert_schema(_base_tablet_schema));
 
         // new tablet
         _new_tablet_metadata = std::make_shared<TabletMetadata>();
@@ -112,7 +112,7 @@ public:
         }
 
         _new_tablet_schema = TabletSchema::create(*new_schema);
-        _new_schema = std::make_shared<VSchema>(ChunkHelper::convert_schema(*_new_tablet_schema));
+        _new_schema = std::make_shared<VSchema>(ChunkHelper::convert_schema(_new_tablet_schema));
     }
 
 protected:
@@ -283,7 +283,7 @@ public:
         }
 
         _base_tablet_schema = TabletSchema::create(*base_schema);
-        _base_schema = std::make_shared<VSchema>(ChunkHelper::convert_schema(*_base_tablet_schema));
+        _base_schema = std::make_shared<VSchema>(ChunkHelper::convert_schema(_base_tablet_schema));
 
         // new tablet
         _new_tablet_metadata = std::make_shared<TabletMetadata>();
@@ -318,7 +318,7 @@ public:
         }
 
         _new_tablet_schema = TabletSchema::create(*new_schema);
-        _new_schema = std::make_shared<VSchema>(ChunkHelper::convert_schema(*_new_tablet_schema));
+        _new_schema = std::make_shared<VSchema>(ChunkHelper::convert_schema(_new_tablet_schema));
     }
 
 protected:
@@ -497,7 +497,7 @@ public:
         }
 
         _base_tablet_schema = TabletSchema::create(*base_schema);
-        _base_schema = std::make_shared<VSchema>(ChunkHelper::convert_schema(*_base_tablet_schema));
+        _base_schema = std::make_shared<VSchema>(ChunkHelper::convert_schema(_base_tablet_schema));
 
         // new tablet
         _new_tablet_metadata = std::make_shared<TabletMetadata>();
@@ -542,7 +542,7 @@ public:
         }
 
         _new_tablet_schema = TabletSchema::create(*new_schema);
-        _new_schema = std::make_shared<VSchema>(ChunkHelper::convert_schema(*_new_tablet_schema));
+        _new_schema = std::make_shared<VSchema>(ChunkHelper::convert_schema(_new_tablet_schema));
     }
 
 protected:

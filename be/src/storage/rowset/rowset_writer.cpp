@@ -174,6 +174,7 @@ StatusOr<RowsetSharedPtr> RowsetWriter::build() {
     } else {
         _rowset_meta_pb->set_rowset_state(VISIBLE);
     }
+    _context.tablet_schema->to_schema_pb(_rowset_meta_pb->mutable_tablet_schema());
     auto rowset_meta = std::make_shared<RowsetMeta>(_rowset_meta_pb);
     RowsetSharedPtr rowset;
     RETURN_IF_ERROR(
@@ -360,7 +361,7 @@ StatusOr<std::unique_ptr<SegmentWriter>> HorizontalRowsetWriter::_create_segment
         path = Rowset::segment_file_path(_context.rowset_path_prefix, _context.rowset_id, _num_segment);
     }
     ASSIGN_OR_RETURN(auto wfile, _fs->new_writable_file(path));
-    const auto* schema = _rowset_schema != nullptr ? _rowset_schema.get() : _context.tablet_schema;
+    const TabletSchemaCSPtr schema = _rowset_schema != nullptr ? _rowset_schema : _context.tablet_schema;
     auto segment_writer = std::make_unique<SegmentWriter>(std::move(wfile), _num_segment, schema, _writer_options);
     RETURN_IF_ERROR(segment_writer->init());
     ++_num_segment;
@@ -575,7 +576,7 @@ Status HorizontalRowsetWriter::_final_merge() {
                     _context.tablet_schema->num_columns(), _context.tablet_schema->sort_key_idxes(),
                     config::vertical_compaction_max_columns_per_group, &column_groups);
         }
-        auto schema = ChunkHelper::convert_schema_to_format_v2(*_context.tablet_schema, column_groups[0]);
+        auto schema = ChunkHelper::convert_schema_to_format_v2(_context.tablet_schema, column_groups[0]);
         if (!_context.merge_condition.empty()) {
             for (int i = _context.tablet_schema->num_key_columns(); i < _context.tablet_schema->num_columns(); ++i) {
                 if (_context.tablet_schema->schema()->field(i)->name() == _context.merge_condition) {
@@ -660,12 +661,12 @@ Status HorizontalRowsetWriter::_final_merge() {
             if (st.is_end_of_file()) {
                 break;
             } else if (st.ok()) {
-                ChunkHelper::padding_char_columns(char_field_indexes, schema, *_context.tablet_schema, chunk);
+                ChunkHelper::padding_char_columns(char_field_indexes, schema, _context.tablet_schema, chunk);
                 total_rows += chunk->num_rows();
                 total_chunk++;
-                if (auto st = _vertical_rowset_writer->add_columns(*chunk, column_groups[0], true); !st.ok()) {
-                    LOG(WARNING) << "writer add_columns error. tablet=" << _context.tablet_id << ", err=" << st;
-                    return st;
+                if (auto status = _vertical_rowset_writer->add_columns(*chunk, column_groups[0], true); !status.ok()) {
+                    LOG(WARNING) << "writer add_columns error. tablet=" << _context.tablet_id << ", err=" << status;
+                    return status;
                 }
             } else {
                 return st;
@@ -687,50 +688,50 @@ Status HorizontalRowsetWriter::_final_merge() {
 
             seg_iterators.clear();
 
-            auto schema = ChunkHelper::convert_schema_to_format_v2(*_context.tablet_schema, column_groups[i]);
+            auto chunk_schema = ChunkHelper::convert_schema_to_format_v2(_context.tablet_schema, column_groups[i]);
 
             for (const auto& segment : segments) {
-                auto res = segment->new_iterator(schema, seg_options);
+                auto res = segment->new_iterator(chunk_schema, seg_options);
                 if (!res.ok()) {
                     return res.status();
                 }
                 seg_iterators.emplace_back(res.value());
             }
 
-            ChunkIteratorPtr itr;
-            // create temporary segment files at first, then merge them and create final segment files if schema change with sorting
+            ChunkIteratorPtr chunk_itr;
+            // create temporary segment files at first, then merge them and create final segment files if chunk_schema change with sorting
             if (_context.schema_change_sorting) {
                 if (_context.tablet_schema->keys_type() == KeysType::DUP_KEYS ||
                     _context.tablet_schema->keys_type() == KeysType::PRIMARY_KEYS) {
-                    itr = new_mask_merge_iterator(seg_iterators, mask_buffer.get());
+                    chunk_itr = new_mask_merge_iterator(seg_iterators, mask_buffer.get());
                 } else if (_context.tablet_schema->keys_type() == KeysType::UNIQUE_KEYS ||
                            _context.tablet_schema->keys_type() == KeysType::AGG_KEYS) {
-                    itr = new_aggregate_iterator(new_mask_merge_iterator(seg_iterators, mask_buffer.get()), false);
+                    chunk_itr = new_aggregate_iterator(new_mask_merge_iterator(seg_iterators, mask_buffer.get()), false);
                 } else {
                     return Status::NotSupported(
-                            fmt::format("final merge: schema change with sorting do not support {} type",
+                            fmt::format("final merge: chunk_schema change with sorting do not support {} type",
                                         KeysType_Name(_context.tablet_schema->keys_type())));
                 }
             } else {
-                itr = new_aggregate_iterator(new_mask_merge_iterator(seg_iterators, mask_buffer.get()), false);
+                chunk_itr = new_aggregate_iterator(new_mask_merge_iterator(seg_iterators, mask_buffer.get()), false);
             }
-            itr->init_encoded_schema(vectorized::EMPTY_GLOBAL_DICTMAPS);
+            chunk_itr->init_encoded_schema(vectorized::EMPTY_GLOBAL_DICTMAPS);
 
-            auto chunk_shared_ptr = ChunkHelper::new_chunk(schema, config::vector_chunk_size);
-            auto chunk = chunk_shared_ptr.get();
+            auto chunk_shared_ptr_ = ChunkHelper::new_chunk(chunk_schema, config::vector_chunk_size);
+            auto chunk_ = chunk_shared_ptr_.get();
 
-            auto char_field_indexes = ChunkHelper::get_char_field_indexes(schema);
+            auto char_field_indexes_ = ChunkHelper::get_char_field_indexes(chunk_schema);
 
             while (true) {
-                chunk->reset();
-                auto st = itr->get_next(chunk, source_masks.get());
+                chunk_->reset();
+                auto st = chunk_itr->get_next(chunk_, source_masks.get());
                 if (st.is_end_of_file()) {
                     break;
                 } else if (st.ok()) {
-                    ChunkHelper::padding_char_columns(char_field_indexes, schema, *_context.tablet_schema, chunk);
-                    if (auto st = _vertical_rowset_writer->add_columns(*chunk, column_groups[i], false); !st.ok()) {
-                        LOG(WARNING) << "writer add_columns error. tablet=" << _context.tablet_id << ", err=" << st;
-                        return st;
+                    ChunkHelper::padding_char_columns(char_field_indexes_, chunk_schema, _context.tablet_schema, chunk_);
+                    if (auto status = _vertical_rowset_writer->add_columns(*chunk_, column_groups[i], false); !status.ok()) {
+                        LOG(WARNING) << "writer add_columns error. tablet=" << _context.tablet_id << ", err=" << status;
+                        return status;
                     }
                 } else {
                     return st;
@@ -739,7 +740,7 @@ Status HorizontalRowsetWriter::_final_merge() {
                     source_masks->clear();
                 }
             }
-            itr->close();
+            chunk_itr->close();
             if (auto st = _vertical_rowset_writer->flush_columns(); !st.ok()) {
                 LOG(WARNING) << "failed to flush_columns group, tablet=" << _context.tablet_id << ", err=" << st;
                 return st;
@@ -758,7 +759,7 @@ Status HorizontalRowsetWriter::_final_merge() {
                   << " chunk=" << total_chunk << " bytes=" << PrettyPrinter::print(total_data_size(), TUnit::UNIT)
                   << ") duration: " << timer.elapsed_time() / 1000000 << "ms";
     } else {
-        auto schema = ChunkHelper::convert_schema_to_format_v2(*_context.tablet_schema);
+        auto schema = ChunkHelper::convert_schema_to_format_v2(_context.tablet_schema);
 
         for (const auto& segment : segments) {
             auto res = segment->new_iterator(schema, seg_options);
@@ -819,12 +820,12 @@ Status HorizontalRowsetWriter::_final_merge() {
             if (st.is_end_of_file()) {
                 break;
             } else if (st.ok()) {
-                ChunkHelper::padding_char_columns(char_field_indexes, schema, *_context.tablet_schema, chunk);
+                ChunkHelper::padding_char_columns(char_field_indexes, schema, _context.tablet_schema, chunk);
                 total_rows += chunk->num_rows();
                 total_chunk++;
-                if (auto st = add_chunk(*chunk); !st.ok()) {
-                    LOG(WARNING) << "writer add_chunk error: " << st;
-                    return st;
+                if (auto status = add_chunk(*chunk); !status.ok()) {
+                    LOG(WARNING) << "writer add_chunk error: " << status;
+                    return status;
                 }
             } else {
                 return st;
@@ -1046,7 +1047,7 @@ StatusOr<std::unique_ptr<SegmentWriter>> VerticalRowsetWriter::_create_segment_w
     std::lock_guard<std::mutex> l(_lock);
     ASSIGN_OR_RETURN(auto wfile, _fs->new_writable_file(Rowset::segment_file_path(_context.rowset_path_prefix,
                                                                                   _context.rowset_id, _num_segment)));
-    const auto* schema = _rowset_schema != nullptr ? _rowset_schema.get() : _context.tablet_schema;
+    const auto schema = _rowset_schema != nullptr ? _rowset_schema : _context.tablet_schema;
     auto segment_writer = std::make_unique<SegmentWriter>(std::move(wfile), _num_segment, schema, _writer_options);
     RETURN_IF_ERROR(segment_writer->init(column_indexes, is_key));
     ++_num_segment;

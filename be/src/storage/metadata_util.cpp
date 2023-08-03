@@ -31,13 +31,9 @@
 
 namespace starrocks {
 
-enum class FieldTypeVersion {
-    kV1,
-    kV2,
-};
 
 // Old version StarRocks use `TColumnType` to save type info, convert it into `TTypeDesc`.
-static void convert_to_new_version(TColumn* tcolumn) {
+void convert_to_new_version(TColumn* tcolumn) {
     if (!tcolumn->__isset.type_desc) {
         tcolumn->__set_index_len(tcolumn->column_type.index_len);
 
@@ -132,8 +128,8 @@ static LogicalType t_primitive_type_to_field_type(TPrimitiveType::type primitive
     return TYPE_UNKNOWN;
 }
 
-static Status t_column_to_pb_column(int32_t unique_id, const TColumn& t_column, FieldTypeVersion v, ColumnPB* column_pb,
-                                    size_t depth = 0) {
+Status t_column_to_pb_column(int32_t unique_id, const TColumn& t_column, FieldTypeVersion v, ColumnPB* column_pb,
+                                    size_t depth) {
     const int32_t kFakeUniqueId = -1;
 
     const std::vector<TTypeNode>& types = t_column.type_desc.types;
@@ -253,7 +249,13 @@ Status convert_t_schema_to_pb_schema(const TTabletSchema& tablet_schema, uint32_
     bool has_bf_columns = false;
     for (TColumn tcolumn : tablet_schema.columns) {
         convert_to_new_version(&tcolumn);
-        uint32_t col_unique_id = col_ordinal_to_unique_id.at(col_ordinal++);
+        uint32_t col_unique_id;
+        if (tcolumn.col_unique_id >= 0) {
+            col_unique_id = tcolumn.col_unique_id;
+        } else {
+            col_unique_id = col_ordinal_to_unique_id.at(col_ordinal);
+        }
+        col_ordinal++;
         ColumnPB* column = schema->add_column();
 
         RETURN_IF_ERROR(t_column_to_pb_column(col_unique_id, tcolumn, field_version, column));

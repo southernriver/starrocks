@@ -57,6 +57,7 @@ import com.starrocks.common.ErrorCode;
 import com.starrocks.common.ErrorReport;
 import com.starrocks.common.Pair;
 import com.starrocks.common.UserException;
+import com.starrocks.common.util.Util;
 import com.starrocks.lake.LakeTablet;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.GlobalStateMgr;
@@ -64,6 +65,7 @@ import com.starrocks.service.FrontendOptions;
 import com.starrocks.sql.ast.PartitionNames;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
 import com.starrocks.system.Backend;
+import com.starrocks.thrift.TColumn;
 import com.starrocks.thrift.TExplainLevel;
 import com.starrocks.thrift.TInternalScanRange;
 import com.starrocks.thrift.TLakeScanNode;
@@ -631,6 +633,8 @@ public class OlapScanNode extends ScanNode {
     protected void toThrift(TPlanNode msg) {
         List<String> keyColumnNames = new ArrayList<String>();
         List<TPrimitiveType> keyColumnTypes = new ArrayList<TPrimitiveType>();
+        List<TColumn> columnsDesc = new ArrayList<TColumn>();
+
         if (selectedIndexId != -1) {
             MaterializedIndexMeta indexMeta = olapTable.getIndexMetaByIndexId(selectedIndexId);
             if (KeysType.PRIMARY_KEYS == olapTable.getKeysType() && indexMeta.getSortKeyIdxes() != null) {
@@ -641,9 +645,10 @@ public class OlapScanNode extends ScanNode {
                 }
             } else {
                 for (Column col : olapTable.getSchemaByIndexId(selectedIndexId)) {
-                    if (!col.isKey()) {
-                        break;
-                    }
+                    TColumn tColumn = col.toThrift();
+                    col.setIndexFlag(tColumn, olapTable.getIndexes());
+                    columnsDesc.add(tColumn);
+
                     keyColumnNames.add(col.getName());
                     keyColumnTypes.add(col.getPrimitiveType().toThrift());
                 }
@@ -674,7 +679,8 @@ public class OlapScanNode extends ScanNode {
         } else {
             msg.node_type = TPlanNodeType.OLAP_SCAN_NODE;
             msg.olap_scan_node =
-                    new TOlapScanNode(desc.getId().asInt(), keyColumnNames, keyColumnTypes, isPreAggregation);
+                    new TOlapScanNode(desc.getId().asInt(), keyColumnNames,
+                        keyColumnTypes, isPreAggregation, columnsDesc);
             msg.olap_scan_node.setSort_key_column_names(keyColumnNames);
             msg.olap_scan_node.setRollup_name(olapTable.getIndexNameById(selectedIndexId));
             if (!conjuncts.isEmpty()) {

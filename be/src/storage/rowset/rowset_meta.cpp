@@ -18,6 +18,11 @@ RowsetMeta::RowsetMeta(std::string_view pb_rowset_meta, bool* parse_ok) {
 
 RowsetMeta::RowsetMeta(std::unique_ptr<RowsetMetaPB>& rowset_meta_pb) {
     _rowset_meta_pb = std::move(rowset_meta_pb);
+    if (_rowset_meta_pb->has_tablet_schema()) {
+        _schema = TabletSchemaCache::instance()->insert(
+                _rowset_meta_pb->tablet_schema().SerializeAsString());
+        _rowset_meta_pb->clear_tablet_schema();
+    }
     _init();
     _mem_usage = _calc_mem_usage();
     MEM_TRACKER_SAFE_CONSUME(ExecEnv::GetInstance()->rowset_metadata_mem_tracker(), _mem_usage);
@@ -25,6 +30,11 @@ RowsetMeta::RowsetMeta(std::unique_ptr<RowsetMetaPB>& rowset_meta_pb) {
 
 RowsetMeta::RowsetMeta(const RowsetMetaPB& rowset_meta_pb) {
     _rowset_meta_pb = std::make_unique<RowsetMetaPB>(rowset_meta_pb);
+    if (_rowset_meta_pb->has_tablet_schema()) {
+        _schema = TabletSchemaCache::instance()->insert(
+                _rowset_meta_pb->tablet_schema().SerializeAsString());
+        _rowset_meta_pb->clear_tablet_schema();
+    }
     _init();
     _mem_usage = _calc_mem_usage();
     MEM_TRACKER_SAFE_CONSUME(ExecEnv::GetInstance()->rowset_metadata_mem_tracker(), _mem_usage);

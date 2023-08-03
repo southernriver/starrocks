@@ -147,7 +147,7 @@ Status TabletUpdates::_load_from_pb(const TabletUpdatesPB& tablet_updates_pb) {
                 auto rowset_meta = std::make_shared<RowsetMeta>(rowset_meta_data, &parse_ok);
                 CHECK(parse_ok) << "Corrupted rowset meta";
                 RowsetSharedPtr rowset;
-                st = RowsetFactory::create_rowset(&_tablet.tablet_schema(), _tablet.schema_hash_path(), rowset_meta,
+                st = RowsetFactory::create_rowset(_tablet.tablet_schema(), _tablet.schema_hash_path(), rowset_meta,
                                                   &rowset);
                 if (st.ok()) {
                     _pending_commits.emplace(version, rowset);
@@ -170,7 +170,7 @@ Status TabletUpdates::_load_from_pb(const TabletUpdatesPB& tablet_updates_pb) {
     RETURN_IF_ERROR(TabletMetaManager::rowset_iterate(
             _tablet.data_dir(), _tablet.tablet_id(), [&](const RowsetMetaSharedPtr& rowset_meta) -> bool {
                 RowsetSharedPtr rowset;
-                st = RowsetFactory::create_rowset(&_tablet.tablet_schema(), _tablet.schema_hash_path(), rowset_meta,
+                st = RowsetFactory::create_rowset(_tablet.tablet_schema(), _tablet.schema_hash_path(), rowset_meta,
                                                   &rowset);
                 if (st.ok()) {
                     _rowsets[rowset_meta->get_rowset_seg_id()] = std::move(rowset);
@@ -858,8 +858,8 @@ void TabletUpdates::_apply_rowset_commit(const EditVersionInfo& version_info) {
     std::int32_t conditional_column = -1;
     const auto& txn_meta = rowset->rowset_meta()->get_meta_pb().txn_meta();
     if (txn_meta.has_merge_condition()) {
-        for (int i = 0; i < _tablet.tablet_schema().columns().size(); ++i) {
-            if (_tablet.tablet_schema().column(i).name() == txn_meta.merge_condition()) {
+        for (int i = 0; i < _tablet.tablet_schema()->columns().size(); ++i) {
+            if (_tablet.tablet_schema()->column(i).name() == txn_meta.merge_condition()) {
                 conditional_column = i;
                 break;
             }
@@ -1024,9 +1024,10 @@ void TabletUpdates::_apply_rowset_commit(const EditVersionInfo& version_info) {
         const auto& rowset_meta_pb = rowset->rowset_meta()->get_meta_pb();
         if (rowset_meta_pb.has_txn_meta()) {
             rowset->rowset_meta()->clear_txn_meta();
+            auto meta_pb = rowset->rowset_meta()->get_meta_pb();
             st = TabletMetaManager::apply_rowset_commit(_tablet.data_dir(), tablet_id, _next_log_id, version,
                                                         new_del_vecs, index_meta, enable_persistent_index,
-                                                        &(rowset->rowset_meta()->get_meta_pb()));
+                                                        &meta_pb);
         } else {
             st = TabletMetaManager::apply_rowset_commit(_tablet.data_dir(), tablet_id, _next_log_id, version,
                                                         new_del_vecs, index_meta, enable_persistent_index, nullptr);
@@ -1142,7 +1143,7 @@ Status TabletUpdates::_do_update(std::uint32_t rowset_id, std::int32_t upsert_id
                                  const std::vector<ColumnUniquePtr>& upserts, PrimaryIndex& index,
                                  std::int64_t tablet_id, DeletesMap* new_deletes) {
     if (condition_column >= 0) {
-        auto tablet_column = _tablet.tablet_schema().column(condition_column);
+        auto tablet_column = _tablet.tablet_schema()->column(condition_column);
         std::vector<uint32_t> read_column_ids;
         read_column_ids.push_back(condition_column);
 
@@ -1244,7 +1245,7 @@ Status TabletUpdates::_do_compaction(std::unique_ptr<CompactionInfo>* pinfo) {
     context.partition_id = _tablet.partition_id();
     context.tablet_schema_hash = _tablet.schema_hash();
     context.rowset_path_prefix = _tablet.schema_hash_path();
-    context.tablet_schema = &_tablet.tablet_schema();
+    context.tablet_schema = _tablet.tablet_schema();
     context.rowset_state = COMMITTED;
     context.segments_overlap = NONOVERLAPPING;
     context.max_rows_per_segment =
@@ -1263,7 +1264,7 @@ Status TabletUpdates::_do_compaction(std::unique_ptr<CompactionInfo>* pinfo) {
     cfg.chunk_size = config::vector_chunk_size;
     cfg.algorithm = algorithm;
     RETURN_IF_ERROR(vectorized::compaction_merge_rowsets(_tablet, info->start_version.major(), input_rowsets,
-                                                         rowset_writer.get(), cfg));
+                                                         rowset_writer.get(), cfg, context.tablet_schema));
     auto output_rowset = rowset_writer->build();
     if (!output_rowset.ok()) return output_rowset.status();
     // 4. commit compaction
@@ -2588,7 +2589,7 @@ Status TabletUpdates::convert_from(const std::shared_ptr<Tablet>& base_tablet, i
         writer_context.partition_id = _tablet.partition_id();
         writer_context.tablet_schema_hash = _tablet.schema_hash();
         writer_context.rowset_path_prefix = _tablet.schema_hash_path();
-        writer_context.tablet_schema = &_tablet.tablet_schema();
+        writer_context.tablet_schema = _tablet.tablet_schema();
         writer_context.rowset_state = VISIBLE;
         writer_context.version = src_rowset->version();
         writer_context.segments_overlap = src_rowset->rowset_meta()->segments_overlap();
@@ -2697,7 +2698,7 @@ Status TabletUpdates::convert_from(const std::shared_ptr<Tablet>& base_tablet, i
     LOG(INFO) << "convert_from finish tablet:" << _tablet.tablet_id() << " version:" << this->max_version()
               << " base tablet:" << base_tablet->tablet_id() << " #pending:" << _pending_commits.size()
               << " time:" << watch.get_elapse_second() << "s"
-              << " #column:" << _tablet.tablet_schema().num_columns() << " #rowset:" << src_rowsets.size()
+              << " #column:" << _tablet.thread_safe_get_tablet_schema()->num_columns() << " #rowset:" << src_rowsets.size()
               << " #file:" << total_files << " #row:" << total_rows << " bytes:" << total_bytes;
     ;
     return Status::OK();
@@ -2816,7 +2817,7 @@ Status TabletUpdates::reorder_from(const std::shared_ptr<Tablet>& base_tablet, i
         writer_context.partition_id = _tablet.partition_id();
         writer_context.tablet_schema_hash = _tablet.schema_hash();
         writer_context.rowset_path_prefix = _tablet.schema_hash_path();
-        writer_context.tablet_schema = &_tablet.tablet_schema();
+        writer_context.tablet_schema = _tablet.tablet_schema();
         writer_context.rowset_state = VISIBLE;
         writer_context.version = src_rowset->version();
         writer_context.segments_overlap = src_rowset->rowset_meta()->segments_overlap();
@@ -2972,7 +2973,7 @@ Status TabletUpdates::reorder_from(const std::shared_ptr<Tablet>& base_tablet, i
     LOG(INFO) << "reorder_from finish tablet:" << _tablet.tablet_id() << " version:" << this->max_version()
               << " base tablet:" << base_tablet->tablet_id() << " #pending:" << _pending_commits.size()
               << " time:" << watch.get_elapse_second() << "s"
-              << " #column:" << _tablet.tablet_schema().num_columns() << " #rowset:" << src_rowsets.size()
+              << " #column:" << _tablet.tablet_schema()->num_columns() << " #rowset:" << src_rowsets.size()
               << " #file:" << total_files << " #row:" << total_rows << " bytes:" << total_bytes;
     return Status::OK();
 }
@@ -3164,7 +3165,7 @@ Status TabletUpdates::load_snapshot(const SnapshotMeta& snapshot_meta, bool rest
             if (rowset_meta->tablet_id() != _tablet.tablet_id()) {
                 return Status::InternalError("mismatched tablet id");
             }
-            RETURN_IF_ERROR(RowsetFactory::create_rowset(&_tablet.tablet_schema(), _tablet.schema_hash_path(),
+            RETURN_IF_ERROR(RowsetFactory::create_rowset(_tablet.tablet_schema(), _tablet.schema_hash_path(),
                                                          rowset_meta, &rowset));
             if (rowset->start_version() != rowset->end_version()) {
                 return Status::InternalError("mismatched start and end version");
@@ -3234,7 +3235,7 @@ Status TabletUpdates::load_snapshot(const SnapshotMeta& snapshot_meta, bool rest
                     std::max<uint32_t>(new_next_rowset_id, new_id + std::max(1L, rowset_meta_pb.num_segments()));
             rowset_meta->set_rowset_seg_id(new_id);
             RowsetSharedPtr* rowset = &new_rowsets[new_id];
-            RETURN_IF_ERROR(RowsetFactory::create_rowset(&_tablet.tablet_schema(), _tablet.schema_hash_path(),
+            RETURN_IF_ERROR(RowsetFactory::create_rowset(_tablet.thread_safe_get_tablet_schema(), _tablet.schema_hash_path(),
                                                          rowset_meta, rowset));
             VLOG(2) << "add a new rowset " << tablet_id << "@" << new_id << "@" << rowset_meta->rowset_id();
         }
@@ -3408,7 +3409,7 @@ Status TabletUpdates::get_column_values(std::vector<uint32_t>& column_ids, bool 
     }
     if (with_default) {
         for (auto i = 0; i < column_ids.size(); ++i) {
-            const TabletColumn& tablet_column = _tablet.tablet_schema().column(column_ids[i]);
+            const TabletColumn& tablet_column = _tablet.tablet_schema()->column(column_ids[i]);
             if (tablet_column.has_default_value()) {
                 const TypeInfoPtr& type_info = get_type_info(tablet_column);
                 std::unique_ptr<DefaultValueColumnIterator> default_value_iter =
@@ -3443,7 +3444,7 @@ Status TabletUpdates::get_column_values(std::vector<uint32_t>& column_ids, bool 
         }
         std::string seg_path =
                 Rowset::segment_file_path(rowset->rowset_path(), rowset->rowset_id(), rssid - iter->first);
-        auto segment = Segment::open(fs, seg_path, rssid - iter->first, &rowset->schema());
+        auto segment = Segment::open(fs, seg_path, rssid - iter->first, rowset->schema());
         if (!segment.ok()) {
             LOG(WARNING) << "Fail to open " << seg_path << ": " << segment.status();
             return segment.status();
@@ -3459,7 +3460,8 @@ Status TabletUpdates::get_column_values(std::vector<uint32_t>& column_ids, bool 
         auto use_page_cache = !config::disable_storage_page_cache;
         for (auto i = 0; i < column_ids.size(); ++i) {
             ColumnIterator* col_iter_raw_ptr = nullptr;
-            RETURN_IF_ERROR((*segment)->new_column_iterator(column_ids[i], &col_iter_raw_ptr, use_page_cache));
+            RETURN_IF_ERROR((*segment)->new_column_iterator(column_ids[i], &col_iter_raw_ptr, use_page_cache,
+                                                            _tablet.tablet_schema()));
             std::unique_ptr<ColumnIterator> col_iter(col_iter_raw_ptr);
             RETURN_IF_ERROR(col_iter->init(iter_opts));
             RETURN_IF_ERROR(col_iter->fetch_values_by_rowid(rowids.data(), rowids.size(), (*columns)[i].get()));

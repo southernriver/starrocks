@@ -30,6 +30,8 @@
 #include "gen_cpp/internal_service.pb.h"
 #include "util/countdown_latch.h"
 #include "util/priority_thread_pool.hpp"
+#include "storage/storage_engine.h"
+#include "storage/tablet_manager.h"
 
 namespace brpc {
 class Controller;
@@ -109,6 +111,12 @@ public:
     void execute_command(google::protobuf::RpcController* controller, const ExecuteCommandRequestPB* request,
                          ExecuteCommandResultPB* response, google::protobuf::Closure* done) override;
 
+    void get_column_ids_by_tablet_ids(google::protobuf::RpcController* controller,
+                                      const PFetchColIdsRequest* request,
+                                      PFetchColIdsResponse* response,
+                                      google::protobuf::Closure* done) override;
+
+
 private:
     void _get_info_impl(const PProxyRequest* request, PProxyResult* response,
                         GenericCountDownLatch<bthread::Mutex, bthread::ConditionVariable>* latch, int timeout_ms);
@@ -122,6 +130,10 @@ private:
     Status _exec_plan_fragment_by_pipeline(const TExecPlanFragmentParams& t_common_request,
                                            const TExecPlanFragmentParams& t_unique_request);
     Status _exec_plan_fragment_by_non_pipeline(const TExecPlanFragmentParams& t_request);
+    void _get_column_ids_by_tablet_ids(google::protobuf::RpcController* controller,
+                                       const PFetchColIdsRequest* request,
+                                       PFetchColIdsResponse* response,
+                                       google::protobuf::Closure* done);
 
 protected:
     ExecEnv* _exec_env;

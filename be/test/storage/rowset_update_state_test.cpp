@@ -52,7 +52,7 @@ public:
         writer_context.partition_id = 0;
         writer_context.rowset_path_prefix = tablet->schema_hash_path();
         writer_context.rowset_state = COMMITTED;
-        writer_context.tablet_schema = &tablet->tablet_schema();
+        writer_context.tablet_schema = tablet->tablet_schema();
         writer_context.version.first = 0;
         writer_context.version.second = 0;
         writer_context.segments_overlap = NONOVERLAPPING;
@@ -123,13 +123,13 @@ public:
 
         writer_context.partial_update_tablet_schema = partial_schema;
         writer_context.referenced_column_ids = column_indexes;
-        writer_context.tablet_schema = partial_schema.get();
+        writer_context.tablet_schema = partial_schema;
         writer_context.version.first = 0;
         writer_context.version.second = 0;
         writer_context.segments_overlap = NONOVERLAPPING;
         std::unique_ptr<RowsetWriter> writer;
         EXPECT_TRUE(RowsetFactory::create_rowset_writer(writer_context, &writer).ok());
-        auto schema = ChunkHelper::convert_schema_to_format_v2(*partial_schema.get());
+        auto schema = ChunkHelper::convert_schema_to_format_v2(partial_schema);
 
         auto chunk = ChunkHelper::new_chunk(schema, keys.size());
         EXPECT_TRUE(2 == chunk->num_columns());
@@ -224,7 +224,7 @@ TEST_F(RowsetUpdateStateTest, prepare_partial_update_states) {
     ASSERT_EQ(N, read_tablet(_tablet, rowsets.size()));
 
     std::vector<int32_t> column_indexes = {0, 1};
-    std::shared_ptr<TabletSchema> partial_schema = TabletSchema::create(_tablet->tablet_schema(), column_indexes);
+    std::shared_ptr<TabletSchema> partial_schema = TabletSchema::create(_tablet->unsafe_tablet_schema_ref(), column_indexes);
     RowsetSharedPtr partial_rowset = create_partial_rowset(_tablet, keys, column_indexes, partial_schema);
     // check data of write column
     RowsetUpdateState state;
@@ -259,7 +259,7 @@ TEST_F(RowsetUpdateStateTest, check_conflict) {
 
     // create partial_rowset
     std::vector<int32_t> column_indexes = {0, 1};
-    std::shared_ptr<TabletSchema> partial_schema = TabletSchema::create(_tablet->tablet_schema(), column_indexes);
+    std::shared_ptr<TabletSchema> partial_schema = TabletSchema::create(_tablet->unsafe_tablet_schema_ref(), column_indexes);
     RowsetSharedPtr partial_rowset = create_partial_rowset(_tablet, keys, column_indexes, partial_schema);
     RowsetUpdateState state;
     state.load(_tablet.get(), partial_rowset.get());
@@ -280,7 +280,7 @@ TEST_F(RowsetUpdateStateTest, check_conflict) {
     writer_context.partition_id = 0;
     writer_context.rowset_path_prefix = _tablet->schema_hash_path();
     writer_context.rowset_state = COMMITTED;
-    writer_context.tablet_schema = &_tablet->tablet_schema();
+    writer_context.tablet_schema = _tablet->tablet_schema();
     writer_context.version.first = 0;
     writer_context.version.second = 0;
     writer_context.segments_overlap = NONOVERLAPPING;

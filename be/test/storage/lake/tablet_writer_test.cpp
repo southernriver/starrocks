@@ -67,7 +67,7 @@ public:
         }
 
         _tablet_schema = TabletSchema::create(*schema);
-        _schema = std::make_shared<VSchema>(ChunkHelper::convert_schema(*_tablet_schema));
+        _schema = std::make_shared<VSchema>(ChunkHelper::convert_schema(_tablet_schema));
     }
 
     void SetUp() override {
@@ -135,9 +135,9 @@ TEST_F(DuplicateTabletWriterTest, test_write_success) {
 
     ASSIGN_OR_ABORT(auto fs, FileSystem::CreateSharedFromString(kTestGroupPath));
     ASSIGN_OR_ABORT(auto seg0, Segment::open(fs, _location_provider->segment_location(_tablet_metadata->id(), files[0]),
-                                             0, _tablet_schema.get()));
+                                             0, _tablet_schema));
     ASSIGN_OR_ABORT(auto seg1, Segment::open(fs, _location_provider->segment_location(_tablet_metadata->id(), files[1]),
-                                             1, _tablet_schema.get()));
+                                             1, _tablet_schema));
 
     OlapReaderStatistics statistics;
     SegmentReadOptions opts;

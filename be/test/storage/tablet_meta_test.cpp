@@ -115,7 +115,7 @@ TEST(TabletMetaTest, test_create) {
     ASSERT_EQ(987, tablet_meta->shard_id());
     ASSERT_EQ(0, tablet_meta->num_rows());
 
-    const TabletSchema& tablet_schema = tablet_meta->tablet_schema();
+    const TabletSchema& tablet_schema = tablet_meta->unsafe_tablet_schema_ref();
     ASSERT_EQ(3, tablet_schema.num_columns());
     ASSERT_EQ(KeysType::DUP_KEYS, tablet_schema.keys_type());
     ASSERT_EQ(false, tablet_schema.is_in_memory());
