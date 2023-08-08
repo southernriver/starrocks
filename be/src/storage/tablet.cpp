@@ -948,6 +948,44 @@ void Tablet::get_compaction_status(std::string* json_result) {
     format_str = ToStringFromUnixMillis(_last_base_compaction_success_millis.load());
     base_success_value.SetString(format_str.c_str(), format_str.length(), root.GetAllocator());
     root.AddMember("last base success time", base_success_value, root.GetAllocator());
+    rapidjson::Value last_base_cost_value;
+    format_str = std::to_string(_last_base_compaction_cost_time.load() / 1000.0) + "s";
+    last_base_cost_value.SetString(format_str.c_str(), format_str.length(), root.GetAllocator());
+    root.AddMember("last base cost time", last_base_cost_value, root.GetAllocator());
+    rapidjson::Value last_cumu_cost_value;
+    format_str = std::to_string(_last_cumu_compaction_cost_time.load() / 1000.0) + "s";
+    last_cumu_cost_value.SetString(format_str.c_str(), format_str.length(), root.GetAllocator());
+    root.AddMember("last cumulative cost time", last_cumu_cost_value, root.GetAllocator());
+    float divided = 1024 * 1024;
+
+    // print current task as an object
+    {
+        std::lock_guard lock(_compaction_task_lock);
+        rapidjson::Value current_task(rapidjson::kObjectType);
+        current_task.SetObject();
+        if (_compaction_task != nullptr) {
+            rapidjson::Value type(rapidjson::kStringType);
+            type.SetString(to_string(_compaction_context ? _compaction_context->type : INVALID_COMPACTION).c_str(),
+                           root.GetAllocator());
+            current_task.AddMember("type", type, root.GetAllocator());
+            current_task.AddMember("input_rowset_num", _compaction_task->input_rowsets().size(), root.GetAllocator());
+            current_task.AddMember("input_segment_num", _compaction_task->input_segments_num(), root.GetAllocator());
+            current_task.AddMember("input_rows_num", _compaction_task->input_rows_num(), root.GetAllocator());
+            rapidjson::Value input_data_size;
+            format_str = std::to_string(_compaction_task->input_rowsets_size() / divided) + "MB";
+            input_data_size.SetString(format_str.c_str(), format_str.length(), root.GetAllocator());
+            current_task.AddMember("input_data_size", input_data_size, root.GetAllocator());
+            rapidjson::Value start_time;
+            format_str = ToStringFromUnixMillis(_compaction_task->start_time());
+            start_time.SetString(format_str.c_str(), format_str.length(), root.GetAllocator());
+            current_task.AddMember("start_time", start_time, root.GetAllocator());
+            format_str = std::to_string(_compaction_task->get_progress()) + "%";
+            rapidjson::Value progress;
+            progress.SetString(format_str.c_str(), format_str.length(), root.GetAllocator());
+            current_task.AddMember("progress", progress, root.GetAllocator());
+        }
+        root.AddMember("current task", current_task, root.GetAllocator());
+    }
 
     // print all rowsets' version as an array
     rapidjson::Document versions_arr;
@@ -956,9 +994,10 @@ void Tablet::get_compaction_status(std::string* json_result) {
         const Version& ver = rowsets[i]->version();
         rapidjson::Value value;
         std::string version_str =
-                strings::Substitute("[$0-$1] $2 $3 $4", ver.first, ver.second, rowsets[i]->num_segments(),
+                strings::Substitute("[$0-$1] $2 $3 $4 level$5 $6MB", ver.first, ver.second, rowsets[i]->num_segments(),
                                     (delete_flags[i] ? "DELETE" : "DATA"),
-                                    SegmentsOverlapPB_Name(rowsets[i]->rowset_meta()->segments_overlap()));
+                                    SegmentsOverlapPB_Name(rowsets[i]->rowset_meta()->segments_overlap()),
+                                    rowsets[i]->get_level(), rowsets[i]->data_disk_size() / divided);
         value.SetString(version_str.c_str(), version_str.length(), versions_arr.GetAllocator());
         versions_arr.PushBack(value, versions_arr.GetAllocator());
     }
