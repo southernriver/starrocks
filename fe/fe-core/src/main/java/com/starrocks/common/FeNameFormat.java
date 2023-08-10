@@ -30,7 +30,7 @@ public class FeNameFormat {
     private FeNameFormat() {
     }
 
-    private static final String LABEL_REGEX = "^[-\\w]{1,128}$";
+    private static final String LABEL_REGEX = "^[-\\w]{1,256}$";
     public static final String COMMON_NAME_REGEX = "^[a-zA-Z]\\w{0,255}$|^_[a-zA-Z0-9]\\w{0,254}$";
 
     // The length length of db name is 256
