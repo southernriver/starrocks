@@ -144,9 +144,15 @@ void CompactionTask::_success_callback() {
     if (_task_info.compaction_type == CUMULATIVE_COMPACTION) {
         StarRocksMetrics::instance()->cumulative_compaction_deltas_total.increment(_input_rowsets.size());
         StarRocksMetrics::instance()->cumulative_compaction_bytes_total.increment(_task_info.input_rowsets_size);
+        StarRocksMetrics::instance()->cumulative_compaction_task_cost_time.set_value(cost_time / 1000.0);
+        StarRocksMetrics::instance()->cumulative_compaction_task_rate.set_value(_task_info.input_rowsets_size /
+                                                                                (cost_time / 1000.0));
     } else {
         StarRocksMetrics::instance()->base_compaction_deltas_total.increment(_input_rowsets.size());
         StarRocksMetrics::instance()->base_compaction_bytes_total.increment(_task_info.input_rowsets_size);
+        StarRocksMetrics::instance()->base_compaction_task_cost_time.set_value(cost_time / 1000.0);
+        StarRocksMetrics::instance()->base_compaction_task_rate.set_value(_task_info.input_rowsets_size /
+                                                                          (cost_time / 1000.0));
     }
 
     // preload the rowset
@@ -165,9 +171,11 @@ void CompactionTask::_failure_callback(const Status& st) {
         _tablet->set_last_cumu_compaction_failure_time(UnixMillis());
         _tablet->set_last_cumu_compaction_failure_status(st.code());
         _tablet->set_last_cumu_compaction_cost_time(0);
+        StarRocksMetrics::instance()->cumulative_compaction_request_failed.increment(1);
     } else {
         _tablet->set_last_base_compaction_failure_time(UnixMillis());
         _tablet->set_last_base_compaction_cost_time(0);
+        StarRocksMetrics::instance()->base_compaction_request_failed.increment(1);
     }
     LOG(WARNING) << "compaction task:" << _task_info.task_id << ", tablet:" << _task_info.tablet_id << " failed.";
 }
