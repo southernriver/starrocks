@@ -34,6 +34,7 @@ public class PulsarTaskInfo extends RoutineLoadTaskInfo {
     private RoutineLoadManager routineLoadManager = GlobalStateMgr.getCurrentState().getRoutineLoadManager();
 
     private Map<String, MessageId> initialPositions = Maps.newHashMap();
+    private Map<String, MessageId> latestPartPositions = Maps.newHashMap();
 
     public PulsarTaskInfo(UUID id, long jobId, long taskScheduleIntervalMs, long timeToExecuteMs, long timeoutMs,
                           Map<String, MessageId> initialPositions) {
@@ -89,22 +90,31 @@ public class PulsarTaskInfo extends RoutineLoadTaskInfo {
                 initialPositions.put(partition, latestPosition);
             } else if (initialPositions.get(partition).compareTo(latestPosition) == -1) {
                 ready = true;
+                latestPartPositions.put(partition, latestPosition);
             }
         }
 
         return ready;
     }
 
-    // TODO(chen9t) there's no way to find out how many backlogs have been consumed in this round,
     // the bellowing method will preempt the slots of BEs. So return ture until we find a better way.
     @Override
     public boolean isProgressKeepUp(RoutineLoadProgress progress, Map<String, Long> consumeLagsRowNum) {
-        // PulsarProgress pProgress = (PulsarProgress) progress;
-        // for (Long backLogNum : pProgress.getBacklogNums()) {
-        //     if (backLogNum > 0) {
-        //         return false;
-        //     }
-        // }
+        PulsarProgress pProgress = (PulsarProgress) progress;
+        if (latestPartPositions.isEmpty()) {
+            return true;
+        }
+
+        for (Map.Entry<String, MessageId> entry : latestPartPositions.entrySet()) {
+            String part = entry.getKey();
+            MessageId latestPosition = entry.getValue();
+            MessageId consumedPosition = pProgress.getInitialPositionByPartition(part);
+            if (consumedPosition != null) {
+                if (consumedPosition.compareTo(latestPosition) == -1) {
+                    return false;
+                }
+            }
+        }
         return true;
     }
 
@@ -160,15 +170,26 @@ public class PulsarTaskInfo extends RoutineLoadTaskInfo {
         return tRoutineLoadTask;
     }
 
+    private void getReadablePositionInfo(Map<String, String> showPartitionToPosition) {
+        for (Map.Entry<String, MessageId> entry : initialPositions.entrySet()) {
+            showPartitionToPosition.put(entry.getKey(), entry.getValue().toString());
+        }
+    }
+
     @Override
     protected String getTaskDataSourceProperties() {
+        Map<String, String> showPartitionToPosition = Maps.newHashMap();
+        getReadablePositionInfo(showPartitionToPosition);
         Gson gson = new Gson();
-        return gson.toJson(initialPositions);
+        return gson.toJson(showPartitionToPosition);
     }
 
     @Override
     public String toString() {
-        return "Task id: " + getId() + ", initial positions: " + initialPositions;
+        Map<String, String> showPartitionToPosition = Maps.newHashMap();
+        getReadablePositionInfo(showPartitionToPosition);
+        return "Task id: " + getId()
+                + "[" + Joiner.on("|").withKeyValueSeparator("_").join(showPartitionToPosition) + "]";
     }
 
     private TExecPlanFragmentParams plan(RoutineLoadJob routineLoadJob) throws UserException {
