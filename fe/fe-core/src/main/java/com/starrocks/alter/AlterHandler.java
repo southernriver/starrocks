@@ -21,7 +21,6 @@
 
 package com.starrocks.alter;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.OlapTable;
@@ -49,7 +48,6 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.stream.Collectors;
 
 public abstract class AlterHandler extends LeaderDaemon {
     private static final Logger LOG = LogManager.getLogger(AlterHandler.class);
@@ -112,12 +110,6 @@ public abstract class AlterHandler extends LeaderDaemon {
 
     public Map<Long, AlterJobV2> getAlterJobsV2() {
         return this.alterJobsV2;
-    }
-
-    public List<AlterJobV2> getAlterJobsV2ByLastTimestamp(long lastTimestamp) {
-        return ImmutableList.copyOf(alterJobsV2.values()).stream()
-                .filter(job -> job.isDone() && job.getFinishedTimeMs() > lastTimestamp)
-                .collect(Collectors.toList());
     }
 
     private void clearExpireFinishedOrCancelledAlterJobsV2() {

@@ -55,12 +55,10 @@ import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.service.ExecuteEnv;
 import com.starrocks.system.Backend;
 import com.starrocks.system.SystemInfoService;
-import org.apache.commons.lang3.tuple.Triple;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
@@ -144,9 +142,6 @@ public final class MetricRepo {
     public static GaugeMetricImpl<Double> GAUGE_QUERY_LATENCY_P999;
     public static GaugeMetricImpl<Long> GAUGE_MAX_TABLET_COMPACTION_SCORE;
     public static GaugeMetricImpl<Long> GAUGE_STACKED_JOURNAL_NUM;
-
-    public static GaugeMetricImpl<Double> GAUGE_SCHEMA_CHANGE_LATENCY_MEAN;
-    public static GaugeMetricImpl<Double> GAUGE_SCHEMA_CHANGE_LATENCY_MAX;
 
     public static List<GaugeMetricImpl<Long>> GAUGE_ROUTINE_LOAD_LAGS;
     public static List<GaugeMetricImpl<Long>> GAUGE_ROUTINE_LOAD_TIME_LAGS;
@@ -349,21 +344,6 @@ public final class MetricRepo {
         GAUGE_QUERY_LATENCY_P999.addLabel(new MetricLabel("type", "999_quantile"));
         GAUGE_QUERY_LATENCY_P999.setValue(0.0);
         STARROCKS_METRIC_REGISTER.addMetric(GAUGE_QUERY_LATENCY_P999);
-
-        GAUGE_SCHEMA_CHANGE_LATENCY_MEAN
-                = new GaugeMetricImpl<>("schema_change_latency_mean",
-                MetricUnit.MILLISECONDS, "mean of schema change");
-        GAUGE_SCHEMA_CHANGE_LATENCY_MEAN.addLabel(new MetricLabel("type", "mean"));
-        GAUGE_SCHEMA_CHANGE_LATENCY_MEAN.setValue(0.0);
-        STARROCKS_METRIC_REGISTER.addMetric(GAUGE_SCHEMA_CHANGE_LATENCY_MEAN);
-
-        GAUGE_SCHEMA_CHANGE_LATENCY_MAX
-                = new GaugeMetricImpl<>("schema_change_latency_max",
-                MetricUnit.MILLISECONDS, "max latency of schema change");
-        GAUGE_SCHEMA_CHANGE_LATENCY_MAX.addLabel(new MetricLabel("type", "max"));
-        GAUGE_SCHEMA_CHANGE_LATENCY_MAX.setValue(0.0);
-        STARROCKS_METRIC_REGISTER.addMetric(GAUGE_SCHEMA_CHANGE_LATENCY_MAX);
-
 
         // 2. counter
         COUNTER_REQUEST_ALL = new LongCounterMetric("request_total", MetricUnit.REQUESTS, "total request");
@@ -595,30 +575,6 @@ public final class MetricRepo {
         } // end for backends
     }
 
-    public static Triple<Long, Double, Double> getSchemaChangeLatencyMetrics(long lastFinishSchemaChangeTimestamp) {
-        if (!GlobalStateMgr.getCurrentState().isLeader()) {
-            return Triple.of(lastFinishSchemaChangeTimestamp, 0d, 0d);
-        }
-
-        List<AlterJobV2> alterJobsV2 = GlobalStateMgr.getCurrentState().getAlterInstance().getSchemaChangeHandler()
-                .getAlterJobsV2ByLastTimestamp(lastFinishSchemaChangeTimestamp);
-        if (alterJobsV2.isEmpty()) {
-            return Triple.of(lastFinishSchemaChangeTimestamp, 0d, 0d);
-        }
-        List<AlterJobV2> sortedJobsV2 =
-                alterJobsV2.stream().sorted(Comparator.comparingLong(AlterJobV2::getFinishedTimeMs))
-                        .collect(Collectors.toList());
-        long lastFinishTimestamp = sortedJobsV2.get(sortedJobsV2.size() - 1).getFinishedTimeMs();
-
-        double mean =
-                sortedJobsV2.stream().mapToLong(job -> job.getFinishedTimeMs() - job.getCreateTimeMs()).summaryStatistics()
-                        .getAverage();
-        double max = sortedJobsV2.stream().mapToLong(job -> job.getFinishedTimeMs() - job.getCreateTimeMs()).summaryStatistics()
-                .getMax();
-
-        return Triple.of(lastFinishTimestamp, mean, max);
-    }
-
     public static void updateRoutineLoadProcessMetrics() {
         List<RoutineLoadJob> jobs = GlobalStateMgr.getCurrentState().getRoutineLoadManager().getRoutineLoadJobByState(
                 Sets.newHashSet(RoutineLoadJob.JobState.NEED_SCHEDULE,
@@ -795,8 +751,6 @@ public final class MetricRepo {
         if (Config.enable_routine_load_lag_metrics) {
             collectKafkaRoutineLoadProcessMetrics(visitor);
         }
-
-        collectAlterJobLatencyMetrics(visitor);
         collectRoutineLoadRowNumLagMetrics(visitor);
         collectRoutineLoadProcessLagMetrics(visitor);
         collectIcebergRoutineLoadProcessMetrics(visitor);
@@ -884,11 +838,6 @@ public final class MetricRepo {
         for (GaugeMetricImpl<Long> metric : GAUGE_ROUTINE_LOAD_ROW_NUM_LAGS) {
             visitor.visit(metric);
         }
-    }
-
-    private static void collectAlterJobLatencyMetrics(MetricVisitor visitor) {
-        visitor.visit(GAUGE_SCHEMA_CHANGE_LATENCY_MEAN);
-        visitor.visit(GAUGE_SCHEMA_CHANGE_LATENCY_MAX);
     }
 
     private static void collectRoutineLoadIngestMetrics(MetricVisitor visitor) {
