@@ -85,7 +85,9 @@ public class PulsarTaskInfo extends RoutineLoadTaskInfo {
             } catch (IOException e) {
                 throw new RoutineLoadPauseException("Failed to deserialize messageId for partition: " + partition);
             }
-            if (initialPositions.get(partition).compareTo(latestPosition) == -1) {
+            if (initialPositions.get(partition).compareTo(MessageId.latest) == 0) {
+                initialPositions.put(partition, latestPosition);
+            } else if (initialPositions.get(partition).compareTo(latestPosition) == -1) {
                 ready = true;
             }
         }

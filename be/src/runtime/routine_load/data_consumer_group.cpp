@@ -446,7 +446,7 @@ Status PulsarDataConsumerGroup::start_all(StreamLoadContext* ctx) {
                     << ", partition: " << partition << ", message id: " << msg_id << ", len: " << len;
 
             // Pulsar server might redeliver same messages when it's restart
-            if (ack_offset[partition] == pulsar::MessageId::latest() || msg_id > ack_offset[partition]) {
+            if (msg_id > ack_offset[partition]) {
                 Status st;
                 if (ctx->format == TFileFormatType::FORMAT_TDMSG_KV ||
                     ctx->format == TFileFormatType::FORMAT_TDMSG_CSV) {
