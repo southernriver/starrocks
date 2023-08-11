@@ -86,20 +86,7 @@ public:
     bool equal(int64_t tablet_id, int32_t schema_hash);
 
     // properties encapsulated in TabletSchema
-    virtual const TabletSchema& unsafe_tablet_schema_ref() const;
-
-    virtual const TabletSchemaCSPtr tablet_schema() const;
-
-    bool set_tablet_schema_into_rowset_meta() {
-        bool flag = false;
-        for (const RowsetMetaSharedPtr& rowset_meta : _tablet_meta->all_rs_metas()) {
-            if (!rowset_meta->tablet_schema()) {
-                rowset_meta->set_tablet_schema(tablet_schema());
-                flag = true;
-            }
-        }
-        return flag;
-    }
+    const TabletSchema& tablet_schema() const;
 
 protected:
     virtual void on_shutdown() {}
@@ -108,7 +95,6 @@ protected:
 
     TabletState _state;
     TabletMetaSharedPtr _tablet_meta;
-    TabletSchemaCSPtr _schema;
 
     DataDir* _data_dir;
     std::string _tablet_path; // TODO: remove this variable for less memory occupation
@@ -173,11 +159,7 @@ inline bool BaseTablet::equal(int64_t id, int32_t hash) {
     return tablet_id() == id && schema_hash() == hash;
 }
 
-inline const TabletSchema& BaseTablet::unsafe_tablet_schema_ref() const {
-    return _tablet_meta->unsafe_tablet_schema_ref();
-}
-
-inline const TabletSchemaCSPtr BaseTablet::tablet_schema() const {
+inline const TabletSchema& BaseTablet::tablet_schema() const {
     return _tablet_meta->tablet_schema();
 }
 

@@ -146,9 +146,6 @@ public class OperationType {
     public static final short OP_FINISHING_SCHEMA_CHANGE = 103;
     public static final short OP_SAVE_TRANSACTION_ID = 104;
 
-    // light schema change for add and drop columns
-    public static final short OP_MODIFY_TABLE_ADD_OR_DROP_COLUMNS = 105;
-
     // routine load 110~120
     public static final short OP_ROUTINE_LOAD_JOB = 110;
     public static final short OP_ALTER_ROUTINE_LOAD_JOB = 111;
@@ -156,7 +153,6 @@ public class OperationType {
     // UDF 130-140
     public static final short OP_ADD_FUNCTION = 130;
     public static final short OP_DROP_FUNCTION = 131;
-
 
     // routine load 200
     public static final short OP_CREATE_ROUTINE_LOAD_JOB = 200;
@@ -298,8 +294,4 @@ public class OperationType {
 
     // hot cold query
     public static final short OP_MODIFY_TABLE_PROPERTY = 15000;
-
-    // alter light schema change
-    public static final short OP_ALTER_LIGHT_SCHEMA_CHANGE = 403;
-
 }

@@ -26,11 +26,11 @@ public:
     // read from src, write to dest
     // this function will read data from src_file and write to dest file first
     // then append write_column to dest file
-    static Status rewrite(const std::string& src, const std::string& dest, const std::shared_ptr<const TabletSchema>& tschema,
+    static Status rewrite(const std::string& src, const std::string& dest, const TabletSchema& tschema,
                           std::vector<uint32_t>& column_ids, std::vector<std::unique_ptr<vectorized::Column>>& columns,
                           uint32_t segment_id, const FooterPointerPB& partial_rowseet_footer);
     // this funciton will append write_column to src_file and rebuild segment footer
-    static Status rewrite(const std::string& src, const std::shared_ptr<const TabletSchema>& tschema, std::vector<uint32_t>& column_ids,
+    static Status rewrite(const std::string& src, const TabletSchema& tschema, std::vector<uint32_t>& column_ids,
                           std::vector<std::unique_ptr<vectorized::Column>>& columns, uint32_t segment_id,
                           const FooterPointerPB& partial_rowseet_footer);
 };

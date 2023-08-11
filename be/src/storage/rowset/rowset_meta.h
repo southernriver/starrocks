@@ -32,14 +32,11 @@
 #include "json2pb/json_to_pb.h"
 #include "json2pb/pb_to_json.h"
 #include "storage/olap_common.h"
-#include "storage/tablet_schema.h"
-#include "storage/tablet_schema_cache.h"
 
 namespace starrocks {
 
 class RowsetMeta;
 using RowsetMetaSharedPtr = std::shared_ptr<RowsetMeta>;
-
 
 class RowsetMeta {
 public:
@@ -120,12 +117,7 @@ public:
 
     int64_t num_segments() const { return _rowset_meta_pb->num_segments(); }
 
-    void to_rowset_pb(RowsetMetaPB* rs_meta_pb) const {
-        *rs_meta_pb = *_rowset_meta_pb;
-        if (_schema) {
-            _schema->to_schema_pb(rs_meta_pb->mutable_tablet_schema());
-        }
-    }
+    void to_rowset_pb(RowsetMetaPB* rs_meta_pb) const { *rs_meta_pb = *_rowset_meta_pb; }
 
     RowsetMetaPB to_rowset_pb() const {
         RowsetMetaPB meta_pb;
@@ -184,35 +176,11 @@ public:
 
     uint32_t get_num_delete_files() const { return _rowset_meta_pb->num_delete_files(); }
 
-    const RowsetMetaPB get_meta_pb() const {
-        RowsetMetaPB rowset_meta_pb = *_rowset_meta_pb;
-
-        if (_schema) {
-            _schema->to_schema_pb(rowset_meta_pb.mutable_tablet_schema());
-        }
-        return rowset_meta_pb;
-    }
-
-    void set_tablet_schema(const TabletSchemaCSPtr& tablet_schema_ptr) {
-        TabletSchemaPB* ts_pb = _rowset_meta_pb->mutable_tablet_schema();
-        tablet_schema_ptr->to_schema_pb(ts_pb);
-        CHECK(_schema == nullptr);
-        _schema = TabletSchemaCache::instance()->insert(tablet_schema_ptr->to_key());
-    }
-
-    const TabletSchemaCSPtr tablet_schema() { return _schema; }
+    const RowsetMetaPB& get_meta_pb() const { return *_rowset_meta_pb; }
 
 private:
     bool _deserialize_from_pb(std::string_view value) {
-        if (!_rowset_meta_pb->ParseFromArray(value.data(), value.size())) {
-            return false;
-        }
-        if (_rowset_meta_pb->has_tablet_schema()) {
-            _schema = TabletSchemaCache::instance()->insert(
-                    _rowset_meta_pb->tablet_schema().SerializeAsString());
-            _rowset_meta_pb->clear_tablet_schema();
-        }
-        return true;
+        return _rowset_meta_pb->ParseFromArray(value.data(), value.size());
     }
 
     void _init() {
@@ -248,8 +216,6 @@ private:
     std::unique_ptr<RowsetMetaPB> _rowset_meta_pb;
     RowsetId _rowset_id;
     bool _is_removed_from_rowset_meta = false;
-    TabletSchemaCSPtr _schema = nullptr;
-
 };
 
 } // namespace starrocks

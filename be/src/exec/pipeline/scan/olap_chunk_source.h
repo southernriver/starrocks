@@ -67,7 +67,6 @@ private:
 
     ObjectPool _obj_pool;
     TabletSharedPtr _tablet;
-    std::shared_ptr<TabletSchema> _tablet_schema;
     int64_t _version = 0;
 
     RuntimeState* _runtime_state = nullptr;

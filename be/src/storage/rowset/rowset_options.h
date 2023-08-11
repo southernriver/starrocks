@@ -10,7 +10,6 @@
 #include "storage/olap_common.h"
 #include "storage/olap_runtime_range_pruner.h"
 #include "storage/seek_range.h"
-#include "storage/tablet_schema.h"
 
 namespace starrocks {
 class Conditions;
@@ -49,7 +48,7 @@ public:
 
     const vectorized::DeletePredicates* delete_predicates = nullptr;
 
-    TabletSchemaCSPtr tablet_schema = nullptr;
+    const TabletSchema* tablet_schema = nullptr;
 
     bool is_primary_keys = false;
     int64_t version = 0;

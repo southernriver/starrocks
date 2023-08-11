@@ -31,7 +31,6 @@
 #include "gen_cpp/Descriptors_types.h"
 #include "gen_cpp/descriptors.pb.h"
 #include "runtime/descriptors.h"
-#include "storage/tablet_schema.h"
 
 namespace starrocks {
 
@@ -41,7 +40,6 @@ struct OlapTableIndexSchema {
     int64_t index_id;
     std::vector<SlotDescriptor*> slots;
     int32_t schema_hash;
-    std::vector<TabletColumn*> columns;
 
     void to_protobuf(POlapTableIndexSchema* pindex) const;
 };

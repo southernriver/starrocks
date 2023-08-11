@@ -52,7 +52,6 @@ struct DeltaWriterOptions {
     WriteQuorumTypePB write_quorum;
     std::string merge_condition;
     ReplicaState replica_state;
-    POlapTableSchemaParam ptable_schema_param;
 };
 
 enum State {
@@ -140,10 +139,6 @@ private:
     Status _init();
     Status _flush_memtable_async(bool eos = false);
     Status _flush_memtable();
-    void _build_current_tablet_schema(int64_t index_id,
-                                      const POlapTableSchemaParam& table_schema_param,
-                                      const TabletSchemaCSPtr& ori_tablet_schema);
-
     const char* _state_name(State state) const;
     const char* _replica_state_name(ReplicaState state) const;
 
@@ -169,10 +164,7 @@ private:
     Schema _vectorized_schema;
     std::unique_ptr<MemTable> _mem_table;
     std::unique_ptr<MemTableSink> _mem_table_sink;
-    // tablet schema owned by delta writer, all write will use this tablet schema
-    // it's build from tablet_schema（stored when create tablet） and OlapTableSchema
-    // every request will have it's own tablet schema so simple schema change can work
-    std::shared_ptr<TabletSchema> _tablet_schema;
+    const TabletSchema* _tablet_schema;
 
     std::unique_ptr<FlushToken> _flush_token;
     std::unique_ptr<ReplicateToken> _replicate_token;

@@ -59,11 +59,22 @@ namespace starrocks {
 using strings::Substitute;
 
 StatusOr<std::shared_ptr<Segment>> Segment::open(std::shared_ptr<FileSystem> fs, const std::string& path,
-                                                 uint32_t segment_id, TabletSchemaCSPtr tablet_schema,
+                                                 uint32_t segment_id, const TabletSchema* tablet_schema,
+                                                 size_t* footer_length_hint,
+                                                 const FooterPointerPB* partial_rowset_footer) {
+    auto segment = std::make_shared<Segment>(private_type(0), std::move(fs), path, segment_id, tablet_schema);
+
+    RETURN_IF_ERROR(segment->_open(footer_length_hint, partial_rowset_footer));
+    return std::move(segment);
+}
+
+StatusOr<std::shared_ptr<Segment>> Segment::open(std::shared_ptr<FileSystem> fs, const std::string& path,
+                                                 uint32_t segment_id, std::shared_ptr<const TabletSchema> tablet_schema,
                                                  size_t* footer_length_hint,
                                                  const FooterPointerPB* partial_rowset_footer) {
     auto segment =
             std::make_shared<Segment>(private_type(0), std::move(fs), path, segment_id, std::move(tablet_schema));
+
     RETURN_IF_ERROR(segment->_open(footer_length_hint, partial_rowset_footer));
     return std::move(segment);
 }
@@ -159,7 +170,13 @@ Status Segment::parse_segment_footer(RandomAccessFile* read_file, SegmentFooterP
 }
 
 Segment::Segment(const private_type&, std::shared_ptr<FileSystem> fs, std::string path, uint32_t segment_id,
-                 TabletSchemaCSPtr tablet_schema)
+                 const TabletSchema* tablet_schema)
+        : _fs(std::move(fs)), _fname(std::move(path)), _tablet_schema(tablet_schema), _segment_id(segment_id) {
+    MEM_TRACKER_SAFE_CONSUME(ExecEnv::GetInstance()->segment_metadata_mem_tracker(), _basic_info_mem_usage());
+}
+
+Segment::Segment(const private_type&, std::shared_ptr<FileSystem> fs, std::string path, uint32_t segment_id,
+                 std::shared_ptr<const TabletSchema> tablet_schema)
         : _fs(std::move(fs)),
           _fname(std::move(path)),
           _tablet_schema(std::move(tablet_schema)),
@@ -190,16 +207,11 @@ StatusOr<ChunkIteratorPtr> Segment::_new_iterator(const vectorized::Schema& sche
     // trying to prune the current segment by segment-level zone map
     for (const auto& pair : read_options.predicates_for_zone_map) {
         ColumnId column_id = pair.first;
-        const auto& tablet_column = read_options.tablet_schema
-                ? read_options.tablet_schema->column(column_id)
-                : _tablet_schema->column(column_id);
-        auto column_unique_id = tablet_column.unique_id();
-        if (_column_readers.count(column_unique_id) < 1
-            || !_column_readers.at(column_unique_id)->has_zone_map()) {
+        if (_column_readers[column_id] == nullptr || !_column_readers[column_id]->has_zone_map()) {
             continue;
         }
-        if (!_column_readers.at(column_unique_id)->segment_zone_map_filter(pair.second)) {
-            read_options.stats->segment_stats_filtered += _column_readers.at(column_unique_id)->num_rows();
+        if (!_column_readers[column_id]->segment_zone_map_filter(pair.second)) {
+            read_options.stats->segment_stats_filtered += _column_readers[column_id]->num_rows();
             return Status::EndOfFile(strings::Substitute("End of file $0, empty iterator", _fname));
         }
     }
@@ -214,9 +226,8 @@ StatusOr<ChunkIteratorPtr> Segment::new_iterator(const vectorized::Schema& schem
     // If input schema is not match the actual meta, must convert the read_options according
     // to the actual format. And create an AdaptSegmentIterator to wrap
     if (_needs_chunk_adapter) {
-        auto& ref_tablet_schema = read_options.tablet_schema ? read_options.tablet_schema: _tablet_schema.schema();
         std::unique_ptr<vectorized::SegmentChunkIteratorAdapter> adapter(new vectorized::SegmentChunkIteratorAdapter(
-                ref_tablet_schema, *_column_storage_types, schema, read_options.chunk_size));
+                *_tablet_schema, *_column_storage_types, schema, read_options.chunk_size));
         RETURN_IF_ERROR(adapter->prepare(read_options));
 
         auto result = _new_iterator(adapter->in_schema(), adapter->in_read_options());
@@ -278,10 +289,6 @@ bool Segment::has_loaded_index() const {
     return invoked(_load_index_once);
 }
 
-bool Segment::is_valid_column(uint32_t column_index) const {
-    return _column_readers.count(column_index) > 0;
-}
-
 Status Segment::_create_column_readers(SegmentFooterPB* footer) {
     std::unordered_map<uint32_t, uint32_t> column_id_to_footer_ordinal;
     for (uint32_t ordinal = 0, sz = footer->columns().size(); ordinal < sz; ++ordinal) {
@@ -289,8 +296,9 @@ Status Segment::_create_column_readers(SegmentFooterPB* footer) {
         column_id_to_footer_ordinal.emplace(column_pb.unique_id(), ordinal);
     }
 
+    _column_readers.resize(_tablet_schema->columns().size());
     for (uint32_t ordinal = 0, sz = _tablet_schema->num_columns(); ordinal < sz; ++ordinal) {
-        const auto& column = _tablet_schema->column(ordinal);
+        const auto& column = _tablet_schema->columns()[ordinal];
         auto iter = column_id_to_footer_ordinal.find(column.unique_id());
         if (iter == column_id_to_footer_ordinal.end()) {
             continue;
@@ -300,7 +308,7 @@ Status Segment::_create_column_readers(SegmentFooterPB* footer) {
         if (!res.ok()) {
             return res.status();
         }
-        _column_readers.emplace(column.unique_id(), std::move(res).value());
+        _column_readers[ordinal] = std::move(res).value();
     }
     return Status::OK();
 }
@@ -312,9 +320,8 @@ void Segment::_prepare_adapter_info() {
     std::vector<LogicalType> types(num_columns);
     for (ColumnId cid = 0; cid < num_columns; ++cid) {
         LogicalType type;
-        auto column_unique_id = _tablet_schema->column(cid).unique_id();
-        if (_column_readers.count(column_unique_id) > 0) {
-            type = _column_readers.at(column_unique_id)->column_type();
+        if (_column_readers[cid] != nullptr) {
+            type = _column_readers[cid]->column_type();
         } else {
             // when the default column is used, column reader will be null.
             // And the type will be same with the tablet schema.
@@ -333,14 +340,9 @@ void Segment::_prepare_adapter_info() {
     }
 }
 
-Status Segment::new_column_iterator(uint32_t cid, ColumnIterator** iter, bool use_page_cache,
-                                    const TabletSchemaCSPtr& read_tablet_schema) {
-    auto const& current_tablet_schema = !read_tablet_schema
-                                                ? _tablet_schema.schema()
-                                                : read_tablet_schema;
-    const TabletColumn& tablet_column = current_tablet_schema->column(cid);
-    auto column_unique_id = tablet_column.unique_id();
-    if ((_column_readers.count(column_unique_id) < 1)) {
+Status Segment::new_column_iterator(uint32_t cid, ColumnIterator** iter, bool use_page_cache) {
+    if (_column_readers[cid] == nullptr) {
+        const TabletColumn& tablet_column = _tablet_schema->column(cid);
         if (!tablet_column.has_default_value() && !tablet_column.is_nullable()) {
             return Status::InternalError(
                     fmt::format("invalid nonexistent column({}) without default value.", tablet_column.name()));
@@ -355,16 +357,12 @@ Status Segment::new_column_iterator(uint32_t cid, ColumnIterator** iter, bool us
         *iter = default_value_iter.release();
         return Status::OK();
     }
-    return _column_readers.at(column_unique_id)->new_iterator(iter);
+    return _column_readers[cid]->new_iterator(iter);
 }
 
-Status Segment::new_bitmap_index_iterator(uint32_t cid, BitmapIndexIterator** iter, bool use_page_cache,
-                                          const TabletSchemaCSPtr& tablet_schema) {
-    DCHECK(tablet_schema);
-    auto column_id = tablet_schema->column(cid).unique_id();
-    if (_column_readers.count(column_id) > 0
-        && _column_readers.at(column_id)->has_bitmap_index()) {
-        return _column_readers.at(column_id)->new_bitmap_index_iterator(iter, use_page_cache);
+Status Segment::new_bitmap_index_iterator(uint32_t cid, BitmapIndexIterator** iter, bool use_page_cache) {
+    if (_column_readers[cid] != nullptr && _column_readers[cid]->has_bitmap_index()) {
+        return _column_readers[cid]->new_bitmap_index_iterator(iter, use_page_cache);
     }
     return Status::OK();
 }

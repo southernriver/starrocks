@@ -40,19 +40,19 @@ public:
     ~DeleteConditionHandler() = default;
 
     // generated DeletePredicatePB by TCondition
-    Status generate_delete_predicate(const TabletSchemaCSPtr& schema, const std::vector<TCondition>& conditions,
+    Status generate_delete_predicate(const TabletSchema& schema, const std::vector<TCondition>& conditions,
                                      DeletePredicatePB* del_pred);
 
     // Check if cond is a valid delete condition
-    Status check_condition_valid(const TabletSchemaCSPtr& tablet_schema, const TCondition& cond);
+    Status check_condition_valid(const TabletSchema& tablet_schema, const TCondition& cond);
 
     // construct sub condition from TCondition
     std::string construct_sub_predicates(const TCondition& condition);
 
 private:
-    int32_t _get_field_index(const TabletSchemaCSPtr& schema, const std::string& field_name) const {
-        for (int i = 0; i < schema->num_columns(); i++) {
-            if (schema->column(i).name() == field_name) {
+    int32_t _get_field_index(const TabletSchema& schema, const std::string& field_name) const {
+        for (int i = 0; i < schema.num_columns(); i++) {
+            if (schema.column(i).name() == field_name) {
                 return i;
             }
         }

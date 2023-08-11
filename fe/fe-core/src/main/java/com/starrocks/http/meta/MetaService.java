@@ -37,7 +37,6 @@ import com.starrocks.staros.StarMgrServer;
 import com.starrocks.system.Frontend;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponseStatus;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -381,14 +380,9 @@ public class MetaService {
              * the jobs' read lock. This will guarantee the consistency of database and job queues.
              * But Backend may still inconsistent.
              */
-            String baseDumpPath = request.getSingleParameter("baseDumpPath");
-            String targetMetaVersionStr = request.getSingleParameter("targetMetaVersion");
-            int targetMetaVersion = -1;
-            if (StringUtils.isNumericSpace(targetMetaVersionStr)) {
-                targetMetaVersion = Integer.parseInt(targetMetaVersionStr);
-            }
+
             // TODO: Still need to lock ClusterInfoService to prevent add or drop Backends
-            String dumpFilePath = GlobalStateMgr.getCurrentState().dumpImage(baseDumpPath, targetMetaVersion);
+            String dumpFilePath = GlobalStateMgr.getCurrentState().dumpImage();
             if (dumpFilePath == null) {
                 response.appendContent("dump failed. " + dumpFilePath);
             }

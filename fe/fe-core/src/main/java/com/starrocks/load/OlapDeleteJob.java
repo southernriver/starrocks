@@ -27,7 +27,6 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.starrocks.analysis.Predicate;
-import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.LocalTablet;
 import com.starrocks.catalog.MaterializedIndex;
@@ -50,7 +49,6 @@ import com.starrocks.task.AgentBatchTask;
 import com.starrocks.task.AgentTaskExecutor;
 import com.starrocks.task.AgentTaskQueue;
 import com.starrocks.task.PushTask;
-import com.starrocks.thrift.TColumn;
 import com.starrocks.thrift.TPriority;
 import com.starrocks.thrift.TPushType;
 import com.starrocks.thrift.TTaskType;
@@ -60,7 +58,6 @@ import com.starrocks.transaction.TabletCommitInfo;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -122,11 +119,6 @@ public class OlapDeleteJob extends DeleteJob {
                     long indexId = index.getId();
                     int schemaHash = olapTable.getSchemaHashByIndexId(indexId);
 
-                    List<TColumn> columnsDesc = new ArrayList<>();
-                    for (Column column : olapTable.getSchemaByIndexId(indexId)) {
-                        columnsDesc.add(column.toThrift());
-                    }
-
                     for (Tablet tablet : index.getTablets()) {
                         long tabletId = tablet.getId();
 
@@ -149,7 +141,7 @@ public class OlapDeleteJob extends DeleteJob {
                                     TTaskType.REALTIME_PUSH,
                                     getTransactionId(),
                                     GlobalStateMgr.getCurrentGlobalTransactionMgr().getTransactionIDGenerator()
-                                            .getNextTransactionId(), columnsDesc);
+                                            .getNextTransactionId());
                             pushTask.setIsSchemaChanging(false);
                             pushTask.setCountDownLatch(countDownLatch);
 

@@ -86,7 +86,7 @@ Status MetaReader::_build_collect_context(const MetaReaderParams& read_params) {
         }
 
         // get column type
-        LogicalType type = _tablet->tablet_schema()->column(index).type();
+        LogicalType type = _tablet->tablet_schema().column(index).type();
         _collect_context.seg_collecter_params.field_type.emplace_back(type);
 
         // get collect field
@@ -107,7 +107,6 @@ Status MetaReader::_build_collect_context(const MetaReaderParams& read_params) {
             _collect_context.seg_collecter_params.read_page.emplace_back(false);
         }
     }
-    _collect_context.seg_collecter_params.tablet_schema = read_params.tablet->tablet_schema();
     return Status::OK();
 }
 
@@ -255,8 +254,7 @@ Status SegmentMetaCollecter::_init_return_column_iterators() {
         if (_params->read_page[i]) {
             auto cid = _params->cids[i];
             if (_column_iterators[cid] == nullptr) {
-                RETURN_IF_ERROR(_segment->new_column_iterator(cid, &_column_iterators[cid], _params->use_page_cache,
-                                                              _params->tablet_schema));
+                RETURN_IF_ERROR(_segment->new_column_iterator(cid, &_column_iterators[cid], _params->use_page_cache));
                 _obj_pool.add(_column_iterators[cid]);
 
                 ColumnIteratorOptions iter_opts;

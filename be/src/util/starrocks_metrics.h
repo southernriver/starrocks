@@ -85,10 +85,6 @@ public:
     METRIC_DEFINE_INT_COUNTER(report_resource_usage_requests_total, MetricUnit::REQUESTS);
     METRIC_DEFINE_INT_COUNTER(report_resource_usage_requests_failed, MetricUnit::REQUESTS);
 
-    METRIC_DEFINE_INT_COUNTER(tablet_schema_cache_count, MetricUnit::NOUNIT);
-    METRIC_DEFINE_INT_COUNTER(tablet_schema_cache_memory_bytes, MetricUnit::BYTES);
-    METRIC_DEFINE_INT_COUNTER(lru_cache_memory_bytes, MetricUnit::BYTES);
-
     METRIC_DEFINE_INT_COUNTER(schema_change_requests_total, MetricUnit::REQUESTS);
     METRIC_DEFINE_INT_COUNTER(schema_change_requests_failed, MetricUnit::REQUESTS);
     METRIC_DEFINE_INT_COUNTER(create_rollup_requests_total, MetricUnit::REQUESTS);

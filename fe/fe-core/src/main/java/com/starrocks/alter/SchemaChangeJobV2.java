@@ -478,7 +478,6 @@ public class SchemaChangeJobV2 extends AlterJobV2 {
                     long originIdxId = indexIdMap.get(shadowIdxId);
                     int shadowSchemaHash = indexSchemaVersionAndHashMap.get(shadowIdxId).schemaHash;
                     int originSchemaHash = tbl.getSchemaHashByIndexId(indexIdMap.get(shadowIdxId));
-                    List<Column> originSchemaColumns = tbl.getSchemaByIndexId(originIdxId);
 
                     for (Tablet shadowTablet : shadowIdx.getTablets()) {
                         long shadowTabletId = shadowTablet.getId();
@@ -487,7 +486,7 @@ public class SchemaChangeJobV2 extends AlterJobV2 {
                             AlterReplicaTask rollupTask = AlterReplicaTask.alterLocalTablet(
                                     shadowReplica.getBackendId(), dbId, tableId, partitionId,
                                     shadowIdxId, shadowTabletId, originTabletId, shadowReplica.getId(),
-                                    shadowSchemaHash, originSchemaHash, visibleVersion, jobId, originSchemaColumns);
+                                    shadowSchemaHash, originSchemaHash, visibleVersion, jobId);
                             schemaChangeBatchTask.addTask(rollupTask);
                         }
                     }
@@ -754,17 +753,6 @@ public class SchemaChangeJobV2 extends AlterJobV2 {
         if (storageFormat == TStorageFormat.V2) {
             tbl.setStorageFormat(storageFormat);
         }
-
-        //update max column unique id
-        int maxColUniqueId = tbl.getMaxColUniqueId();
-        for (Column column : tbl.getFullSchema()) {
-            if (column.getUniqueId() > maxColUniqueId) {
-                maxColUniqueId = column.getUniqueId();
-            }
-        }
-        tbl.setMaxColUniqueId(maxColUniqueId);
-        LOG.debug("fullSchema:{}, maxColUniqueId:{}", tbl.getFullSchema(), maxColUniqueId);
-
 
         tbl.setState(OlapTableState.NORMAL);
     }

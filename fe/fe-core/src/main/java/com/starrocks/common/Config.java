@@ -128,9 +128,6 @@ public class Config extends ConfigBase {
     @ConfField(mutable = true)
     public static long slow_lock_log_every_ms = 3000L;
 
-    @ConfField
-    public static String custom_config_dir = "/conf";
-
     /**
      * dump_log_dir:
      * This specifies FE dump log dir.
@@ -2046,9 +2043,6 @@ public class Config extends ConfigBase {
 
     @ConfField(mutable = true)
     public static boolean routine_load_manager_fair_lock = true;
-
-    @ConfField(mutable = true)
-    public static boolean allow_default_light_schema_change = false;
 
     /**
      * support server-side prepared statement

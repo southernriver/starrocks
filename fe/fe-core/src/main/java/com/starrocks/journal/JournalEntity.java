@@ -55,7 +55,6 @@ import com.starrocks.load.streamload.StreamLoadTask;
 import com.starrocks.mysql.privilege.UserPropertyInfo;
 import com.starrocks.persist.AddPartitionsInfo;
 import com.starrocks.persist.AddPartitionsInfoV2;
-import com.starrocks.persist.AlterLightSchemaChangeInfo;
 import com.starrocks.persist.AlterLoadJobOperationLog;
 import com.starrocks.persist.AlterRoutineLoadJobOperationLog;
 import com.starrocks.persist.AlterUserInfo;
@@ -101,7 +100,6 @@ import com.starrocks.persist.RoutineLoadOperation;
 import com.starrocks.persist.SetReplicaStatusOperationLog;
 import com.starrocks.persist.ShardInfo;
 import com.starrocks.persist.SwapTableOperationLog;
-import com.starrocks.persist.TableAddOrDropColumnsInfo;
 import com.starrocks.persist.TableInfo;
 import com.starrocks.persist.TablePropertyInfo;
 import com.starrocks.persist.TruncateTableInfo;
@@ -781,16 +779,6 @@ public class JournalEntity implements Writable {
             }
             case OperationType.OP_AUTH_UPGRDE_V2: {
                 data = AuthUpgradeInfo.read(in);
-                isRead = true;
-                break;
-            }
-            case OperationType.OP_MODIFY_TABLE_ADD_OR_DROP_COLUMNS: {
-                data = TableAddOrDropColumnsInfo.read(in);
-                isRead = true;
-                break;
-            }
-            case OperationType.OP_ALTER_LIGHT_SCHEMA_CHANGE: {
-                data = AlterLightSchemaChangeInfo.read(in);
                 isRead = true;
                 break;
             }

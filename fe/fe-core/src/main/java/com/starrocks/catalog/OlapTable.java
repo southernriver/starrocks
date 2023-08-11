@@ -179,8 +179,6 @@ public class OlapTable extends Table implements GsonPostProcessable {
     @SerializedName(value = "tableProperty")
     protected TableProperty tableProperty;
 
-    private int maxColUniqueId = Column.COLUMN_UNIQUE_ID_INIT_VALUE;
-
     public OlapTable() {
         this(TableType.OLAP);
     }
@@ -248,21 +246,6 @@ public class OlapTable extends Table implements GsonPostProcessable {
 
     public TableProperty getTableProperty() {
         return this.tableProperty;
-    }
-
-
-    //take care: only use at create olap table.
-    public int incAndGetMaxColUniqueId() {
-        this.maxColUniqueId++;
-        return this.maxColUniqueId;
-    }
-
-    public int getMaxColUniqueId() {
-        return this.maxColUniqueId;
-    }
-
-    public void setMaxColUniqueId(int maxColUniqueId) {
-        this.maxColUniqueId = maxColUniqueId;
     }
 
     public boolean dynamicPartitionExists() {
@@ -1237,10 +1220,6 @@ public class OlapTable extends Table implements GsonPostProcessable {
         }
 
         tempPartitions.write(out);
-
-        if (GlobalStateMgr.withStateJournalVersion().moreThanOrEquals(FeMetaVersion.VERSION_96)) {
-            out.writeInt(maxColUniqueId);
-        }
     }
 
     @Override
@@ -1383,11 +1362,6 @@ public class OlapTable extends Table implements GsonPostProcessable {
                 }
                 tempPartitions.unsetPartitionInfo();
             }
-        }
-
-
-        if (GlobalStateMgr.getCurrentStateJournalVersion() >= FeMetaVersion.VERSION_96) {
-            maxColUniqueId = in.readInt();
         }
 
         // In the present, the fullSchema could be rebuilt by schema change while the properties is changed by MV.
@@ -2016,24 +1990,6 @@ public class OlapTable extends Table implements GsonPostProcessable {
         tableProperty.modifyTableProperties(properties);
         tableProperty.setForeignKeyConstraints(foreignKeyConstraints);
     }
-
-    public Boolean getUseLightSchemaChange() {
-        if (tableProperty != null) {
-            return tableProperty.getUseSchemaLightChange();
-        }
-        // property is set false by default
-        return false;
-    }
-
-    public void setUseLightSchemaChange(boolean useLightSchemaChange) {
-        if (tableProperty == null) {
-            tableProperty = new TableProperty(new HashMap<>());
-        }
-        tableProperty.modifyTableProperties(PropertyAnalyzer.PROPERTIES_USE_LIGHT_SCHEMA_CHANGE,
-                Boolean.valueOf(useLightSchemaChange).toString());
-        tableProperty.buildUseLightSchemaChange();
-    }
-
 
     @Override
     public void onCreate() {

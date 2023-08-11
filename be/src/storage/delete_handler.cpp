@@ -48,7 +48,7 @@ using google::protobuf::RepeatedPtrField;
 
 namespace starrocks {
 
-Status DeleteConditionHandler::generate_delete_predicate(const TabletSchemaCSPtr& schema,
+Status DeleteConditionHandler::generate_delete_predicate(const TabletSchema& schema,
                                                          const std::vector<TCondition>& conditions,
                                                          DeletePredicatePB* del_pred) {
     if (conditions.empty()) {
@@ -154,7 +154,7 @@ bool DeleteConditionHandler::is_condition_value_valid(const TabletColumn& column
     return valid_condition;
 }
 
-Status DeleteConditionHandler::check_condition_valid(const TabletSchemaCSPtr& schema, const TCondition& cond) {
+Status DeleteConditionHandler::check_condition_valid(const TabletSchema& schema, const TCondition& cond) {
     // Checks for the existence of the specified column name
     int field_index = _get_field_index(schema, cond.column_name);
 
@@ -164,9 +164,9 @@ Status DeleteConditionHandler::check_condition_valid(const TabletSchemaCSPtr& sc
     }
 
     // Checks that the specified column is a key, is it type float or double.
-    const TabletColumn& column = schema->column(field_index);
+    const TabletColumn& column = schema.column(field_index);
 
-    if ((!column.is_key() && schema->keys_type() != KeysType::DUP_KEYS) || column.type() == TYPE_DOUBLE ||
+    if ((!column.is_key() && schema.keys_type() != KeysType::DUP_KEYS) || column.type() == TYPE_DOUBLE ||
         column.type() == TYPE_FLOAT) {
         LOG(WARNING) << "field is not key column, or storage model is not duplicate, or data type "
                         "is float or double.";

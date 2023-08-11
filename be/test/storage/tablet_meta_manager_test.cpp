@@ -70,10 +70,10 @@ TEST_F(TabletMetaManagerTest, test_save_load_tablet_meta) {
     ASSERT_EQ(10, load_meta->tablet_uid().lo);
     ASSERT_EQ(20, load_meta->tablet_uid().hi);
     ASSERT_EQ(TabletTypePB::TABLET_TYPE_DISK, load_meta->tablet_type());
-    ASSERT_EQ(DUP_KEYS, load_meta->unsafe_tablet_schema_ref().keys_type());
-    ASSERT_EQ("c0", load_meta->unsafe_tablet_schema_ref().column(0).name());
-    ASSERT_EQ(true, load_meta->unsafe_tablet_schema_ref().column(0).is_key());
-    ASSERT_EQ(TYPE_INT, load_meta->unsafe_tablet_schema_ref().column(0).type());
+    ASSERT_EQ(DUP_KEYS, load_meta->tablet_schema().keys_type());
+    ASSERT_EQ("c0", load_meta->tablet_schema().column(0).name());
+    ASSERT_EQ(true, load_meta->tablet_schema().column(0).is_key());
+    ASSERT_EQ(TYPE_INT, load_meta->tablet_schema().column(0).type());
 
     load_meta.reset(new TabletMeta());
     auto visit_func = [&](long tablet_id, long schema_hash, std::string_view meta) -> bool {
@@ -89,10 +89,10 @@ TEST_F(TabletMetaManagerTest, test_save_load_tablet_meta) {
     ASSERT_EQ(10, load_meta->tablet_uid().lo);
     ASSERT_EQ(20, load_meta->tablet_uid().hi);
     ASSERT_EQ(TabletTypePB::TABLET_TYPE_DISK, load_meta->tablet_type());
-    ASSERT_EQ(DUP_KEYS, load_meta->unsafe_tablet_schema_ref().keys_type());
-    ASSERT_EQ("c0", load_meta->unsafe_tablet_schema_ref().column(0).name());
-    ASSERT_EQ(true, load_meta->unsafe_tablet_schema_ref().column(0).is_key());
-    ASSERT_EQ(TYPE_INT, load_meta->unsafe_tablet_schema_ref().column(0).type());
+    ASSERT_EQ(DUP_KEYS, load_meta->tablet_schema().keys_type());
+    ASSERT_EQ("c0", load_meta->tablet_schema().column(0).name());
+    ASSERT_EQ(true, load_meta->tablet_schema().column(0).is_key());
+    ASSERT_EQ(TYPE_INT, load_meta->tablet_schema().column(0).type());
 }
 
 // NOLINTNEXTLINE

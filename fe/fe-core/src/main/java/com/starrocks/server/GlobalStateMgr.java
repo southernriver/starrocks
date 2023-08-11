@@ -280,9 +280,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -297,7 +294,6 @@ import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 public class GlobalStateMgr {
@@ -553,42 +549,6 @@ public class GlobalStateMgr {
         private static final GlobalStateMgr INSTANCE = new GlobalStateMgr();
     }
 
-    public static class VersionOperator {
-        private boolean invalid = false;
-        private int currentVersion = 0;
-
-        public VersionOperator withInvalid() {
-            this.invalid = true;
-            return this;
-        }
-
-        private boolean operate(int currentVersion, int targetVersion, BiFunction<Integer, Integer, Boolean> operateFunc) {
-            if (this.invalid) {
-                // true by default
-                return true;
-            } else {
-                return operateFunc.apply(currentVersion, targetVersion);
-            }
-        }
-
-        public VersionOperator withVersion(int currentVersion) {
-            this.currentVersion = currentVersion;
-            return this;
-        }
-
-        public boolean moreThan(int targetVersion) {
-            return operate(currentVersion, targetVersion, (a, b) -> a > b);
-        }
-
-        public boolean moreThanOrEquals(int targetVersion) {
-            return operate(currentVersion, targetVersion, (a, b) -> a >= b);
-        }
-
-        public boolean equals(int targetVersion) {
-            return operate(currentVersion, targetVersion, Integer::equals);
-        }
-    }
-
     private GlobalStateMgr() {
         this(false);
     }
@@ -823,16 +783,6 @@ public class GlobalStateMgr {
     // use this to get correct GlobalStateMgr's journal version
     public static int getCurrentStateJournalVersion() {
         return MetaContext.get().getMetaVersion();
-    }
-
-    public static VersionOperator withStateJournalVersion() {
-        VersionOperator versionOperator = new VersionOperator();
-        if (MetaContext.get() == null) {
-            versionOperator.withInvalid();
-        } else {
-            versionOperator.withVersion(getCurrentStateJournalVersion());
-        }
-        return versionOperator;
     }
 
     public static int getCurrentStateStarRocksJournalVersion() {
@@ -1638,7 +1588,7 @@ public class GlobalStateMgr {
         Storage storage = new Storage(this.imageDir);
         File curFile = storage.getImageFile(replayedJournalId.get());
         File ckpt = new File(this.imageDir, Storage.IMAGE_NEW);
-        saveImage(ckpt, replayedJournalId.get(), -1);
+        saveImage(ckpt, replayedJournalId.get());
 
         // Move image.ckpt to image.dataVersion
         LOG.info("Move " + ckpt.getAbsolutePath() + " to " + curFile.getAbsolutePath());
@@ -1648,7 +1598,7 @@ public class GlobalStateMgr {
         }
     }
 
-    public void saveImage(File curFile, long replayedJournalId, int targetMetaVersion) throws IOException {
+    public void saveImage(File curFile, long replayedJournalId) throws IOException {
         if (!curFile.exists()) {
             curFile.createNewFile();
         }
@@ -1659,7 +1609,7 @@ public class GlobalStateMgr {
         long checksum = 0;
         long saveImageStartTime = System.currentTimeMillis();
         try (DataOutputStream dos = new DataOutputStream(new FileOutputStream(curFile))) {
-            checksum = saveHeader(dos, replayedJournalId, checksum, targetMetaVersion);
+            checksum = saveHeader(dos, replayedJournalId, checksum);
             checksum = nodeMgr.saveLeaderInfo(dos, checksum);
             checksum = nodeMgr.saveFrontends(dos, checksum);
             checksum = nodeMgr.saveBackends(dos, checksum);
@@ -1710,15 +1660,13 @@ public class GlobalStateMgr {
                 curFile.getAbsolutePath(), (saveImageEndTime - saveImageStartTime), checksum);
     }
 
-    public long saveHeader(DataOutputStream dos, long replayedJournalId, long checksum,
-                           int targetMetaVersion) throws IOException {
+    public long saveHeader(DataOutputStream dos, long replayedJournalId, long checksum) throws IOException {
         // Write meta version
         // community meta version is a positive integer, so we write -1 to distinguish old image structure
         checksum ^= -1;
         dos.writeInt(-1);
-        int metaVersion = targetMetaVersion < 0 ? FeConstants.meta_version : targetMetaVersion;
-        checksum ^= metaVersion;
-        dos.writeInt(metaVersion);
+        checksum ^= FeConstants.meta_version;
+        dos.writeInt(FeConstants.meta_version);
         checksum ^= FeConstants.starrocks_meta_version;
         dos.writeInt(FeConstants.starrocks_meta_version);
 
@@ -2449,12 +2397,6 @@ public class GlobalStateMgr {
                 sb.append("LZ4").append("\"");
             } else {
                 sb.append(olapTable.getCompressionType()).append("\"");
-            }
-
-            // show lightSchemaChange only when it is set true
-            if (olapTable.getUseLightSchemaChange()) {
-                sb.append(",\n\"").append(PropertyAnalyzer.PROPERTIES_USE_LIGHT_SCHEMA_CHANGE).append("\" = \"");
-                sb.append(olapTable.getUseLightSchemaChange()).append("\"");
             }
 
             // storage media
@@ -3435,20 +3377,12 @@ public class GlobalStateMgr {
         localMetastore.replayUpdateClusterAndBackends(info);
     }
 
-    public String dumpImage(String dumpFileBasePath, int version) {
+    public String dumpImage() {
         LOG.info("begin to dump meta data");
-        String dumpFilePath = null;
+        String dumpFilePath;
         Map<Long, Database> lockedDbMap = Maps.newTreeMap();
         tryLock(true);
-        MetaContext currentMetaContext = MetaContext.get();
         try {
-            if (version > 0) {
-                MetaContext metaContext = new MetaContext();
-                metaContext.setMetaVersion(version);
-                metaContext.setStarRocksMetaVersion(metaContext.getStarRocksMetaVersion());
-                metaContext.setThreadLocalInfo();
-            }
-
             // sort all dbs
             for (long dbId : getDbIds()) {
                 Database db = getDb(dbId);
@@ -3463,30 +3397,15 @@ public class GlobalStateMgr {
             LOG.info("acquired all the dbs' read lock.");
 
             long journalId = getMaxJournalId();
-            String metaDir = dumpFileBasePath == null ? Config.meta_dir : dumpFileBasePath;
-            Path metaPath = Paths.get(metaDir);
-            if (!Files.exists(metaPath)) {
-                Files.createDirectory(metaPath);
-            }
-            File dumpFile = new File(metaDir, "image." + journalId);
+            File dumpFile = new File(Config.meta_dir, "image." + journalId);
             dumpFilePath = dumpFile.getAbsolutePath();
             try {
                 LOG.info("begin to dump {}", dumpFilePath);
-                saveImage(dumpFile, journalId, version);
+                saveImage(dumpFile, journalId);
             } catch (IOException e) {
                 LOG.error("failed to dump image to {}", dumpFilePath, e);
             }
-        } catch (IOException e) {
-            LOG.error("Dump error", e);
         } finally {
-            if (version > 0) {
-                if (currentMetaContext != null) {
-                    currentMetaContext.setThreadLocalInfo();
-                } else {
-                    MetaContext.remove();
-                }
-            }
-
             // unlock all
             for (Database db : lockedDbMap.values()) {
                 db.readUnlock();

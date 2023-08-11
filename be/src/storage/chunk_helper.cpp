@@ -92,13 +92,13 @@ vectorized::Field ChunkHelper::convert_field(ColumnId id, const TabletColumn& c)
     return f;
 }
 
-vectorized::Schema ChunkHelper::convert_schema(const starrocks::TabletSchemaCSPtr& schema) {
+vectorized::Schema ChunkHelper::convert_schema(const starrocks::TabletSchema& schema) {
     starrocks::vectorized::Fields fields;
-    for (ColumnId cid = 0; cid < schema->num_columns(); ++cid) {
-        auto f = convert_field(cid, schema->column(cid));
+    for (ColumnId cid = 0; cid < schema.num_columns(); ++cid) {
+        auto f = convert_field(cid, schema.column(cid));
         fields.emplace_back(std::make_shared<starrocks::vectorized::Field>(std::move(f)));
     }
-    return starrocks::vectorized::Schema(std::move(fields), schema->keys_type(), schema->sort_key_idxes());
+    return starrocks::vectorized::Schema(std::move(fields), schema.keys_type(), schema.sort_key_idxes());
 }
 
 starrocks::vectorized::Field ChunkHelper::convert_field_to_format_v2(ColumnId id, const TabletColumn& c) {
@@ -136,38 +136,38 @@ starrocks::vectorized::Field ChunkHelper::convert_field_to_format_v2(ColumnId id
     return f;
 }
 
-starrocks::vectorized::Schema ChunkHelper::convert_schema_to_format_v2(const starrocks::TabletSchemaCSPtr& schema) {
-    return starrocks::vectorized::Schema(schema->schema());
+starrocks::vectorized::Schema ChunkHelper::convert_schema_to_format_v2(const starrocks::TabletSchema& schema) {
+    return starrocks::vectorized::Schema(schema.schema());
 }
 
-starrocks::vectorized::Schema ChunkHelper::convert_schema_to_format_v2(const starrocks::TabletSchemaCSPtr& schema,
+starrocks::vectorized::Schema ChunkHelper::convert_schema_to_format_v2(const starrocks::TabletSchema& schema,
                                                                        const std::vector<ColumnId>& cids) {
-    return starrocks::vectorized::Schema(schema->schema(), cids);
+    return starrocks::vectorized::Schema(schema.schema(), cids);
 }
 
-starrocks::vectorized::Schema ChunkHelper::get_short_key_schema_with_format_v2(const starrocks::TabletSchemaCSPtr& schema) {
+starrocks::vectorized::Schema ChunkHelper::get_short_key_schema_with_format_v2(const starrocks::TabletSchema& schema) {
     std::vector<ColumnId> short_key_cids;
-    const auto& sort_key_idxes = schema->sort_key_idxes();
-    short_key_cids.reserve(schema->num_short_key_columns());
-    for (auto i = 0; i < schema->num_short_key_columns(); ++i) {
+    const auto& sort_key_idxes = schema.sort_key_idxes();
+    short_key_cids.reserve(schema.num_short_key_columns());
+    for (auto i = 0; i < schema.num_short_key_columns(); ++i) {
         short_key_cids.push_back(sort_key_idxes[i]);
     }
-    return starrocks::vectorized::Schema(schema->schema(), short_key_cids);
+    return starrocks::vectorized::Schema(schema.schema(), short_key_cids);
 }
 
-starrocks::vectorized::Schema ChunkHelper::get_sort_key_schema_with_format_v2(const starrocks::TabletSchemaCSPtr& schema) {
-    std::vector<ColumnId> sort_key_iota_idxes(schema->sort_key_idxes().size());
+starrocks::vectorized::Schema ChunkHelper::get_sort_key_schema_with_format_v2(const starrocks::TabletSchema& schema) {
+    std::vector<ColumnId> sort_key_iota_idxes(schema.sort_key_idxes().size());
     std::iota(sort_key_iota_idxes.begin(), sort_key_iota_idxes.end(), 0);
-    return starrocks::vectorized::Schema(schema->schema(), schema->sort_key_idxes(), sort_key_iota_idxes);
+    return starrocks::vectorized::Schema(schema.schema(), schema.sort_key_idxes(), sort_key_iota_idxes);
 }
 
 starrocks::vectorized::Schema ChunkHelper::get_sort_key_schema_by_primary_key_format_v2(
-        const starrocks::TabletSchemaCSPtr& tablet_schema) {
-    std::vector<ColumnId> primary_key_iota_idxes(tablet_schema->num_key_columns());
+        const starrocks::TabletSchema& tablet_schema) {
+    std::vector<ColumnId> primary_key_iota_idxes(tablet_schema.num_key_columns());
     std::iota(primary_key_iota_idxes.begin(), primary_key_iota_idxes.end(), 0);
-    std::vector<ColumnId> all_keys_iota_idxes(tablet_schema->num_columns());
+    std::vector<ColumnId> all_keys_iota_idxes(tablet_schema.num_columns());
     std::iota(all_keys_iota_idxes.begin(), all_keys_iota_idxes.end(), 0);
-    return starrocks::vectorized::Schema(tablet_schema->schema(), all_keys_iota_idxes, primary_key_iota_idxes);
+    return starrocks::vectorized::Schema(tablet_schema.schema(), all_keys_iota_idxes, primary_key_iota_idxes);
 }
 
 ColumnId ChunkHelper::max_column_id(const starrocks::vectorized::Schema& schema) {
@@ -276,7 +276,7 @@ std::vector<size_t> ChunkHelper::get_char_field_indexes(const vectorized::Schema
 }
 
 void ChunkHelper::padding_char_columns(const std::vector<size_t>& char_column_indexes, const vectorized::Schema& schema,
-                                       const starrocks::TabletSchemaCSPtr& tschema, vectorized::Chunk* chunk) {
+                                       const starrocks::TabletSchema& tschema, vectorized::Chunk* chunk) {
     size_t num_rows = chunk->num_rows();
     for (auto field_index : char_column_indexes) {
         vectorized::Column* column = chunk->get_column_by_index(field_index).get();
@@ -293,7 +293,7 @@ void ChunkHelper::padding_char_columns(const std::vector<size_t>& char_column_in
         vectorized::Bytes& new_bytes = new_binary->get_bytes();
 
         // |schema| maybe partial columns in vertical compaction, so get char column length by name.
-        uint32_t len = tschema->column(tschema->field_index(schema.field(field_index)->name())).length();
+        uint32_t len = tschema.column(tschema.field_index(schema.field(field_index)->name())).length();
 
         new_offset.resize(num_rows + 1);
         new_bytes.assign(num_rows * len, 0); // padding 0

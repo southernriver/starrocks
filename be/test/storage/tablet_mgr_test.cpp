@@ -332,7 +332,7 @@ TEST_F(TabletMgrTest, GetNextBatchTabletsTest) {
 }
 
 static void create_rowset_writer_context(RowsetWriterContext* rowset_writer_context,
-                                         const std::string& schema_hash_path, const TabletSchemaCSPtr tablet_schema,
+                                         const std::string& schema_hash_path, const TabletSchema* tablet_schema,
                                          int64_t start_ver, int64_t end_ver, int64_t rid) {
     RowsetId rowset_id;
     rowset_id.init(rid);
@@ -347,7 +347,7 @@ static void create_rowset_writer_context(RowsetWriterContext* rowset_writer_cont
     rowset_writer_context->version.second = end_ver;
 }
 
-static void rowset_writer_add_rows(std::unique_ptr<RowsetWriter>& writer, const TabletSchemaCSPtr& tablet_schema) {
+static void rowset_writer_add_rows(std::unique_ptr<RowsetWriter>& writer, const TabletSchema& tablet_schema) {
     std::vector<std::string> test_data;
     auto schema = ChunkHelper::convert_schema_to_format_v2(tablet_schema);
     auto chunk = ChunkHelper::new_chunk(schema, 1024);
@@ -402,7 +402,7 @@ TEST_F(TabletMgrTest, RsVersionMapTest) {
     TabletManager* tablet_manager = starrocks::StorageEngine::instance()->tablet_manager();
     TabletSharedPtr tablet = tablet_manager->get_tablet(12347);
     ASSERT_TRUE(tablet != nullptr);
-    const auto& tablet_schema = tablet->tablet_schema();
+    const TabletSchema& tablet_schema = tablet->tablet_schema();
 
     // create rowset <2, 2>, <3, 3>, <3, 4>, <4, 4>, <4, 5>, <5, 5>, <5, 6>
     std::vector<Version> ver_list;
@@ -426,7 +426,7 @@ TEST_F(TabletMgrTest, RsVersionMapTest) {
     int64_t rid = 10000;
     for (auto&& ver : ver_list) {
         RowsetWriterContext rowset_writer_context;
-        create_rowset_writer_context(&rowset_writer_context, tablet->schema_hash_path(), tablet_schema, ver.first,
+        create_rowset_writer_context(&rowset_writer_context, tablet->schema_hash_path(), &tablet_schema, ver.first,
                                      ver.second, rid++);
         std::unique_ptr<RowsetWriter> rowset_writer;
         ASSERT_TRUE(RowsetFactory::create_rowset_writer(rowset_writer_context, &rowset_writer).ok());

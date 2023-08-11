@@ -58,7 +58,7 @@ public:
         writer_context.partition_id = 0;
         writer_context.rowset_path_prefix = tablet->schema_hash_path();
         writer_context.rowset_state = COMMITTED;
-        writer_context.tablet_schema = tablet->tablet_schema();
+        writer_context.tablet_schema = &tablet->tablet_schema();
         writer_context.version.first = 0;
         writer_context.version.second = 0;
         writer_context.segments_overlap = NONOVERLAPPING;
@@ -115,13 +115,13 @@ public:
         writer_context.rowset_state = COMMITTED;
         writer_context.partial_update_tablet_schema = partial_schema;
         writer_context.referenced_column_ids = column_indexes;
-        writer_context.tablet_schema = partial_schema;
+        writer_context.tablet_schema = partial_schema.get();
         writer_context.version.first = 0;
         writer_context.version.second = 0;
         writer_context.segments_overlap = NONOVERLAPPING;
         std::unique_ptr<RowsetWriter> writer;
         EXPECT_TRUE(RowsetFactory::create_rowset_writer(writer_context, &writer).ok());
-        auto schema = ChunkHelper::convert_schema_to_format_v2(partial_schema);
+        auto schema = ChunkHelper::convert_schema_to_format_v2(*partial_schema.get());
 
         if (keys.size() > 0) {
             auto chunk = ChunkHelper::new_chunk(schema, keys.size());
@@ -148,7 +148,7 @@ public:
         writer_context.partition_id = 0;
         writer_context.rowset_path_prefix = tablet->schema_hash_path();
         writer_context.rowset_state = COMMITTED;
-        writer_context.tablet_schema = tablet->tablet_schema();
+        writer_context.tablet_schema = &tablet->tablet_schema();
         writer_context.version.first = 0;
         writer_context.version.second = 0;
         writer_context.segments_overlap = NONOVERLAPPING;
@@ -177,7 +177,7 @@ public:
         writer_context.partition_id = 0;
         writer_context.rowset_path_prefix = tablet->schema_hash_path();
         writer_context.rowset_state = COMMITTED;
-        writer_context.tablet_schema = tablet->tablet_schema();
+        writer_context.tablet_schema = &tablet->tablet_schema();
         writer_context.version.first = 0;
         writer_context.version.second = 0;
         writer_context.segments_overlap = NONOVERLAPPING;
@@ -206,7 +206,7 @@ public:
         writer_context.partition_id = 0;
         writer_context.rowset_path_prefix = tablet->schema_hash_path();
         writer_context.rowset_state = COMMITTED;
-        writer_context.tablet_schema = tablet->tablet_schema();
+        writer_context.tablet_schema = &tablet->tablet_schema();
         writer_context.version.first = 0;
         writer_context.version.second = 0;
         writer_context.segments_overlap = NONOVERLAPPING;
@@ -1732,8 +1732,8 @@ void TabletUpdatesTest::test_convert_from(bool enable_persistent_index) {
 
     tablet_to_schema_change->set_tablet_state(TABLET_NOTREADY);
     auto chunk_changer = std::make_unique<vectorized::ChunkChanger>(tablet_to_schema_change->tablet_schema());
-    for (int i = 0; i < tablet_to_schema_change->tablet_schema()->num_columns(); ++i) {
-        const auto& new_column = tablet_to_schema_change->tablet_schema()->column(i);
+    for (int i = 0; i < tablet_to_schema_change->tablet_schema().num_columns(); ++i) {
+        const auto& new_column = tablet_to_schema_change->tablet_schema().column(i);
         int32_t column_index = _tablet->field_index(std::string{new_column.name()});
         auto column_mapping = chunk_changer->get_mutable_column_mapping(i);
         if (column_index >= 0) {
@@ -1766,8 +1766,8 @@ void TabletUpdatesTest::test_convert_from_with_pending(bool enable_persistent_in
 
     tablet_to_schema_change->set_tablet_state(TABLET_NOTREADY);
     auto chunk_changer = std::make_unique<vectorized::ChunkChanger>(tablet_to_schema_change->tablet_schema());
-    for (int i = 0; i < tablet_to_schema_change->tablet_schema()->num_columns(); ++i) {
-        const auto& new_column = tablet_to_schema_change->tablet_schema()->column(i);
+    for (int i = 0; i < tablet_to_schema_change->tablet_schema().num_columns(); ++i) {
+        const auto& new_column = tablet_to_schema_change->tablet_schema().column(i);
         int32_t column_index = _tablet->field_index(std::string{new_column.name()});
         auto column_mapping = chunk_changer->get_mutable_column_mapping(i);
         if (column_index >= 0) {
@@ -2298,7 +2298,7 @@ void TabletUpdatesTest::test_load_snapshot_incremental_with_partial_rowset_old(b
     });
 
     std::vector<int32_t> column_indexes = {0, 1};
-    std::shared_ptr<TabletSchema> partial_schema = TabletSchema::create(tablet1->unsafe_tablet_schema_ref(), column_indexes);
+    std::shared_ptr<TabletSchema> partial_schema = TabletSchema::create(tablet1->tablet_schema(), column_indexes);
     tablets_prepare(tablet0, tablet1, column_indexes, partial_schema);
 
     // try to do snapshot
@@ -2361,7 +2361,7 @@ void TabletUpdatesTest::test_load_snapshot_incremental_with_partial_rowset_new(b
     });
 
     std::vector<int32_t> column_indexes = {0, 1};
-    std::shared_ptr<TabletSchema> partial_schema = TabletSchema::create(tablet1->unsafe_tablet_schema_ref(), column_indexes);
+    std::shared_ptr<TabletSchema> partial_schema = TabletSchema::create(tablet1->tablet_schema(), column_indexes);
     tablets_prepare(tablet0, tablet1, column_indexes, partial_schema);
     if (update_case == CASE4) {
         tablet0->updates()->stop_apply(false);
@@ -2832,7 +2832,7 @@ void TabletUpdatesTest::test_get_column_values(bool enable_persistent_index) {
     const auto& tablet_schema = tablet->tablet_schema();
     for (auto i = 0; i < read_column_ids.size(); i++) {
         const auto read_column_id = read_column_ids[i];
-        auto tablet_column = tablet_schema->column(read_column_id);
+        auto tablet_column = tablet_schema.column(read_column_id);
         auto column = ChunkHelper::column_from_field_type(tablet_column.type(), tablet_column.is_nullable());
         read_columns[i] = column->clone_empty();
     }

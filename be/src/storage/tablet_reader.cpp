@@ -26,27 +26,19 @@
 
 namespace starrocks::vectorized {
 
-TabletReader::TabletReader(TabletSharedPtr tablet, const Version& version, Schema schema,
-                           const TabletSchemaCSPtr& tablet_schema)
+TabletReader::TabletReader(TabletSharedPtr tablet, const Version& version, Schema schema)
         : ChunkIterator(std::move(schema)),
           _tablet(std::move(tablet)),
           _version(version),
-          _delete_predicates_version(version) {
-    _tablet_schema = !tablet_schema ? _tablet->tablet_schema() : tablet_schema;
-}
+          _delete_predicates_version(version) {}
 
 TabletReader::TabletReader(TabletSharedPtr tablet, const Version& version, Schema schema,
-                           const std::vector<RowsetSharedPtr>& captured_rowsets,
-                           std::shared_ptr<TabletSchema>* tablet_schema)
+                           const std::vector<RowsetSharedPtr>& captured_rowsets)
         : ChunkIterator(std::move(schema)),
           _tablet(std::move(tablet)),
           _version(version),
           _delete_predicates_version(version),
-          _rowsets(captured_rowsets) {
-    _tablet_schema = tablet_schema
-            ? *tablet_schema
-            : _tablet->tablet_schema();
-}
+          _rowsets(captured_rowsets) {}
 
 TabletReader::TabletReader(TabletSharedPtr tablet, const Version& version, Schema schema, bool is_key,
                            RowSourceMaskBuffer* mask_buffer)
@@ -58,16 +50,6 @@ TabletReader::TabletReader(TabletSharedPtr tablet, const Version& version, Schem
           _is_key(is_key),
           _mask_buffer(mask_buffer) {
     DCHECK(_mask_buffer);
-    _tablet_schema = _tablet->tablet_schema();
-}
-
-TabletReader::TabletReader(TabletSharedPtr tablet, const Version& version,
-                           const TabletSchemaCSPtr& tablet_schema, Schema schema)
-        : ChunkIterator(std::move(schema)),
-          _tablet(std::move(tablet)),
-          _version(version),
-          _delete_predicates_version(version) {
-    _tablet_schema = tablet_schema;
 }
 
 void TabletReader::close() {
@@ -79,7 +61,6 @@ void TabletReader::close() {
     Rowset::release_readers(_rowsets);
     _rowsets.clear();
     _obj_pool.clear();
-    _tablet_schema.reset();
 }
 
 Status TabletReader::prepare() {
@@ -99,7 +80,6 @@ Status TabletReader::prepare() {
     }
     _stats.rowsets_read_count += _rowsets.size();
     Rowset::acquire_readers(_rowsets);
-
     // ensure all input rowsets are loaded into memory
     for (const auto& rowset : _rowsets) {
         rowset->load();
@@ -130,7 +110,7 @@ Status TabletReader::do_get_next(Chunk* chunk, std::vector<RowSourceMask>* sourc
 
 Status TabletReader::get_segment_iterators(const TabletReaderParams& params, std::vector<ChunkIteratorPtr>* iters) {
     RowsetReadOptions rs_opts;
-    KeysType keys_type = _tablet_schema->keys_type();
+    KeysType keys_type = _tablet->tablet_schema().keys_type();
     RETURN_IF_ERROR(_init_predicates(params));
     RETURN_IF_ERROR(_init_delete_predicates(params, &_delete_predicates));
     RETURN_IF_ERROR(parse_seek_range(_tablet, params.range, params.end_range, params.start_key, params.end_key,
@@ -146,7 +126,7 @@ Status TabletReader::get_segment_iterators(const TabletReaderParams& params, std
     rs_opts.runtime_state = params.runtime_state;
     rs_opts.profile = params.profile;
     rs_opts.use_page_cache = params.use_page_cache;
-    rs_opts.tablet_schema = _tablet_schema;
+    rs_opts.tablet_schema = &_tablet->tablet_schema();
     rs_opts.global_dictmaps = params.global_dictmaps;
     rs_opts.unused_output_column_ids = params.unused_output_column_ids;
     rs_opts.runtime_range_pruner = params.runtime_range_pruner;
@@ -186,10 +166,10 @@ Status TabletReader::_init_collector(const TabletReaderParams& params) {
 
     // If |keys_type| is UNIQUE_KEYS and |params.skip_aggregation| is true, must disable aggregate totally.
     // If |keys_type| is AGG_KEYS and |params.skip_aggregation| is true, aggregate is an optional operation.
-    KeysType keys_type = _tablet_schema->keys_type();
+    KeysType keys_type = _tablet->tablet_schema().keys_type();
     const auto skip_aggr = params.skip_aggregation;
-    const auto select_all_keys = _schema.num_key_fields() == _tablet_schema->num_key_columns();
-    DCHECK_LE(_schema.num_key_fields(), _tablet_schema->num_key_columns());
+    const auto select_all_keys = _schema.num_key_fields() == _tablet->num_key_columns();
+    DCHECK_LE(_schema.num_key_fields(), _tablet->num_key_columns());
 
     if (seg_iters.empty()) {
         _collect_iter = new_empty_iterator(_schema, params.chunk_size);
@@ -339,7 +319,7 @@ Status TabletReader::_init_predicates(const TabletReaderParams& params) {
 }
 
 Status TabletReader::_init_delete_predicates(const TabletReaderParams& params, DeletePredicates* dels) {
-    PredicateParser pred_parser(_tablet_schema);
+    PredicateParser pred_parser(_tablet->tablet_schema());
 
     std::shared_lock header_lock(_tablet->get_header_lock());
     // here we can not use DeletePredicatePB from  _tablet->delete_predicates() because
@@ -359,8 +339,8 @@ Status TabletReader::_init_delete_predicates(const TabletReaderParams& params, D
                 LOG(WARNING) << "invalid delete condition: " << pred_pb.sub_predicates(i) << "]";
                 return Status::InternalError("invalid delete condition string");
             }
-            if (_tablet_schema->field_index(cond.column_name) >= _tablet_schema->num_key_columns() &&
-                    _tablet_schema->keys_type() != DUP_KEYS) {
+            if (_tablet->tablet_schema().field_index(cond.column_name) >= _tablet->num_key_columns() &&
+                _tablet->keys_type() != DUP_KEYS) {
                 LOG(WARNING) << "ignore delete condition of non-key column: " << pred_pb.sub_predicates(i);
                 continue;
             }
@@ -407,12 +387,12 @@ Status TabletReader::_init_delete_predicates(const TabletReaderParams& params, D
 }
 
 // convert an OlapTuple to SeekTuple.
-Status TabletReader::_to_seek_tuple(const TabletSchemaCSPtr& tablet_schema, const OlapTuple& input, SeekTuple* tuple,
+Status TabletReader::_to_seek_tuple(const TabletSchema& tablet_schema, const OlapTuple& input, SeekTuple* tuple,
                                     MemPool* mempool) {
     Schema schema;
     std::vector<Datum> values;
     values.reserve(input.size());
-    const auto& sort_key_idxes = tablet_schema->sort_key_idxes();
+    const auto& sort_key_idxes = tablet_schema.sort_key_idxes();
     DCHECK(sort_key_idxes.empty() || sort_key_idxes.size() >= input.size());
     if (sort_key_idxes.size() > 0) {
         for (int i = 0; i < input.size(); i++) {
@@ -421,7 +401,7 @@ Status TabletReader::_to_seek_tuple(const TabletSchemaCSPtr& tablet_schema, cons
     }
     for (size_t i = 0; i < input.size(); i++) {
         int idx = sort_key_idxes.empty() ? i : sort_key_idxes[i];
-        auto f = std::make_shared<Field>(ChunkHelper::convert_field_to_format_v2(idx, tablet_schema->column(idx)));
+        auto f = std::make_shared<Field>(ChunkHelper::convert_field_to_format_v2(idx, tablet_schema.column(idx)));
         schema.append(f);
         values.emplace_back(Datum());
         if (input.is_null(i)) {

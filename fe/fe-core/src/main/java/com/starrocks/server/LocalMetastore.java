@@ -2082,28 +2082,6 @@ public class LocalMetastore implements ConnectorMetadata {
         long baseIndexId = getNextId();
         olapTable.setBaseIndexId(baseIndexId);
 
-        // get use light schema change
-        Boolean useLightSchemaChange;
-        try {
-            useLightSchemaChange = PropertyAnalyzer.analyzeUseLightSchemaChange(properties);
-        } catch (AnalysisException e) {
-            throw new DdlException(e.getMessage());
-        }
-        // only support olap table use light schema change optimization
-        useLightSchemaChange = useLightSchemaChange
-                && olapTable.isOlapTable()
-                && KeysType.PRIMARY_KEYS != olapTable.getKeysType();
-        olapTable.setUseLightSchemaChange(useLightSchemaChange);
-        if (useLightSchemaChange) {
-            for (Column column : baseSchema) {
-                column.setUniqueId(olapTable.incAndGetMaxColUniqueId());
-                LOG.debug("table: {}, newColumn: {}, uniqueId: {}", olapTable.getName(), column.getName(),
-                        column.getUniqueId());
-            }
-        } else {
-            LOG.debug("table: {} doesn't use light schema change", olapTable.getName());
-        }
-
         // analyze bloom filter columns
         Set<String> bfColumns = null;
         double bfFpp = 0;
@@ -5083,21 +5061,5 @@ public class LocalMetastore implements ConnectorMetadata {
             throw new RuntimeException("create partitions failed", e);
         }
         return newPartitions;
-    }
-
-    public TableName getTableNameByTableId(Long tableId) {
-        Collection<Database> dbs = idToDb.values();
-        for (Database db : dbs) {
-            db.readLock();
-            try {
-                Table table = db.getTable(tableId);
-                if (table != null) {
-                    return new TableName(db.getFullName(), table.getName());
-                }
-            } finally {
-                db.readUnlock();
-            }
-        }
-        return null;
     }
 }

@@ -342,7 +342,7 @@ Status LakeDataSource::init_reader_params(const std::vector<OlapScanRange*>& key
     _params.use_page_cache = !config::disable_storage_page_cache && !_runtime_state->disable_storage_page_cache();
     decide_chunk_size();
 
-    PredicateParser parser(_tablet_schema);
+    PredicateParser parser(*_tablet_schema);
     std::vector<PredicatePtr> preds;
     RETURN_IF_ERROR(_conjuncts_manager.get_column_predicates(&parser, &preds));
     for (auto& p : preds) {
@@ -407,7 +407,7 @@ Status LakeDataSource::init_tablet_reader(RuntimeState* runtime_state) {
     RETURN_IF_ERROR(init_scanner_columns(scanner_columns));
     RETURN_IF_ERROR(init_reader_params(_scanner_ranges, scanner_columns, reader_columns));
     starrocks::vectorized::Schema child_schema =
-            ChunkHelper::convert_schema_to_format_v2(_tablet_schema, reader_columns);
+            ChunkHelper::convert_schema_to_format_v2(*_tablet_schema, reader_columns);
 
     ASSIGN_OR_RETURN(auto tablet, ExecEnv::GetInstance()->lake_tablet_manager()->get_tablet(_scan_range.tablet_id));
     ASSIGN_OR_RETURN(_reader, tablet.new_reader(_version, std::move(child_schema)));
@@ -415,7 +415,7 @@ Status LakeDataSource::init_tablet_reader(RuntimeState* runtime_state) {
         _prj_iter = _reader;
     } else {
         starrocks::vectorized::Schema output_schema =
-                ChunkHelper::convert_schema_to_format_v2(_tablet_schema, scanner_columns);
+                ChunkHelper::convert_schema_to_format_v2(*_tablet_schema, scanner_columns);
         _prj_iter = new_projection_iterator(output_schema, _reader);
     }
 

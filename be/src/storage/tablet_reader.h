@@ -13,7 +13,6 @@
 #include "storage/seek_range.h"
 #include "storage/tablet.h"
 #include "storage/tablet_reader_params.h"
-#include "storage/tablet_schema.h"
 
 namespace starrocks::vectorized {
 
@@ -21,16 +20,12 @@ class ColumnPredicate;
 
 class TabletReader final : public ChunkIterator {
 public:
-    TabletReader(TabletSharedPtr tablet, const Version& version, Schema schema,
-                 const TabletSchemaCSPtr& tablet_schema = nullptr);
+    TabletReader(TabletSharedPtr tablet, const Version& version, Schema schema);
     // *captured_rowsets* is captured forward before creating TabletReader.
     TabletReader(TabletSharedPtr tablet, const Version& version, Schema schema,
-                 const std::vector<RowsetSharedPtr>& captured_rowsets,
-                 std::shared_ptr<TabletSchema>* tablet_schema = nullptr);
+                 const std::vector<RowsetSharedPtr>& captured_rowsets);
     TabletReader(TabletSharedPtr tablet, const Version& version, Schema schema, bool is_key,
                  RowSourceMaskBuffer* mask_buffer);
-    TabletReader(TabletSharedPtr tablet, const Version& version,
-                 const TabletSchemaCSPtr& tablet_schema, Schema schema);
     ~TabletReader() override { close(); }
 
     Status prepare();
@@ -68,11 +63,10 @@ private:
     Status _init_delete_predicates(const TabletReaderParams& read_params, DeletePredicates* dels);
     Status _init_collector(const TabletReaderParams& read_params);
 
-    static Status _to_seek_tuple(const TabletSchemaCSPtr& tablet_schema, const OlapTuple& input, SeekTuple* tuple,
+    static Status _to_seek_tuple(const TabletSchema& tablet_schema, const OlapTuple& input, SeekTuple* tuple,
                                  MemPool* mempool);
 
     TabletSharedPtr _tablet;
-    TabletSchemaCSPtr _tablet_schema;
     Version _version;
     // version of delete predicates, equal as _version by default
     // _delete_predicates_version will be set as max_version of tablet in schema change vectorized

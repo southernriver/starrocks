@@ -38,7 +38,7 @@ DeltaWriter::DeltaWriter(DeltaWriterOptions opt, MemTracker* mem_tracker, Storag
           _schema_initialized(false),
           _mem_table(nullptr),
           _mem_table_sink(nullptr),
-          _tablet_schema(new TabletSchema),
+          _tablet_schema(nullptr),
           _flush_token(nullptr),
           _replicate_token(nullptr),
           _with_rollback_log(true) {}
@@ -117,7 +117,6 @@ Status DeltaWriter::_init() {
             return st;
         }
     }
-
     if (_tablet->version_count() > config::tablet_max_versions) {
         if (config::enable_event_based_compaction_framework) {
             StorageEngine::instance()->compaction_manager()->update_tablet_async(_tablet);
@@ -170,15 +169,9 @@ Status DeltaWriter::_init() {
             return _opt.slots->size();
         }
     }();
-
-    // build tablet schema in request level
-    auto tablet_schema_ptr = _tablet->tablet_schema();
-    _build_current_tablet_schema(_opt.index_id,
-                                 _opt.ptable_schema_param, _tablet->tablet_schema());
-
     // maybe partial update, change to partial tablet schema
-    if (tablet_schema_ptr->keys_type() == KeysType::PRIMARY_KEYS &&
-        partial_cols_num < tablet_schema_ptr->num_columns()) {
+    if (_tablet->tablet_schema().keys_type() == KeysType::PRIMARY_KEYS &&
+        partial_cols_num < _tablet->tablet_schema().num_columns()) {
         writer_context.referenced_column_ids.reserve(partial_cols_num);
         for (auto i = 0; i < partial_cols_num; ++i) {
             const auto& slot_col_name = (*_opt.slots)[i]->col_name();
@@ -199,26 +192,27 @@ Status DeltaWriter::_init() {
             // If tablet is a new created tablet and has no historical data, average_row_size is 0
             // And we use schema size as average row size. If there are complex type(i.e. BITMAP/ARRAY) or varchar,
             // we will consider it as 16 bytes.
-            average_row_size = tablet_schema_ptr->estimate_row_size(16);
+            average_row_size = _tablet->tablet_schema().estimate_row_size(16);
             _memtable_buffer_row = config::write_buffer_size / average_row_size;
         }
+
         writer_context.partial_update_tablet_schema =
-                TabletSchema::create(*tablet_schema_ptr, writer_context.referenced_column_ids);
-        auto sort_key_idxes = tablet_schema_ptr->sort_key_idxes();
+                TabletSchema::create(_tablet->tablet_schema(), writer_context.referenced_column_ids);
+        auto sort_key_idxes = _tablet->tablet_schema().sort_key_idxes();
         std::sort(sort_key_idxes.begin(), sort_key_idxes.end());
         if (!std::includes(writer_context.referenced_column_ids.begin(), writer_context.referenced_column_ids.end(),
                            sort_key_idxes.begin(), sort_key_idxes.end())) {
             LOG(WARNING) << "table with sort key do not support partial update";
             return Status::NotSupported("table with sort key do not support partial update");
         }
-        writer_context.tablet_schema = writer_context.partial_update_tablet_schema;
-        _tablet_schema = writer_context.partial_update_tablet_schema;
+        writer_context.tablet_schema = writer_context.partial_update_tablet_schema.get();
     } else {
-        if (tablet_schema_ptr->keys_type() == KeysType::PRIMARY_KEYS && !_opt.merge_condition.empty()) {
+        writer_context.tablet_schema = &_tablet->tablet_schema();
+        if (_tablet->tablet_schema().keys_type() == KeysType::PRIMARY_KEYS && !_opt.merge_condition.empty()) {
             writer_context.merge_condition = _opt.merge_condition;
         }
-        writer_context.tablet_schema = _tablet_schema;
     }
+
     writer_context.rowset_id = _storage_engine->next_rowset_id();
     writer_context.tablet_uid = _tablet->tablet_uid();
     writer_context.tablet_id = _opt.tablet_id;
@@ -240,6 +234,7 @@ Status DeltaWriter::_init() {
         return st;
     }
     _mem_table_sink = std::make_unique<MemTableRowsetWriterSink>(_rowset_writer.get());
+    _tablet_schema = writer_context.tablet_schema;
     _flush_token = _storage_engine->memtable_flush_executor()->create_flush_token();
     if (_replica_state == Primary && _opt.replicas.size() > 1) {
         _replicate_token = _storage_engine->segment_replicate_executor()->create_replicate_token(&_opt);
@@ -394,37 +389,12 @@ Status DeltaWriter::_flush_memtable() {
     return _flush_token->wait();
 }
 
-
-void DeltaWriter::_build_current_tablet_schema(int64_t index_id,
-                                               const POlapTableSchemaParam& ptable_schema_param,
-                                               const TabletSchemaCSPtr& ori_tablet_schema) {
-    _tablet_schema->copy_from(ori_tablet_schema);
-    // new tablet schema if new table
-
-    // find the right index id
-    int i = 0;
-    for (; i < ptable_schema_param.indexes_size(); i++) {
-        if (ptable_schema_param.indexes(i).id() == index_id) break;
-    }
-    if (ptable_schema_param.indexes_size() > 0 &&
-        ptable_schema_param.indexes(0).columns_desc_size() != 0 &&
-        ptable_schema_param.indexes(0).columns_desc(0).unique_id() >= 0) {
-        _tablet_schema->build_current_tablet_schema(index_id, ptable_schema_param.version(),
-                                                    ptable_schema_param.indexes(i),
-                                                    ori_tablet_schema);
-    }
-    if (_tablet_schema->schema_version() > ori_tablet_schema->schema_version()) {
-        _tablet->update_max_version_schema(_tablet_schema);
-    }
-}
-
-
 void DeltaWriter::_reset_mem_table() {
     if (!_schema_initialized) {
         _vectorized_schema = MemTable::convert_schema(_tablet_schema, _opt.slots);
         _schema_initialized = true;
     }
-    if (_tablet->tablet_schema()->keys_type() == KeysType::PRIMARY_KEYS && !_opt.merge_condition.empty()) {
+    if (_tablet->tablet_schema().keys_type() == KeysType::PRIMARY_KEYS && !_opt.merge_condition.empty()) {
         _mem_table = std::make_unique<MemTable>(_tablet->tablet_id(), &_vectorized_schema, _opt.slots,
                                                 _mem_table_sink.get(), _opt.merge_condition, _mem_tracker);
     } else {
@@ -478,7 +448,7 @@ Status DeltaWriter::commit() {
         return res.status();
     }
 
-    _cur_rowset->set_schema(_tablet->tablet_schema());
+    _cur_rowset->set_schema(&_tablet->tablet_schema());
     if (_tablet->keys_type() == KeysType::PRIMARY_KEYS) {
         auto st = _storage_engine->update_manager()->on_rowset_finished(_tablet.get(), _cur_rowset.get());
         if (!st.ok()) {

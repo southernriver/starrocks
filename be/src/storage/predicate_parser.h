@@ -3,10 +3,8 @@
 #pragma once
 
 #include <string>
-#include <utility>
 
 #include "common/statusor.h"
-#include "tablet_schema.h"
 
 namespace starrocks {
 
@@ -22,7 +20,7 @@ class ColumnPredicate;
 
 class PredicateParser {
 public:
-    explicit PredicateParser(TabletSchemaCSPtr schema) : _schema(std::move(schema)) {}
+    explicit PredicateParser(const TabletSchema& schema) : _schema(schema) {}
 
     // check if an expression can be pushed down to the storage level
     bool can_pushdown(const ColumnPredicate* predicate) const;
@@ -37,7 +35,7 @@ public:
                                               ExprContext* expr_ctx) const;
 
 private:
-    const TabletSchemaCSPtr _schema;
+    const TabletSchema& _schema;
 };
 
 } // namespace vectorized

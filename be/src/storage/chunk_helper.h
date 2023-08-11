@@ -21,28 +21,28 @@ class ChunkHelper {
 public:
     static vectorized::Field convert_field(ColumnId id, const TabletColumn& c);
 
-    static vectorized::Schema convert_schema(const TabletSchemaCSPtr& schema);
+    static vectorized::Schema convert_schema(const TabletSchema& schema);
 
     // Convert TabletColumn to vectorized::Field. This function will generate format
     // V2 type: DATE_V2, TIMESTAMP, DECIMAL_V2
     static vectorized::Field convert_field_to_format_v2(ColumnId id, const TabletColumn& c);
 
     // Convert TabletSchema to vectorized::Schema with changing format v1 type to format v2 type.
-    static vectorized::Schema convert_schema_to_format_v2(const starrocks::TabletSchemaCSPtr& schema);
+    static vectorized::Schema convert_schema_to_format_v2(const TabletSchema& schema);
 
     // Convert TabletSchema to vectorized::Schema with changing format v1 type to format v2 type.
-    static vectorized::Schema convert_schema_to_format_v2(const starrocks::TabletSchemaCSPtr& schema,
+    static vectorized::Schema convert_schema_to_format_v2(const TabletSchema& schema,
                                                           const std::vector<ColumnId>& cids);
 
     // Get schema with format v2 type containing short key columns from TabletSchema.
-    static vectorized::Schema get_short_key_schema_with_format_v2(const starrocks::TabletSchemaCSPtr& tablet_schema);
+    static vectorized::Schema get_short_key_schema_with_format_v2(const TabletSchema& tablet_schema);
 
     // Get schema with format v2 type containing sort key columns from TabletSchema.
-    static vectorized::Schema get_sort_key_schema_with_format_v2(const starrocks::TabletSchemaCSPtr& tablet_schema);
+    static vectorized::Schema get_sort_key_schema_with_format_v2(const TabletSchema& tablet_schema);
 
     // Get schema with format v2 type containing sort key columns filled by primary key columns from TabletSchema.
     static vectorized::Schema get_sort_key_schema_by_primary_key_format_v2(
-            const starrocks::TabletSchemaCSPtr& tablet_schema);
+            const starrocks::TabletSchema& tablet_schema);
 
     static ColumnId max_column_id(const vectorized::Schema& schema);
 
@@ -69,7 +69,7 @@ public:
 
     // Padding char columns
     static void padding_char_columns(const std::vector<size_t>& char_column_indexes, const vectorized::Schema& schema,
-                                     const TabletSchemaCSPtr& tschema, vectorized::Chunk* chunk);
+                                     const TabletSchema& tschema, vectorized::Chunk* chunk);
 
     // Reorder columns of `chunk` according to the order of |tuple_desc|.
     static void reorder_chunk(const TupleDescriptor& tuple_desc, vectorized::Chunk* chunk);

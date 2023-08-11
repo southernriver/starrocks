@@ -60,7 +60,6 @@ import com.starrocks.lake.LakeTablet;
 import com.starrocks.load.Load;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.system.SystemInfoService;
-import com.starrocks.thrift.TColumn;
 import com.starrocks.thrift.TDataSink;
 import com.starrocks.thrift.TDataSinkType;
 import com.starrocks.thrift.TExplainLevel;
@@ -211,7 +210,7 @@ public class OlapTableSink extends DataSink {
         TOlapTableSchemaParam schemaParam = new TOlapTableSchemaParam();
         schemaParam.setDb_id(dbId);
         schemaParam.setTable_id(table.getId());
-        schemaParam.setVersion(table.getIndexMetaByIndexId(table.getBaseIndexId()).getSchemaVersion());
+        schemaParam.setVersion(0);
 
         schemaParam.tuple_desc = tupleDescriptor.toThrift();
         for (SlotDescriptor slotDesc : tupleDescriptor.getSlots()) {
@@ -221,18 +220,12 @@ public class OlapTableSink extends DataSink {
         for (Map.Entry<Long, MaterializedIndexMeta> pair : table.getIndexIdToMeta().entrySet()) {
             MaterializedIndexMeta indexMeta = pair.getValue();
             List<String> columns = Lists.newArrayList();
-            List<TColumn> columnsDesc = Lists.newArrayList();
             columns.addAll(indexMeta.getSchema().stream().map(Column::getName).collect(Collectors.toList()));
-            for (Column column : indexMeta.getSchema()) {
-                TColumn tColumn = column.toThrift();
-                column.setIndexFlag(tColumn, table.getIndexes());
-                columnsDesc.add(tColumn);
-            }
             if (table.getKeysType() == KeysType.PRIMARY_KEYS) {
                 columns.add(Load.LOAD_OP_COLUMN);
             }
             TOlapTableIndexSchema indexSchema = new TOlapTableIndexSchema(pair.getKey(), columns,
-                    indexMeta.getSchemaHash(), columnsDesc);
+                    indexMeta.getSchemaHash());
             schemaParam.addToIndexes(indexSchema);
         }
         return schemaParam;
