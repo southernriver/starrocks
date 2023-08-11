@@ -206,8 +206,8 @@ public class CreateRoutineLoadStmt extends DdlStmt {
     private boolean skipUtf8Check = false;
     private boolean taskNumExceedBeNum = false;
     private String timezone = TimeUtils.DEFAULT_TIME_ZONE;
-    private String timeoutSecond = null;
-    private String consumeSecond = null;
+    private String timeoutSecond = "0";
+    private String consumeSecond = "0";
     private boolean partialUpdate = false;
     private boolean recoverOffsetsFromLastJob = false;
     private String jobThatRecoverOffsetsFrom;
@@ -606,8 +606,8 @@ public class CreateRoutineLoadStmt extends DdlStmt {
         }
 
         // The following properties could be null, and we should use value from Config
-        timeoutSecond = jobProperties.get(TIMEOUT_SECOND);
-        consumeSecond = jobProperties.get(CONSUME_SECOND);
+        timeoutSecond = jobProperties.get(TIMEOUT_SECOND) == null ? "0" : jobProperties.get(TIMEOUT_SECOND);
+        consumeSecond = jobProperties.get(CONSUME_SECOND) == null ? "0" : jobProperties.get(CONSUME_SECOND);
 
         format = jobProperties.get(FORMAT);
         if (format != null) {
