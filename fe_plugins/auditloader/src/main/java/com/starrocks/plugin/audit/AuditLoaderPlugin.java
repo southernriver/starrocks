@@ -34,6 +34,8 @@ public class AuditLoaderPlugin extends Plugin implements AuditPlugin {
     private static final Logger LOG = LogManager.getLogger(AuditLoaderPlugin.class);
 
     private static SimpleDateFormat DATETIME_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    private static SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyyMMdd");
+    private static SimpleDateFormat HOUR_FORMAT = new SimpleDateFormat("yyyyMMddHH");
 
     private StringBuilder auditBuffer = new StringBuilder();
 
@@ -110,6 +112,9 @@ public class AuditLoaderPlugin extends Plugin implements AuditPlugin {
     }
 
     private void assembleAudit(AuditEvent event) {
+        this.auditBuffer.append(longToDateString(event.timestamp)).append("\t");
+        this.auditBuffer.append(longToHourString(event.timestamp)).append("\t");
+        this.auditBuffer.append(this.conf.cluster_name).append("\t");
         this.auditBuffer.append(event.queryId).append("\t");
         this.auditBuffer.append(longToTimeString(event.timestamp)).append("\t");
         this.auditBuffer.append(event.clientIp).append("\t");
@@ -204,6 +209,8 @@ public class AuditLoaderPlugin extends Plugin implements AuditPlugin {
 
         public int max_stmt_length = 4096;
 
+        public String cluster_name = "";
+
         public void init(Map<String, String> properties) throws PluginException {
             try {
                 if (properties.containsKey("max_batch_size"))
@@ -222,6 +229,8 @@ public class AuditLoaderPlugin extends Plugin implements AuditPlugin {
                     this.table = properties.get("table");
                 if (properties.containsKey("max_stmt_length"))
                     this.max_stmt_length = Integer.parseInt(properties.get("max_stmt_length"));
+                if (properties.containsKey("cluster_name"))
+                    this.cluster_name = properties.get("cluster_name");
             } catch (Exception e) {
                 throw new PluginException(e.getMessage());
             }
@@ -256,5 +265,17 @@ public class AuditLoaderPlugin extends Plugin implements AuditPlugin {
         if (timeStamp <= 0L)
             return "1900-01-01 00:00:00";
         return DATETIME_FORMAT.format(new Date(timeStamp));
+    }
+
+    public static synchronized String longToDateString(long timeStamp) {
+        if (timeStamp <= 0L)
+            return "1900-01-01 00:00:00";
+        return DATE_FORMAT.format(new Date(timeStamp));
+    }
+
+    public static synchronized String longToHourString(long timeStamp) {
+        if (timeStamp <= 0L)
+            return "1900010100";
+        return HOUR_FORMAT.format(new Date(timeStamp));
     }
 }

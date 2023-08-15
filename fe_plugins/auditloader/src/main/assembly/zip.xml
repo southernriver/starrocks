@@ -39,5 +39,12 @@ under the License.
             </includes>
             <outputDirectory>/</outputDirectory>
         </fileSet>
+        <fileSet>
+            <directory>src/main/resources</directory>
+            <includes>
+                <include>create.sql</include>
+            </includes>
+            <outputDirectory>/</outputDirectory>
+        </fileSet>
     </fileSets>
 </assembly>
