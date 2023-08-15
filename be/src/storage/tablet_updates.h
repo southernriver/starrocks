@@ -9,6 +9,7 @@
 #include <unordered_map>
 
 #include "common/statusor.h"
+#include "compaction_manager.h"
 #include "gen_cpp/olap_file.pb.h"
 #include "storage/edit_version.h"
 #include "storage/olap_common.h"
@@ -48,9 +49,11 @@ struct CompactionInfo {
 
 struct CompactionMetric {
     size_t input_rowsets_num;
+    std::vector<uint32_t> input_rowset_ids;
     int64_t input_segments_num;
     size_t input_data_size;
     int64_t start_time;
+    CompactionAlgorithm algorithm;
 };
 
 struct EditVersionInfo {
@@ -163,6 +166,8 @@ public:
     // this method go through all rowsets and identify them for further repair
     // return list of <rowsetid, segment file num> pair
     StatusOr<std::vector<std::pair<uint32_t, uint32_t>>> list_rowsets_need_repair_compaction();
+
+    bool get_running_task_status(CompactionManager::RunningCompactionMetric& update_metric);
 
     void get_compaction_status(std::string* json_result);
 

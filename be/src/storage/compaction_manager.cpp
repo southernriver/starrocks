@@ -6,6 +6,8 @@
 #include <thread>
 
 #include "storage/data_dir.h"
+#include "storage/tablet_manager.h"
+#include "storage/tablet_updates.h"
 #include "util/starrocks_metrics.h"
 #include "util/thread.h"
 
@@ -152,6 +154,7 @@ void CompactionManager::update_candidates(std::vector<CompactionCandidate> candi
             if (candidate.tablet->enable_compaction()) {
                 VLOG(1) << "update candidate " << candidate.tablet->tablet_id() << " type "
                         << starrocks::to_string(candidate.type) << " score " << candidate.score;
+                candidate.wait_start_time = UnixMillis();
                 if (candidate.type == CompactionType::BASE_COMPACTION) {
                     StarRocksMetrics::instance()->wait_base_compaction_task_num.increment(1);
                 } else {
@@ -393,6 +396,94 @@ Status CompactionManager::update_max_threads(int max_threads) {
     } else {
         return Status::InternalError("Thread pool not exist");
     }
+}
+
+Status CompactionManager::get_running_task_status(std::vector<RunningCompactionMetric>& base_metric,
+                                                  std::vector<RunningCompactionMetric>& cumu_metric,
+                                                  std::vector<RunningCompactionMetric>& update_metric) {
+    // get status of base and cumulative tasks
+    {
+        std::lock_guard lg(_tasks_mutex);
+
+        float divided = 1024 * 1024;
+
+        for (const auto task : _running_tasks) {
+            RunningCompactionMetric metric;
+            metric.tablet_id = task->task_id();
+            CompactionType type = task->compaction_type();
+            metric.type = to_string(type);
+            metric.partition_id = task->tablet()->partition_id();
+            metric.tablet_id = task->tablet()->tablet_id();
+            metric.start_time = ToStringFromUnixMillis(task->start_time());
+            metric.algorithm = task->get_compaction_algorithm() == HORIZONTAL_COMPACTION ? "horizontal" : "vertical";
+            metric.input_rowset_num = task->input_rowsets().size();
+            metric.input_segment_num = task->input_segments_num();
+            metric.input_data_size = std::to_string(task->input_rowsets_size() / divided) + "MB";
+            metric.compaction_score = task->compaction_score();
+            metric.progress = std::to_string(task->get_progress()) + "%";
+            for (int i = 0; i < task->input_rowsets().size(); ++i) {
+                RowsetSharedPtr rowset = task->input_rowsets()[i];
+                bool delete_flag = task->tablet()->version_for_delete_predicate(rowset->version());
+                const Version& ver = rowset->version();
+                std::string rowset_str =
+                        strings::Substitute("version:[$0-$1] seg_num:$2 $3 $4 $5MB", ver.first, ver.second,
+                                            rowset->num_segments(), (delete_flag ? "DELETE" : "DATA"),
+                                            SegmentsOverlapPB_Name(rowset->rowset_meta()->segments_overlap()),
+                                            rowset->data_disk_size() / divided);
+                metric.input_rowsets.push_back(rowset_str);
+            }
+
+            if (type == CUMULATIVE_COMPACTION) {
+                cumu_metric.push_back(metric);
+            } else if (type == BASE_COMPACTION) {
+                base_metric.push_back(metric);
+            } else {
+                return Status::InvalidArgument(fmt::format("unknown compaction type {}", type));
+            }
+        }
+    }
+
+    // get status of update tasks
+    std::vector<TabletSharedPtr> tablets;
+    StorageEngine::instance()->tablet_manager()->get_all_tablets(&tablets);
+    for (const auto& tablet : tablets) {
+        if (tablet->updates() == nullptr) {
+            // not primary key tablet
+            continue;
+        }
+        RunningCompactionMetric metric;
+        if (tablet->updates()->get_running_task_status(metric)) {
+            // has running compaction task
+            update_metric.push_back(metric);
+        }
+    }
+
+    return Status::OK();
+}
+
+Status CompactionManager::get_waiting_tasks_status(std::vector<WaitingCompactionMetric>& base_metric,
+                                                   std::vector<WaitingCompactionMetric>& cumu_metric) {
+    std::lock_guard lg(_candidates_mutex);
+
+    for (const auto task : _compaction_candidates) {
+        WaitingCompactionMetric metric;
+        CompactionType type = task.type;
+        metric.type = to_string(type);
+        metric.partition_id = task.tablet->partition_id();
+        metric.tablet_id = task.tablet->tablet_id();
+        metric.start_time = ToStringFromUnixMillis(task.wait_start_time);
+        metric.compaction_score = task.score;
+
+        if (type == CUMULATIVE_COMPACTION) {
+            cumu_metric.push_back(metric);
+        } else if (type == BASE_COMPACTION) {
+            base_metric.push_back(metric);
+        } else {
+            return Status::InvalidArgument(fmt::format("unknown compaction type {}", type));
+        }
+    }
+
+    return Status::OK();
 }
 
 } // namespace starrocks
