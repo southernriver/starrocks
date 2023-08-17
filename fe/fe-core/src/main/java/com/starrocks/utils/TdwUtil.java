@@ -93,7 +93,7 @@ public class TdwUtil {
     public static boolean verifyPrivileges(String dbName, String tableName, List<String> privileges)
             throws AnalysisException {
         String userName = getCurrentTdwUserName();
-        if (userName == null || userName.equalsIgnoreCase("root")) {
+        if (userName == null || userName.equalsIgnoreCase("tdw_root")) {
             return true;
         }
         return TdwRestClient.getInstance().verifyPrivilegeForTable(userName, dbName, tableName, privileges);
