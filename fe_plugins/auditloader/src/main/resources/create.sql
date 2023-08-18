@@ -1,6 +1,6 @@
-CREATE TABLE `starrocks_audit_tbl` (
-    `day` int NULL COMMENT "分区字段，天分区",
-    `hour` int NULL COMMENT "小时",
+CREATE TABLE `all_starrocks_audit_tbl` (
+    `day` int(11) NULL COMMENT "分区字段，天分区",
+    `hour` int(11) NULL COMMENT "小时",
     `cluster_name` varchar(48) NULL COMMENT "集群名",
     `query_id` varchar(48) NULL COMMENT "查询唯一ID",
     `time` datetime NOT NULL COMMENT "查询开始时间",
@@ -29,10 +29,13 @@ CREATE TABLE `starrocks_audit_tbl` (
     `plan_mem_costs` bigint(20) NULL COMMENT "",
     `exception` varchar(1048576) NULL COMMENT ""
 ) ENGINE=OLAP
-DUPLICATE KEY(`query_id`, `time`, `client_ip`)
+DUPLICATE KEY(`day`, `hour`, `cluster_name`, `query_id`, `time`, `client_ip`)
 COMMENT "OLAP"
 PARTITION BY RANGE(`day`)
-(PARTITION p_20230815 VALUES [("2023-08-15"), ("2023-08-16")))
+(PARTITION p_20230815 VALUES [("20230817"), ("20230818")),
+PARTITION p_20230818 VALUES [("20230818"), ("20230819")),
+PARTITION p_20230819 VALUES [("20230819"), ("20230820")),
+PARTITION p_20230820 VALUES [("20230820"), ("20230821")))
 DISTRIBUTED BY HASH(`query_id`) BUCKETS 20
 PROPERTIES (
 "replication_num" = "3",
@@ -43,7 +46,6 @@ PROPERTIES (
 "dynamic_partition.end" = "2",
 "dynamic_partition.prefix" = "p_",
 "dynamic_partition.buckets" = "3",
-"dynamic_partition.history_partition_num" = "2",
 "in_memory" = "false",
 "storage_format" = "DEFAULT",
 "enable_persistent_index" = "false",
