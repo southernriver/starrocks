@@ -21,14 +21,14 @@
 
 package com.starrocks.sql.ast;
 
-import com.google.common.base.Preconditions;
-import com.starrocks.analysis.ColumnDef;
 import com.starrocks.analysis.Expr;
 import com.starrocks.catalog.AggregateType;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.Type;
-import com.starrocks.common.DdlException;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * This is a result of semantic analysis for AddMaterializedViewClause.
@@ -45,23 +45,32 @@ public class MVColumnItem {
     private boolean isAllowNull;
     private boolean isAggregationTypeImplicit;
     private Expr defineExpr;
-    private final String baseColumnName;
+    private final List<String> baseColumnNames;
 
     public MVColumnItem(String name, Type type, AggregateType aggregateType, boolean isAllowNull,
-                        boolean isAggregationTypeImplicit, Expr defineExpr, String baseColumnName) {
+                        boolean isAggregationTypeImplicit, Expr defineExpr, List<String> baseColumnNames) {
         this.name = name;
         this.type = type;
         this.aggregationType = aggregateType;
         this.isAllowNull = isAllowNull;
         this.isAggregationTypeImplicit = isAggregationTypeImplicit;
         this.defineExpr = defineExpr;
-        this.baseColumnName = baseColumnName;
+        this.baseColumnNames = baseColumnNames;
     }
 
     public MVColumnItem(String name, Type type) {
         this.name = name;
         this.type = type;
-        this.baseColumnName = name;
+        this.baseColumnNames = new ArrayList<>();
+        this.baseColumnNames.add(name);
+    }
+
+    public MVColumnItem(String name, Type type, boolean isAllowNull, Expr defineExpr, List<String> baseColumnNames) {
+        this.name = name;
+        this.type = type;
+        this.isAllowNull = isAllowNull;
+        this.defineExpr = defineExpr;
+        this.baseColumnNames = baseColumnNames;
     }
 
     public boolean isAllowNull() {
@@ -109,23 +118,27 @@ public class MVColumnItem {
         this.defineExpr = defineExpr;
     }
 
-    public String getBaseColumnName() {
-        return baseColumnName;
+    public List<String> getBaseColumnNames() {
+        return baseColumnNames;
     }
 
-    public Column toMVColumn(OlapTable olapTable) throws DdlException {
+    public Column toMVColumn(OlapTable olapTable) {
         Column baseColumn = olapTable.getBaseColumn(name);
+        Column result;
         if (baseColumn == null) {
-            Preconditions.checkNotNull(defineExpr);
-            Column result = new Column(name, type, isKey, aggregationType, isAllowNull,
-                    ColumnDef.DefaultValueDef.EMPTY_VALUE, "");
-            result.setDefineExpr(defineExpr);
-            return result;
+            result = new Column(name, type, isKey, aggregationType, isAllowNull,
+                    null, "");
         } else {
-            Column result = new Column(baseColumn);
-            result.setIsKey(isKey);
-            result.setAggregationType(aggregationType, isAggregationTypeImplicit);
-            return result;
+            result = new Column(baseColumn);
         }
+        result.setIsKey(isKey);
+        result.setName(name);
+        result.setAggregationType(aggregationType, isAggregationTypeImplicit);
+        if (defineExpr != null) {
+            result.setDefineExpr(defineExpr);
+        }
+        /// FIXME One Mv column can reference multiple base columns
+        result.setBaseColumnName(!baseColumnNames.isEmpty() ? baseColumnNames.get(0) : "");
+        return result;
     }
 }

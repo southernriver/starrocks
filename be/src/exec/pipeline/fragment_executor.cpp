@@ -834,7 +834,7 @@ Status FragmentExecutor::_decompose_data_sink_to_operator(RuntimeState* runtime_
                                                                             &st);
             RETURN_IF_ERROR(st);
             if (sink != nullptr) {
-                RETURN_IF_ERROR(sink->init(thrift_sink));
+                RETURN_IF_ERROR(sink->init(thrift_sink, runtime_state));
             }
             tablet_sinks.emplace_back(std::move(sink));
         }

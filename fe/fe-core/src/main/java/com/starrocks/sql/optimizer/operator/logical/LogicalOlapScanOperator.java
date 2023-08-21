@@ -9,7 +9,7 @@ import com.starrocks.catalog.Column;
 import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.Table;
 import com.starrocks.sql.ast.PartitionNames;
-import com.starrocks.sql.optimizer.base.HashDistributionSpec;
+import com.starrocks.sql.optimizer.base.DistributionSpec;
 import com.starrocks.sql.optimizer.operator.Operator;
 import com.starrocks.sql.optimizer.operator.OperatorType;
 import com.starrocks.sql.optimizer.operator.OperatorVisitor;
@@ -21,7 +21,7 @@ import java.util.Map;
 import java.util.Objects;
 
 public final class LogicalOlapScanOperator extends LogicalScanOperator {
-    private final HashDistributionSpec hashDistributionSpec;
+    private final DistributionSpec distributionSpec;
     private final long selectedIndexId;
     private final List<Long> selectedPartitionId;
     private final PartitionNames partitionNames;
@@ -39,10 +39,10 @@ public final class LogicalOlapScanOperator extends LogicalScanOperator {
             Table table,
             Map<ColumnRefOperator, Column> colRefToColumnMetaMap,
             Map<Column, ColumnRefOperator> columnMetaToColRefMap,
-            HashDistributionSpec hashDistributionSpec,
+            DistributionSpec distributionSpec,
             long limit,
             ScalarOperator predicate) {
-        this(table, colRefToColumnMetaMap, columnMetaToColRefMap, hashDistributionSpec, limit, predicate,
+        this(table, colRefToColumnMetaMap, columnMetaToColRefMap, distributionSpec, limit, predicate,
                 ((OlapTable) table).getBaseIndexId(),
                 null,
                 null,
@@ -54,7 +54,7 @@ public final class LogicalOlapScanOperator extends LogicalScanOperator {
             Table table,
             Map<ColumnRefOperator, Column> colRefToColumnMetaMap,
             Map<Column, ColumnRefOperator> columnMetaToColRefMap,
-            HashDistributionSpec hashDistributionSpec,
+            DistributionSpec distributionSpec,
             long limit,
             ScalarOperator predicate,
             long selectedIndexId,
@@ -67,7 +67,7 @@ public final class LogicalOlapScanOperator extends LogicalScanOperator {
                 null);
 
         Preconditions.checkState(table instanceof OlapTable);
-        this.hashDistributionSpec = hashDistributionSpec;
+        this.distributionSpec = distributionSpec;
         this.selectedIndexId = selectedIndexId;
         this.selectedPartitionId = selectedPartitionId;
         this.partitionNames = partitionNames;
@@ -81,7 +81,7 @@ public final class LogicalOlapScanOperator extends LogicalScanOperator {
             Table table,
             Map<ColumnRefOperator, Column> colRefToColumnMetaMap,
             Map<Column, ColumnRefOperator> columnMetaToColRefMap,
-            HashDistributionSpec hashDistributionSpec,
+            DistributionSpec distributionSpec,
             long limit,
             ScalarOperator predicate,
             long selectedIndexId,
@@ -89,7 +89,7 @@ public final class LogicalOlapScanOperator extends LogicalScanOperator {
             PartitionNames partitionNames,
             List<Long> selectedTabletId,
             List<Long> hintsTabletIds) {
-        this(table, colRefToColumnMetaMap, columnMetaToColRefMap, hashDistributionSpec, limit, predicate,
+        this(table, colRefToColumnMetaMap, columnMetaToColRefMap, distributionSpec, limit, predicate,
                 selectedIndexId, selectedPartitionId, partitionNames, false, selectedTabletId, hintsTabletIds);
     }
 
@@ -99,7 +99,7 @@ public final class LogicalOlapScanOperator extends LogicalScanOperator {
                 builder.getLimit(),
                 builder.getPredicate(),
                 builder.getProjection());
-        this.hashDistributionSpec = builder.hashDistributionSpec;
+        this.distributionSpec = builder.distributionSpec;
         this.selectedIndexId = builder.selectedIndexId;
         this.selectedPartitionId = builder.selectedPartitionId;
         this.partitionNames = builder.partitionNames;
@@ -109,8 +109,8 @@ public final class LogicalOlapScanOperator extends LogicalScanOperator {
         this.prunedPartitionPredicates = builder.prunedPartitionPredicates;
     }
 
-    public HashDistributionSpec getDistributionSpec() {
-        return hashDistributionSpec;
+    public DistributionSpec getDistributionSpec() {
+        return distributionSpec;
     }
 
     public long getSelectedIndexId() {
@@ -159,7 +159,7 @@ public final class LogicalOlapScanOperator extends LogicalScanOperator {
 
         LogicalOlapScanOperator that = (LogicalOlapScanOperator) o;
         return selectedIndexId == that.selectedIndexId &&
-                Objects.equals(hashDistributionSpec, that.hashDistributionSpec) &&
+                Objects.equals(distributionSpec, that.distributionSpec) &&
                 Objects.equals(selectedPartitionId, that.selectedPartitionId) &&
                 Objects.equals(partitionNames, that.partitionNames) &&
                 Objects.equals(selectedTabletId, that.selectedTabletId) &&
@@ -174,7 +174,7 @@ public final class LogicalOlapScanOperator extends LogicalScanOperator {
 
     public static class Builder
             extends LogicalScanOperator.Builder<LogicalOlapScanOperator, LogicalOlapScanOperator.Builder> {
-        private HashDistributionSpec hashDistributionSpec;
+        private DistributionSpec distributionSpec;
         private long selectedIndexId;
         private List<Long> selectedPartitionId;
         private PartitionNames partitionNames;
@@ -193,7 +193,7 @@ public final class LogicalOlapScanOperator extends LogicalScanOperator {
         public Builder withOperator(LogicalOlapScanOperator scanOperator) {
             super.withOperator(scanOperator);
 
-            this.hashDistributionSpec = scanOperator.hashDistributionSpec;
+            this.distributionSpec = scanOperator.distributionSpec;
             this.selectedIndexId = scanOperator.selectedIndexId;
             this.selectedPartitionId = scanOperator.selectedPartitionId;
             this.partitionNames = scanOperator.partitionNames;

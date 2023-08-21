@@ -146,13 +146,13 @@ Status DataSink::create_data_sink(RuntimeState* state, const TDataSink& thrift_s
     }
 
     if (*sink != nullptr) {
-        RETURN_IF_ERROR((*sink)->init(thrift_sink));
+        RETURN_IF_ERROR((*sink)->init(thrift_sink, state));
     }
 
     return Status::OK();
 }
 
-Status DataSink::init(const TDataSink& thrift_sink) {
+Status DataSink::init(const TDataSink& thrift_sink, RuntimeState* state) {
     return Status::OK();
 }
 

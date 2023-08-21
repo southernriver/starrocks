@@ -124,13 +124,16 @@ public class RollupJobV2 extends AlterJobV2 implements GsonPostProcessable {
     @SerializedName(value = "watershedTxnId")
     protected long watershedTxnId = -1;
 
+    @SerializedName(value = "isColocateMVIndex")
+    protected boolean isColocateMVIndex = false;
+
     // save all create rollup tasks
     private AgentBatchTask rollupBatchTask = new AgentBatchTask();
 
     public RollupJobV2(long jobId, long dbId, long tableId, String tableName, long timeoutMs,
                        long baseIndexId, long rollupIndexId, String baseIndexName, String rollupIndexName,
                        List<Column> rollupSchema, int baseSchemaHash, int rollupSchemaHash, KeysType rollupKeysType,
-                       short rollupShortKeyColumnCount, OriginStatement origStmt) {
+                       short rollupShortKeyColumnCount, OriginStatement origStmt, boolean isColocateMVIndex) {
         super(jobId, JobType.ROLLUP, dbId, tableId, tableName, timeoutMs);
 
         this.baseIndexId = baseIndexId;
@@ -145,6 +148,7 @@ public class RollupJobV2 extends AlterJobV2 implements GsonPostProcessable {
         this.rollupShortKeyColumnCount = rollupShortKeyColumnCount;
 
         this.origStmt = origStmt;
+        this.isColocateMVIndex = isColocateMVIndex;
     }
 
     private RollupJobV2() {
@@ -238,10 +242,6 @@ public class RollupJobV2 extends AlterJobV2 implements GsonPostProcessable {
                                 tbl.isInMemory(),
                                 tbl.enablePersistentIndex(),
                                 tabletType, tbl.getCompressionType(), index.getSortKeyIdxes());
-                        createReplicaTask.setBaseTablet(tabletIdMap.get(rollupTabletId), baseSchemaHash);
-                        if (this.storageFormat != null) {
-                            createReplicaTask.setStorageFormat(this.storageFormat);
-                        }
                         batchTask.addTask(createReplicaTask);
                     } // end for rollupReplicas
                 } // end for rollupTablets
@@ -507,12 +507,15 @@ public class RollupJobV2 extends AlterJobV2 implements GsonPostProcessable {
             }
             partition.visualiseShadowIndex(rollupIndexId, false);
         }
+
         // colocate mv
-        Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
-        if (db != null) {
-            db.writeLock();
-            tbl.addTableToColocateGroupIfSet(dbId, rollupIndexName);
-            db.writeUnlock();
+        if (isColocateMVIndex) {
+            Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
+            if (db != null) {
+                db.writeLock();
+                tbl.addTableToColocateGroupIfSet(dbId, rollupIndexName);
+                db.writeUnlock();
+            }
         }
 
         tbl.rebuildFullSchema();

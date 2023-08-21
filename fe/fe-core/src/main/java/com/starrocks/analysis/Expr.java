@@ -29,6 +29,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.starrocks.catalog.Function;
 import com.starrocks.catalog.FunctionSet;
+import com.starrocks.catalog.ScalarType;
 import com.starrocks.catalog.Type;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.TreeNode;
@@ -741,6 +742,12 @@ abstract public class Expr extends TreeNode<Expr> implements ParseNode, Cloneabl
 
     // Append a flattened version of this expr, including all children, to 'container'.
     final void treeToThriftHelper(TExpr container, ExprVisitor visitor) {
+        if (type.isNull()) {
+            Preconditions.checkState(this instanceof NullLiteral || this instanceof SlotRef);
+            NullLiteral.create(ScalarType.BOOLEAN).treeToThriftHelper(container, visitor);
+            return;
+        }
+
         TExprNode msg = new TExprNode();
 
         Preconditions.checkState(!type.isNull(), "NULL_TYPE is illegal in thrift stage");

@@ -189,6 +189,13 @@ struct TOlapTableSink {
     18: optional Types.TWriteQuorumType write_quorum_type
     19: optional bool enable_replicated_storage
     20: optional string merge_condition
+    21: optional bool null_expr_in_auto_increment
+    22: optional bool miss_auto_increment_column
+    23: optional bool abort_delete // Deprecated
+    24: optional i32 auto_increment_slot_id
+    25: optional string label
+    // enable colocated for sync mv 
+    26: optional bool enable_colocate_mv_index
 }
 
 struct TSchemaTableSink {

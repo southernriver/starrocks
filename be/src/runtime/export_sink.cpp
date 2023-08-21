@@ -47,8 +47,8 @@ ExportSink::ExportSink(ObjectPool* pool, const RowDescriptor& row_desc, const st
           _rows_written_counter(nullptr),
           _write_timer(nullptr) {}
 
-Status ExportSink::init(const TDataSink& t_sink) {
-    RETURN_IF_ERROR(DataSink::init(t_sink));
+Status ExportSink::init(const TDataSink& t_sink, RuntimeState* state) {
+    RETURN_IF_ERROR(DataSink::init(t_sink, state));
     _t_export_sink = t_sink.export_sink;
     if (_t_export_sink.__isset.file_options && _t_export_sink.file_options.__isset.parquet_max_group_bytes) {
         _parquet_options.row_group_max_size = _t_export_sink.file_options.parquet_max_group_bytes;

@@ -195,6 +195,11 @@ struct TOlapTablePartition {
     7: optional list<Exprs.TExprNode> end_keys
 
     8: optional list<list<Exprs.TExprNode>> in_keys
+    // for automatic partition
+    9: optional bool is_shadow_partition = false
+    
+    // associated_partition_ids
+    10: optional map<i64, i64> associated_partition_ids
 }
 
 struct TOlapTablePartitionParam {
@@ -214,6 +219,11 @@ struct TOlapTablePartitionParam {
 
     7: optional list<string> partition_columns
     8: optional list<Exprs.TExpr> partition_exprs
+
+    9: optional bool enable_automatic_partition
+    
+    // logical materialized view
+    10: optional bool enable_associated_tables
 }
 
 struct TOlapTableIndexSchema {
@@ -221,6 +231,7 @@ struct TOlapTableIndexSchema {
     2: required list<string> columns
     3: required i32 schema_hash
     4: required list<TColumn> columns_desc
+    5: optional Exprs.TExpr where_clause
 }
 
 struct TOlapTableSchemaParam {

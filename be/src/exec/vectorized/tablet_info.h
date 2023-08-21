@@ -4,6 +4,7 @@
 
 #include "column/column.h"
 #include "exec/tablet_info.h"
+#include "util/random.h"
 
 namespace starrocks {
 class RuntimeState;
@@ -11,6 +12,8 @@ namespace vectorized {
 struct ChunkRow {
     ChunkRow() = default;
     ChunkRow(Columns* columns_, uint32_t index_) : columns(columns_), index(index_) {}
+
+    std::string debug_string();
 
     Columns* columns = nullptr;
     uint32_t index = 0;
@@ -20,8 +23,17 @@ struct OlapTablePartition {
     int64_t id = 0;
     ChunkRow start_key;
     ChunkRow end_key;
+    std::vector<ChunkRow> in_keys;
     int64_t num_buckets = 0;
     std::vector<OlapTableIndexTablets> indexes;
+    std::unordered_map<int64_t, int64_t> associated_partition_ids;
+    int64_t partition_id_of_index(int32_t index_id) {
+        if (associated_partition_ids.size() > 0) {
+            return associated_partition_ids[index_id];
+        } else {
+            return id;
+        }
+    }
 };
 
 struct PartionKeyComparator {
@@ -62,13 +74,17 @@ public:
     int64_t table_id() const { return _t_param.table_id; }
     int64_t version() const { return _t_param.version; }
 
+    bool enable_associated_tables() const { return _t_param.enable_associated_tables; }
+
     // `invalid_row_index` stores index that chunk[index]
     // has been filtered out for not being able to find tablet.
     // it could be any row, becauset it's just for outputing error message for user to diagnose.
     Status find_tablets(Chunk* chunk, std::vector<OlapTablePartition*>* partitions, std::vector<uint32_t>* indexes,
                         std::vector<uint8_t>* selection, int* invalid_row_index);
 
-    const std::vector<OlapTablePartition*>& get_partitions() const { return _partitions; }
+    const std::map<int64_t, OlapTablePartition*>& get_partitions() const { return _partitions; }
+
+    Status add_partitions(const std::vector<TOlapTablePartition>& partitions);
 
     bool is_un_partitioned() const { return _partition_columns.empty(); }
 
@@ -97,8 +113,10 @@ private:
     std::vector<ExprContext*> _partitions_expr_ctxs;
 
     ObjectPool _obj_pool;
-    std::vector<OlapTablePartition*> _partitions;
+    std::map<int64_t, OlapTablePartition*> _partitions;
     std::map<ChunkRow*, OlapTablePartition*, PartionKeyComparator> _partitions_map;
+
+    Random _rand{(uint32_t)time(nullptr)};
 };
 } // namespace vectorized
 } // namespace starrocks

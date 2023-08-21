@@ -22,6 +22,7 @@
 package com.starrocks.catalog;
 
 import com.google.common.base.Preconditions;
+import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Range;
@@ -31,6 +32,7 @@ import com.starrocks.alter.AlterJobV2Builder;
 import com.starrocks.alter.MaterializedViewHandler;
 import com.starrocks.alter.OlapTableAlterJobV2Builder;
 import com.starrocks.analysis.DescriptorTable.ReferencedPartitionInfo;
+import com.starrocks.analysis.Expr;
 import com.starrocks.backup.Status;
 import com.starrocks.backup.Status.ErrCode;
 import com.starrocks.catalog.DistributionInfo.DistributionInfoType;
@@ -351,18 +353,18 @@ public class OlapTable extends Table implements GsonPostProcessable {
 
     public void setIndexMeta(long indexId, String indexName, List<Column> schema, int schemaVersion,
                              int schemaHash, short shortKeyColumnCount, TStorageType storageType, KeysType keysType) {
-        setIndexMeta(indexId, indexName, schema, schemaVersion, schemaHash, shortKeyColumnCount, storageType, keysType,
-                null, null);
+        setIndexMeta(indexId, indexName, schema, null, schemaVersion, schemaHash, shortKeyColumnCount,
+                storageType, keysType, null, null);
     }
 
     public void setIndexMeta(long indexId, String indexName, List<Column> schema, int schemaVersion,
                              int schemaHash, short shortKeyColumnCount, TStorageType storageType, KeysType keysType,
                              OriginStatement origStmt) {
-        setIndexMeta(indexId, indexName, schema, schemaVersion, schemaHash, shortKeyColumnCount, storageType, keysType,
-                origStmt, null);
+        setIndexMeta(indexId, indexName, schema, null, schemaVersion, schemaHash, shortKeyColumnCount,
+                storageType, keysType, origStmt, null);
     }
 
-    public void setIndexMeta(long indexId, String indexName, List<Column> schema, int schemaVersion,
+    public void setIndexMeta(long indexId, String indexName, List<Column> schema, Expr whereClause, int schemaVersion,
                              int schemaHash, short shortKeyColumnCount, TStorageType storageType, KeysType keysType,
                              OriginStatement origStmt, List<Integer> sortColumns) {
         // Nullable when meta comes from schema change log replay.
@@ -388,6 +390,14 @@ public class OlapTable extends Table implements GsonPostProcessable {
 
         MaterializedIndexMeta indexMeta = new MaterializedIndexMeta(indexId, schema, schemaVersion,
                 schemaHash, shortKeyColumnCount, storageType, keysType, origStmt, sortColumns);
+        if (whereClause != null) {
+            indexMeta.setWhereClause(whereClause);
+        }
+        addMaterializedIndexMeta(indexName, indexMeta);
+    }
+
+    public void addMaterializedIndexMeta(String indexName, MaterializedIndexMeta indexMeta) {
+        long indexId = indexMeta.getIndexId();
         indexIdToMeta.put(indexId, indexMeta);
         indexNameToId.put(indexName, indexId);
     }
@@ -460,11 +470,23 @@ public class OlapTable extends Table implements GsonPostProcessable {
         Map<Long, MaterializedIndexMeta> visibleMVs = Maps.newHashMap();
         List<MaterializedIndex> mvs = getVisibleIndex();
         for (MaterializedIndex mv : mvs) {
+            if (!indexIdToMeta.containsKey(mv.getId())) {
+                continue;
+            }
             visibleMVs.put(mv.getId(), indexIdToMeta.get(mv.getId()));
         }
+
+        // Add associated index meta
+        for (Map.Entry<Long, MaterializedIndexMeta> entry : indexIdToMeta.entrySet()) {
+            if (entry.getValue().isLogical()) {
+                visibleMVs.put(entry.getKey(), entry.getValue());
+            }
+        }
+
         return visibleMVs;
     }
 
+    // Fetch the 1th partition's MaterializedViewIndex which should be not used directly.
     public List<MaterializedIndex> getVisibleIndex() {
         Optional<Partition> firstPartition = idToPartition.values().stream().findFirst();
         if (firstPartition.isPresent()) {
@@ -472,17 +494,6 @@ public class OlapTable extends Table implements GsonPostProcessable {
             return partition.getMaterializedIndices(IndexExtState.VISIBLE);
         }
         return Lists.newArrayList();
-    }
-
-    public Column getVisibleColumn(String columnName) {
-        for (MaterializedIndexMeta meta : getVisibleIndexIdToMeta().values()) {
-            for (Column column : meta.getSchema()) {
-                if (column.getName().equalsIgnoreCase(columnName)) {
-                    return column;
-                }
-            }
-        }
-        return null;
     }
 
     // this is only for schema change.
@@ -1008,15 +1019,43 @@ public class OlapTable extends Table implements GsonPostProcessable {
         }
     }
 
+    // If all indexes except the basic index are all colocate, we can use colocate mv index optimization.
+    public boolean isEnableColocateMVIndex() {
+        if (!isInColocateMvGroup()) {
+            return false;
+        }
+        for (MaterializedIndexMeta indexMeta : indexIdToMeta.values()) {
+            if (indexMeta.getIndexId() == baseIndexId) {
+                continue;
+            }
+            String mvName = getIndexNameById(indexMeta.getIndexId());
+            if (!colocateMaterializedViewNames.contains(mvName)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     // this will be called when rollupJobV2 is finished
     public void addTableToColocateGroupIfSet(Long dbId, String rollupIndexName) {
+        if (colocateMaterializedViewNames.contains(rollupIndexName)) {
+            return;
+        }
         ColocateTableIndex colocateTableIndex = GlobalStateMgr.getCurrentColocateIndex();
-        if (!colocateTableIndex.isColocateTable(this.id) && colocateMaterializedViewNames.contains(rollupIndexName)) {
+        if (!colocateTableIndex.isColocateTable(this.id)) {
             String dbName = GlobalStateMgr.getCurrentState().getDb(dbId).getFullName();
-            String groupName = dbName + ":" + rollupIndexName;
-            colocateTableIndex.addTableToGroup(dbId, this, groupName, null);
+            String colocateGroupName;
+            if (!Strings.isNullOrEmpty(this.colocateGroup)) {
+                colocateGroupName = this.colocateGroup;
+            } else {
+                colocateGroupName = dbName + ":" + getName();
+            }
+            colocateTableIndex.addTableToGroup(dbId, this, colocateGroupName, null);
             setInColocateMvGroup(true);
-            setColocateGroup(groupName);
+            addColocateMaterializedView(rollupIndexName);
+            if (!colocateGroupName.equalsIgnoreCase(this.colocateGroup)) {
+                setColocateGroup(colocateGroupName);
+            }
 
             ColocateTableIndex.GroupId groupId = colocateTableIndex.getGroup(this.id);
             List<List<Long>> backendsPerBucketSeq = colocateTableIndex.getBackendsPerBucketSeq(groupId);
@@ -1141,6 +1180,35 @@ public class OlapTable extends Table implements GsonPostProcessable {
 
         LOG.debug("signature: {}", Math.abs((int) adler32.getValue()));
         return Math.abs((int) adler32.getValue());
+    }
+
+    @Override
+    public List<Long> getAssociatedTableIds() {
+        List<Long> associatedTableIds = Lists.newArrayList(id);
+        indexIdToMeta.values().stream().filter(MaterializedIndexMeta::isLogical)
+                .forEach(m -> associatedTableIds.add(m.getTargetTableId()));
+        return associatedTableIds;
+    }
+
+    // Return associated table_id to index ids mapping.
+    public Map<Long, List<Long>> getAssociatedTableIdToIndexes() {
+        Map<Long, List<Long>> tableIdToIndexes = Maps.newHashMap();
+        for (Map.Entry<Long, MaterializedIndexMeta> entry : indexIdToMeta.entrySet()) {
+            Long indexId = entry.getKey();
+            MaterializedIndexMeta indexMeta = entry.getValue();
+            if (indexMeta.isLogical()) {
+                tableIdToIndexes.computeIfAbsent(indexMeta.getTargetTableId(), x -> Lists.newArrayList())
+                        .add(indexMeta.getTargetTableIndexId());
+            } else {
+                tableIdToIndexes.computeIfAbsent(id, x -> Lists.newArrayList()).add(indexId);
+            }
+        }
+        return tableIdToIndexes;
+    }
+
+    public boolean hasAssociatedTables() {
+        return indexIdToMeta.values().stream()
+                .anyMatch(x -> x.getMetaIndexType() == MaterializedIndexMeta.MetaIndexType.LOGICAL);
     }
 
     // get intersect partition names with the given table "anotherTbl". not including temp partitions
@@ -1603,6 +1671,17 @@ public class OlapTable extends Table implements GsonPostProcessable {
     @Override
     public List<Column> getBaseSchema() {
         return getSchemaByIndexId(baseIndexId);
+    }
+
+    @Override
+    public List<Column> getMVSchema() {
+        List<Column> mvSchema = Lists.newArrayList();
+        for (Map.Entry<Long, MaterializedIndexMeta> entry : indexIdToMeta.entrySet()) {
+            if (entry.getKey() != baseIndexId) {
+                mvSchema.addAll(entry.getValue().getSchema());
+            }
+        }
+        return mvSchema;
     }
 
     public Column getBaseColumn(String columnName) {

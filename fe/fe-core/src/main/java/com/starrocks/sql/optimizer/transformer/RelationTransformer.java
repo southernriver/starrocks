@@ -17,6 +17,7 @@ import com.starrocks.analysis.SlotRef;
 import com.starrocks.analysis.Subquery;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.DistributionInfo;
+import com.starrocks.catalog.DistributionInfo.DistributionInfoType;
 import com.starrocks.catalog.EsTable;
 import com.starrocks.catalog.HashDistributionInfo;
 import com.starrocks.catalog.IcebergTable;
@@ -432,24 +433,33 @@ public class RelationTransformer extends AstVisitor<LogicalPlan, ExpressionMappi
 
         LogicalScanOperator scanOperator;
         if (node.getTable().isNativeTable()) {
+            DistributionSpec distributionSpec = null;
             DistributionInfo distributionInfo = ((OlapTable) node.getTable()).getDefaultDistributionInfo();
-            Preconditions.checkState(distributionInfo instanceof HashDistributionInfo);
-            HashDistributionInfo hashDistributionInfo = (HashDistributionInfo) distributionInfo;
-            List<Column> distributedColumns = hashDistributionInfo.getDistributionColumns();
-            List<Integer> hashDistributeColumns = new ArrayList<>();
-            for (Column distributedColumn : distributedColumns) {
-                hashDistributeColumns.add(columnMetaToColRefMap.get(distributedColumn).getId());
+
+            if (distributionInfo.getType() == DistributionInfoType.HASH) {
+                List<Integer> hashDistributeColumns = new ArrayList<>();
+                HashDistributionInfo hashDistributionInfo = (HashDistributionInfo) distributionInfo;
+                List<Column> distributedColumns = hashDistributionInfo.getDistributionColumns();
+                for (Column distributedColumn : distributedColumns) {
+                    hashDistributeColumns.add(columnMetaToColRefMap.get(distributedColumn).getId());
+                }
+                HashDistributionDesc hashDistributionDesc =
+                        new HashDistributionDesc(hashDistributeColumns, HashDistributionDesc.SourceType.LOCAL);
+                distributionSpec = DistributionSpec.createHashDistributionSpec(hashDistributionDesc);
+            } else if (distributionInfo.getType() == DistributionInfoType.RANDOM) {
+                distributionSpec = DistributionSpec.createAnyDistributionSpec();
+            } else {
+                throw new IllegalStateException("Unknown distribution type: " + distributionInfo.getType());
+
             }
 
-            HashDistributionDesc hashDistributionDesc =
-                    new HashDistributionDesc(hashDistributeColumns, HashDistributionDesc.SourceType.LOCAL);
             if (node.isMetaQuery()) {
                 scanOperator = new LogicalMetaScanOperator(node.getTable(), colRefToColumnMetaMapBuilder.build());
             } else {
                 scanOperator = new LogicalOlapScanOperator(node.getTable(),
                         colRefToColumnMetaMapBuilder.build(),
                         columnMetaToColRefMap,
-                        DistributionSpec.createHashDistributionSpec(hashDistributionDesc),
+                        distributionSpec,
                         Operator.DEFAULT_LIMIT,
                         null,
                         ((OlapTable) node.getTable()).getBaseIndexId(),

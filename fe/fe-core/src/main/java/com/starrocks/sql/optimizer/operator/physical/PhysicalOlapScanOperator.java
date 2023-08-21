@@ -11,7 +11,6 @@ import com.starrocks.sql.optimizer.OptExpression;
 import com.starrocks.sql.optimizer.OptExpressionVisitor;
 import com.starrocks.sql.optimizer.base.DistributionSpec;
 import com.starrocks.sql.optimizer.base.HashDistributionDesc;
-import com.starrocks.sql.optimizer.base.HashDistributionSpec;
 import com.starrocks.sql.optimizer.operator.OperatorType;
 import com.starrocks.sql.optimizer.operator.OperatorVisitor;
 import com.starrocks.sql.optimizer.operator.Projection;
@@ -26,7 +25,7 @@ import java.util.Objects;
 import java.util.Set;
 
 public class PhysicalOlapScanOperator extends PhysicalScanOperator {
-    private final HashDistributionSpec hashDistributionSpec;
+    private final DistributionSpec distributionSpec;
     private final long selectedIndexId;
     private final List<Long> selectedTabletId;
     private final List<Long> selectedPartitionId;
@@ -44,7 +43,7 @@ public class PhysicalOlapScanOperator extends PhysicalScanOperator {
 
     public PhysicalOlapScanOperator(Table table,
                                     Map<ColumnRefOperator, Column> colRefToColumnMetaMap,
-                                    HashDistributionSpec hashDistributionDesc,
+                                    DistributionSpec distributionSpec,
                                     long limit,
                                     ScalarOperator predicate,
                                     long selectedIndexId,
@@ -52,7 +51,7 @@ public class PhysicalOlapScanOperator extends PhysicalScanOperator {
                                     List<Long> selectedTabletId,
                                     Projection projection) {
         super(OperatorType.PHYSICAL_OLAP_SCAN, table, colRefToColumnMetaMap, limit, predicate, projection);
-        this.hashDistributionSpec = hashDistributionDesc;
+        this.distributionSpec = distributionSpec;
         this.selectedIndexId = selectedIndexId;
         this.selectedPartitionId = selectedPartitionId;
         this.selectedTabletId = selectedTabletId;
@@ -161,15 +160,15 @@ public class PhysicalOlapScanOperator extends PhysicalScanOperator {
         }
         PhysicalOlapScanOperator that = (PhysicalOlapScanOperator) o;
         return selectedIndexId == that.selectedIndexId &&
-                Objects.equals(hashDistributionSpec, that.hashDistributionSpec) &&
+                Objects.equals(distributionSpec, that.distributionSpec) &&
                 Objects.equals(selectedPartitionId, that.selectedPartitionId) &&
                 Objects.equals(selectedTabletId, that.selectedTabletId);
     }
 
-    public HashDistributionSpec getDistributionSpec() {
+    public DistributionSpec getDistributionSpec() {
         // In UT, the distributionInfo may be null
-        if (hashDistributionSpec != null) {
-            return hashDistributionSpec;
+        if (distributionSpec != null) {
+            return distributionSpec;
         } else {
             // 1023 is a placeholder column id, only in order to pass UT
             HashDistributionDesc leftHashDesc = new HashDistributionDesc(Collections.singletonList(1023),

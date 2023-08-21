@@ -33,7 +33,6 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Set;
 
-@Deprecated
 public class RandomDistributionDesc extends DistributionDesc {
     int numBucket;
 
@@ -48,7 +47,9 @@ public class RandomDistributionDesc extends DistributionDesc {
 
     @Override
     public void analyze(Set<String> colSet) {
-        throw new SemanticException("Random distribution is deprecated now, use Hash distribution instead");
+        if (numBucket < 0) {
+            throw new SemanticException("Bucket number of random distribution should greater than zero.");
+        }
     }
 
     @Override

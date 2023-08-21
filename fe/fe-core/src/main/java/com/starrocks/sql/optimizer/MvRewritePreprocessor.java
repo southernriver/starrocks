@@ -11,6 +11,7 @@ import com.google.common.collect.Sets;
 import com.starrocks.catalog.BaseTableInfo;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.DistributionInfo;
+import com.starrocks.catalog.DistributionInfo.DistributionInfoType;
 import com.starrocks.catalog.ExpressionRangePartitionInfo;
 import com.starrocks.catalog.HashDistributionInfo;
 import com.starrocks.catalog.MaterializedIndex;
@@ -188,19 +189,6 @@ public class MvRewritePreprocessor {
         }
         final Map<Column, ColumnRefOperator> columnMetaToColRefMap = columnMetaToColRefMapBuilder.build();
 
-        // construct distribution
-        DistributionInfo distributionInfo = mv.getDefaultDistributionInfo();
-        // only hash distribution is supported
-        Preconditions.checkState(distributionInfo instanceof HashDistributionInfo);
-        HashDistributionInfo hashDistributionInfo = (HashDistributionInfo) distributionInfo;
-        List<Column> distributedColumns = hashDistributionInfo.getDistributionColumns();
-        List<Integer> hashDistributeColumns = new ArrayList<>();
-        for (Column distributedColumn : distributedColumns) {
-            hashDistributeColumns.add(columnMetaToColRefMap.get(distributedColumn).getId());
-        }
-        final HashDistributionDesc hashDistributionDesc =
-                new HashDistributionDesc(hashDistributeColumns, HashDistributionDesc.SourceType.LOCAL);
-
         // construct partition
         List<Long> selectPartitionIds = Lists.newArrayList();
         List<Long> selectTabletIds = Lists.newArrayList();
@@ -219,7 +207,7 @@ public class MvRewritePreprocessor {
         return new LogicalOlapScanOperator(mv,
                 colRefToColumnMetaMapBuilder.build(),
                 columnMetaToColRefMap,
-                DistributionSpec.createHashDistributionSpec(hashDistributionDesc),
+                getTableDistributionSpec(mvContext, columnMetaToColRefMap),
                 Operator.DEFAULT_LIMIT,
                 null,
                 mv.getBaseIndexId(),
@@ -227,5 +215,29 @@ public class MvRewritePreprocessor {
                 partitionNames,
                 selectTabletIds,
                 Lists.newArrayList());
+    }
+
+    private DistributionSpec getTableDistributionSpec(
+            MaterializationContext mvContext, Map<Column, ColumnRefOperator> columnMetaToColRefMap) {
+        final MaterializedView mv = mvContext.getMv();
+
+        DistributionSpec distributionSpec = null;
+        // construct distribution
+        DistributionInfo distributionInfo = mv.getDefaultDistributionInfo();
+        if (distributionInfo.getType() == DistributionInfoType.HASH) {
+            HashDistributionInfo hashDistributionInfo = (HashDistributionInfo) distributionInfo;
+            List<Column> distributedColumns = hashDistributionInfo.getDistributionColumns();
+            List<Integer> hashDistributeColumns = new ArrayList<>();
+            for (Column distributedColumn : distributedColumns) {
+                hashDistributeColumns.add(columnMetaToColRefMap.get(distributedColumn).getId());
+            }
+            final HashDistributionDesc hashDistributionDesc =
+                    new HashDistributionDesc(hashDistributeColumns, HashDistributionDesc.SourceType.LOCAL);
+            distributionSpec = DistributionSpec.createHashDistributionSpec(hashDistributionDesc);
+        } else if (distributionInfo.getType() == DistributionInfoType.RANDOM) {
+            distributionSpec = DistributionSpec.createAnyDistributionSpec();
+        }
+
+        return distributionSpec;
     }
 }

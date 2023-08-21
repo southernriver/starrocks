@@ -16,6 +16,20 @@ class RuntimeState;
 
 namespace vectorized {
 
+std::string ChunkRow::debug_string() {
+    std::stringstream os;
+    os << "index " << index << " [";
+    if (columns && columns->size() > 0) {
+        for (size_t col = 0; col < columns->size() - 1; ++col) {
+            os << (*columns)[col]->debug_item(index);
+            os << ", ";
+        }
+        os << (*columns)[columns->size() - 1]->debug_item(index);
+    }
+    os << "]";
+    return os.str();
+}
+
 OlapTablePartitionParam::OlapTablePartitionParam(std::shared_ptr<OlapTableSchemaParam> schema,
                                                  const TOlapTablePartitionParam& t_param)
         : _schema(std::move(schema)), _t_param(t_param) {}
@@ -94,8 +108,12 @@ Status OlapTablePartitionParam::init() {
                 return Status::InternalError(ss.str());
             }
         }
-        _partitions.emplace_back(part);
+        _partitions.emplace(part->id, part);
         _partitions_map.emplace(&part->end_key, part);
+
+        for (const auto& entry : t_part.associated_partition_ids) {
+            part->associated_partition_ids[entry.first] = entry.second;
+        }
     }
 
     return Status::OK();
@@ -260,6 +278,14 @@ void OlapTablePartitionParam::_compute_hashes(Chunk* chunk, std::vector<uint32_t
     for (size_t i = 0; i < _distributed_slot_descs.size(); ++i) {
         _distributed_columns[i] = chunk->get_column_by_slot_id(_distributed_slot_descs[i]->id()).get();
         _distributed_columns[i]->crc32_hash(&(*indexes)[0], 0, num_rows);
+    }
+
+    // if no distributed columns, use random distribution
+    if (_distributed_slot_descs.size() == 0) {
+        uint32_t r = _rand.Next();
+        for (auto i = 0; i < num_rows; ++i) {
+            (*indexes)[i] = r++;
+        }
     }
 }
 

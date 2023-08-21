@@ -196,6 +196,7 @@ message PTabletWriterAddChunkRequest {
     repeated int64 partition_ids = 8;
     optional int64 txn_id = 9;
     optional int64 timeout_ms = 10;
+    optional bool wait_all_sender_close = 11 [default = false];
 };
 
 message PTabletWriterAddChunksRequest {
@@ -212,6 +213,7 @@ message PTabletWriterAddBatchResult {
     optional int64 execution_time_us = 3;
     optional int64 wait_lock_time_us = 4;
     repeated PTabletInfo failed_tablet_vec = 5;
+    optional int64 wait_memtable_flush_time_us = 6;
 };
 
 message PTabletWriterAddSegmentRequest {

@@ -68,6 +68,7 @@ import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.Partition;
 import com.starrocks.catalog.PartitionInfo;
 import com.starrocks.catalog.PartitionType;
+import com.starrocks.catalog.RandomDistributionInfo;
 import com.starrocks.catalog.RangePartitionInfo;
 import com.starrocks.catalog.Replica;
 import com.starrocks.catalog.SinglePartitionInfo;
@@ -1009,6 +1010,12 @@ public class LocalMetastore implements ConnectorMetadata {
                     throw new DdlException("Cannot assign hash distribution buckets less than 0");
                 }
             }
+            if (distributionInfo.getType() == DistributionInfo.DistributionInfoType.RANDOM) {
+                RandomDistributionInfo randomDistributionInfo = (RandomDistributionInfo) distributionInfo;
+                if (randomDistributionInfo.getBucketNum() < 0) {
+                    throw new DdlException("Cannot assign random distribution buckets less than 0");
+                }
+            }
         } else {
             if (defaultDistributionInfo.getType() == DistributionInfo.DistributionInfoType.HASH
                     && Config.enable_auto_tablet_distribution
@@ -1604,6 +1611,12 @@ public class LocalMetastore implements ConnectorMetadata {
             indexMap.put(indexId, rollup);
         }
         DistributionInfo distributionInfo = table.getDefaultDistributionInfo();
+
+        if (distributionInfo.getBucketNum() == 0) {
+            int numBucket = calAvgBucketNumOfRecentPartitions(table, 5);
+            distributionInfo.setBucketNum(numBucket);
+        }
+
         Partition partition =
                 new Partition(partitionId, partitionName, indexMap.get(table.getBaseIndexId()), distributionInfo);
 
@@ -1623,6 +1636,10 @@ public class LocalMetastore implements ConnectorMetadata {
             long indexId = entry.getKey();
             MaterializedIndex index = entry.getValue();
             MaterializedIndexMeta indexMeta = table.getIndexIdToMeta().get(indexId);
+
+            if (indexMeta.isLogical()) {
+                continue;
+            }
 
             // create tablets
             TabletMeta tabletMeta =
@@ -2282,7 +2299,7 @@ public class LocalMetastore implements ConnectorMetadata {
         int schemaHash = Util.schemaHash(schemaVersion, baseSchema, bfColumns, bfFpp);
 
         if (stmt.getSortKeys() != null) {
-            olapTable.setIndexMeta(baseIndexId, tableName, baseSchema, schemaVersion, schemaHash,
+            olapTable.setIndexMeta(baseIndexId, tableName, baseSchema, null, schemaVersion, schemaHash,
                     shortKeyColumnCount, baseIndexStorageType, keysType, null, sortKeyIdxes);
         } else {
             olapTable.setIndexMeta(baseIndexId, tableName, baseSchema, schemaVersion, schemaHash,
@@ -2381,11 +2398,20 @@ public class LocalMetastore implements ConnectorMetadata {
                                 DataProperty.getInferredDefaultDataProperty());
                         DynamicPartitionUtil.checkAndSetDynamicPartitionProperty(olapTable, properties);
                         if (olapTable.dynamicPartitionExists() && olapTable.getColocateGroup() != null) {
-                            HashDistributionInfo info = (HashDistributionInfo) distributionInfo;
-                            if (info.getBucketNum() !=
-                                    olapTable.getTableProperty().getDynamicPartitionProperty().getBuckets()) {
-                                throw new DdlException("dynamic_partition.buckets should equal the distribution buckets"
-                                        + " if creating a colocate table");
+                            if (distributionInfo instanceof HashDistributionInfo) {
+                                HashDistributionInfo info = (HashDistributionInfo) distributionInfo;
+                                if (info.getBucketNum() !=
+                                        olapTable.getTableProperty().getDynamicPartitionProperty().getBuckets()) {
+                                    throw new DdlException("dynamic_partition.buckets should equal the distribution buckets"
+                                            + " if creating a colocate table");
+                                }
+                            } else {
+                                RandomDistributionInfo info = (RandomDistributionInfo) distributionInfo;
+                                if (info.getBucketNum() !=
+                                        olapTable.getTableProperty().getDynamicPartitionProperty().getBuckets()) {
+                                    throw new DdlException("dynamic_partition.buckets should equal the distribution buckets"
+                                            + " if creating a colocate table");
+                                }
                             }
                         }
                         if (hasMedium) {
@@ -2710,6 +2736,30 @@ public class LocalMetastore implements ConnectorMetadata {
         }
     }
 
+    public void replayCreateMaterializedIndexMeta(String dbName, String tableName, String indexName,
+                                                  MaterializedIndexMeta indexMeta) {
+        LOG.info("start to replay create sync materialized view {}", indexName);
+        Database db = this.fullNameToDb.get(dbName);
+        if (db == null) {
+            return;
+        }
+        OlapTable table = (OlapTable) db.getTable(tableName);
+        if (table == null) {
+            return;
+        }
+
+        try {
+            db.writeLock();
+            table.addMaterializedIndexMeta(indexName, indexMeta);
+            table.rebuildFullSchema();
+            LOG.info("replay create sync materialized view {}", indexName);
+        } catch (Exception e) {
+            LOG.warn("replay create sync materialized view {} failed: {}", indexName, e);
+        } finally {
+            db.writeUnlock();
+        }
+    }
+
     private void createLakeTablets(LakeTable table, long partitionId, MaterializedIndex index,
                                    DistributionInfo distributionInfo, short replicationNum, TabletMeta tabletMeta,
                                    Set<Long> tabletIdSet)
@@ -2737,7 +2787,8 @@ public class LocalMetastore implements ConnectorMetadata {
         Preconditions.checkArgument(replicationNum > 0);
 
         DistributionInfo.DistributionInfoType distributionInfoType = distributionInfo.getType();
-        if (distributionInfoType != DistributionInfo.DistributionInfoType.HASH) {
+        if (distributionInfoType != DistributionInfo.DistributionInfoType.HASH && distributionInfoType
+                != DistributionInfo.DistributionInfoType.RANDOM) {
             throw new DdlException("Unknown distribution type: " + distributionInfoType);
         }
 
@@ -5065,6 +5116,7 @@ public class LocalMetastore implements ConnectorMetadata {
         OlapTable olapTable = (OlapTable) table;
         Map<Long, String> origPartitions = Maps.newHashMap();
         OlapTable copiedTbl = getCopiedTable(db, olapTable, sourcePartitionIds, origPartitions);
+        copiedTbl.setDefaultDistributionInfo(olapTable.getDefaultDistributionInfo());
 
         // 2. use the copied table to create partitions
         List<Partition> newPartitions = null;

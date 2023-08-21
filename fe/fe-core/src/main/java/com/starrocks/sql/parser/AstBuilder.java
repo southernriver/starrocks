@@ -234,6 +234,7 @@ import com.starrocks.sql.ast.Property;
 import com.starrocks.sql.ast.QualifiedName;
 import com.starrocks.sql.ast.QueryRelation;
 import com.starrocks.sql.ast.QueryStatement;
+import com.starrocks.sql.ast.RandomDistributionDesc;
 import com.starrocks.sql.ast.RangePartitionDesc;
 import com.starrocks.sql.ast.RecoverDbStmt;
 import com.starrocks.sql.ast.RecoverPartitionStmt;
@@ -1109,6 +1110,10 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
         boolean ifNotExist = context.IF() != null;
         QualifiedName qualifiedName = getQualifiedName(context.mvName);
         TableName tableName = qualifiedNameToTableName(qualifiedName);
+        TableName targetTableName = null;
+        if (context.targetTable != null) {
+            targetTableName = qualifiedNameToTableName(getQualifiedName(context.targetTable));
+        }
 
         String comment =
                 context.comment() == null ? null : ((StringLiteral) visit(context.comment().string())).getStringValue();
@@ -1189,7 +1194,7 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
                 throw new IllegalArgumentException(
                         "Distribution by is not supported by SYNC refresh type in materialized view");
             }
-            return new CreateMaterializedViewStmt(tableName.getTbl(), queryStatement, properties);
+            return new CreateMaterializedViewStmt(tableName.getTbl(), queryStatement, properties, targetTableName);
         }
         if (refreshSchemeDesc instanceof AsyncRefreshSchemeDesc) {
             AsyncRefreshSchemeDesc asyncRefreshSchemeDesc = (AsyncRefreshSchemeDesc) refreshSchemeDesc;
@@ -1197,6 +1202,9 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
                 throw new IllegalArgumentException(
                         "CreateMaterializedView UnitIdentifier only support 'SECOND','MINUTE','HOUR' or 'DAY'");
             }
+        }
+        if (targetTableName != null) {
+            throw new ParsingException("To targetTable is not supported in async mv");
         }
 
         if (!Config.enable_experimental_mv) {
@@ -5271,9 +5279,13 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
         if (context.INTEGER_VALUE() != null) {
             buckets = Integer.parseInt(context.INTEGER_VALUE().getText());
         }
-        List<Identifier> identifierList = visit(context.identifierList().identifier(), Identifier.class);
-
-        return new HashDistributionDesc(buckets, identifierList.stream().map(Identifier::getValue).collect(toList()));
+        if (context.HASH() != null) {
+            List<Identifier> identifierList = visit(context.identifierList().identifier(), Identifier.class);
+            return new HashDistributionDesc(buckets,
+                    identifierList.stream().map(Identifier::getValue).collect(toList()));
+        } else {
+            return new RandomDistributionDesc(buckets);
+        }
     }
 
     @Override

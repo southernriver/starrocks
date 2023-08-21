@@ -85,6 +85,7 @@ public interface ConnectorMetadata {
      * There are two ways of current connector table.
      * 1. Get the remote files information from hdfs or s3 according to table or partition.
      * 2. Get file scan tasks for iceberg metadata by query predicate.
+     *
      * @param table
      * @param partitionKeys selected columns
      * @param predicate used to filter metadata for iceberg, etc

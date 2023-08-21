@@ -75,7 +75,6 @@ public class MaterializedIndex extends MetaObject implements Writable, GsonPostP
             }
         }
     }
-
     public enum IndexExtState {
         ALL,
         VISIBLE, // index state in NORMAL and SCHEMA_CHANGE

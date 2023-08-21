@@ -408,8 +408,8 @@ static bool compare_part_use_range(const PartitionInfo* v1, const PartitionInfo*
     return v1->range() < v2->range();
 }
 
-Status DataStreamSender::init(const TDataSink& tsink) {
-    RETURN_IF_ERROR(DataSink::init(tsink));
+Status DataStreamSender::init(const TDataSink& tsink, RuntimeState* state) {
+    RETURN_IF_ERROR(DataSink::init(tsink, state));
     const TDataStreamSink& t_stream_sink = tsink.stream_sink;
     if (_part_type == TPartitionType::HASH_PARTITIONED ||
         _part_type == TPartitionType::BUCKET_SHUFFLE_HASH_PARTITIONED) {

@@ -39,8 +39,8 @@ SchemaTableSink::SchemaTableSink(ObjectPool* pool, const RowDescriptor& row_desc
 
 SchemaTableSink::~SchemaTableSink() = default;
 
-Status SchemaTableSink::init(const TDataSink& t_sink) {
-    RETURN_IF_ERROR(DataSink::init(t_sink));
+Status SchemaTableSink::init(const TDataSink& t_sink, RuntimeState* state) {
+    RETURN_IF_ERROR(DataSink::init(t_sink, state));
     const auto& schema_table_sink = t_sink.schema_table_sink;
     _table_name = schema_table_sink.table;
 

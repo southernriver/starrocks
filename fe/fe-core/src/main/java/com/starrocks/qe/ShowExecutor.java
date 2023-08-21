@@ -414,6 +414,30 @@ public class ShowExecutor {
         resultSet = new ShowResultSet(stmt.getMetaData(), rowSets);
     }
 
+    public static String buildCreateMVSql(OlapTable olapTable, String mv, MaterializedIndexMeta mvMeta) {
+        StringBuilder originStmtBuilder = new StringBuilder(
+                "create materialized view " + mv +
+                        " as select ");
+        String groupByString = "";
+        for (Column column : mvMeta.getSchema()) {
+            if (column.isKey()) {
+                groupByString += column.getName() + ",";
+            }
+        }
+        originStmtBuilder.append(groupByString);
+        for (Column column : mvMeta.getSchema()) {
+            if (!column.isKey()) {
+                originStmtBuilder.append(column.getAggregationType().toString()).append("(")
+                        .append(column.getName()).append(")").append(",");
+            }
+        }
+        originStmtBuilder.delete(originStmtBuilder.length() - 1, originStmtBuilder.length());
+        originStmtBuilder.append(" from ").append(olapTable.getName()).append(" group by ")
+                .append(groupByString);
+        originStmtBuilder.delete(originStmtBuilder.length() - 1, originStmtBuilder.length());
+        return originStmtBuilder.toString();
+    }
+
     // Handle show process list
     private void handleShowProcesslist() {
         ShowProcesslistStmt showStmt = (ShowProcesslistStmt) stmt;
@@ -808,7 +832,34 @@ public class ShowExecutor {
         try {
             Table table = db.getTable(showStmt.getTable());
             if (table == null) {
-                ErrorReport.reportAnalysisException(ErrorCode.ERR_BAD_TABLE_ERROR, showStmt.getTable());
+                if (showStmt.getType() != ShowCreateTableStmt.CreateTableType.MATERIALIZED_VIEW) {
+                    ErrorReport.reportAnalysisException(ErrorCode.ERR_BAD_TABLE_ERROR, showStmt.getTable());
+                } else {
+                    // For Sync Materialized View, it is a mv index inside OLAP table,
+                    // so we can not get it from database.
+                    for (Table tbl : db.getTables()) {
+                        if (tbl.getType() == Table.TableType.OLAP) {
+                            OlapTable olapTable = (OlapTable) tbl;
+                            Collection<MaterializedIndexMeta> visibleMaterializedViews =
+                                    olapTable.getVisibleIndexIdToMeta().values();
+                            for (MaterializedIndexMeta mvMeta : visibleMaterializedViews) {
+                                if (olapTable.getIndexNameById(mvMeta.getIndexId()).equals(showStmt.getTable())) {
+                                    if (mvMeta.getOriginStmt() == null) {
+                                        String mvName = olapTable.getIndexNameById(mvMeta.getIndexId());
+                                        rows.add(Lists.newArrayList(showStmt.getTable(), buildCreateMVSql(olapTable,
+                                                mvName, mvMeta), "utf8", "utf8_general_ci"));
+                                    } else {
+                                        rows.add(Lists.newArrayList(showStmt.getTable(), mvMeta.getOriginStmt(),
+                                                "utf8", "utf8_general_ci"));
+                                    }
+                                    resultSet = new ShowResultSet(ShowCreateTableStmt.getMaterializedViewMetaData(), rows);
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                    ErrorReport.reportAnalysisException(ErrorCode.ERR_BAD_TABLE_ERROR, showStmt.getTable());
+                }
             }
 
             List<String> createTableStmt = Lists.newArrayList();

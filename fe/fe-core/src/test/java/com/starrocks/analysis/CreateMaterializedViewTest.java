@@ -1215,7 +1215,7 @@ public class CreateMaterializedViewTest {
         try {
             UtFrameUtils.parseStmtWithNewParser(sql, connectContext);
         } catch (Exception e) {
-            Assert.assertEquals("Materialized view should contain distribution desc", e.getMessage());
+            Assert.fail(e.getMessage());
         }
     }
 

@@ -97,6 +97,11 @@ public class Column implements Writable {
     @SerializedName(value = "uniqueId")
     private int uniqueId;
 
+    // For single sync table materialized view, record each base column for the output column.
+    @SerializedName(value = "baseColumnName")
+    private String baseColumnName;
+    @SerializedName(value = "materializedColumnExpr")
+    private Expr materializedColumnExpr;
 
     public Column() {
         this.name = "";
@@ -182,6 +187,7 @@ public class Column implements Writable {
         this.stats = column.getStats();
         this.defineExpr = column.getDefineExpr();
         this.defaultExpr = column.defaultExpr;
+        this.baseColumnName = column.baseColumnName;
         Preconditions.checkArgument(this.type.isComplexType() ||
                 this.type.getPrimitiveType() != PrimitiveType.INVALID_TYPE);
         this.uniqueId = column.getUniqueId();
@@ -197,6 +203,8 @@ public class Column implements Writable {
 
     public String getDisplayName() {
         if (defineExpr == null) {
+            return name;
+        } else if ((defineExpr instanceof SlotRef) && name != null) {
             return name;
         } else {
             return defineExpr.toSql();
@@ -301,6 +309,25 @@ public class Column implements Writable {
 
     public String getComment() {
         return comment;
+    }
+
+    public boolean isMaterializedColumn() {
+        return materializedColumnExpr != null;
+    }
+
+    public String getBaseColumnName() {
+        // TODO: it may not be persistent because it can be deduced from `defineExpr`.
+        // if (baseColumnName == null) {
+        //     SlotRef refCol = getRefColumn();
+        //     if (refCol != null) {
+        //         baseColumnName = refCol.getColumnName();
+        //     }
+        //  }
+        return Strings.isNullOrEmpty(baseColumnName) ? name : baseColumnName;
+    }
+
+    public void setBaseColumnName(String baseColumnName) {
+        this.baseColumnName = baseColumnName;
     }
 
     public int getOlapColumnIndexSize() {
@@ -428,14 +455,24 @@ public class Column implements Writable {
         defineExpr = expr;
     }
 
-    public SlotRef getRefColumn() {
-        List<Expr> slots = new ArrayList<>();
+    public Expr materializedColumnExpr() {
+        if (materializedColumnExpr == null) {
+            return null;
+        }
+        return materializedColumnExpr.clone();
+    }
+
+    public void setMaterializedColumnExpr(Expr expr) {
+        materializedColumnExpr = expr;
+    }
+
+    public List<SlotRef> getRefColumns() {
+        List<SlotRef> slots = new ArrayList<>();
         if (defineExpr == null) {
             return null;
         } else {
             defineExpr.collect(SlotRef.class, slots);
-            Preconditions.checkArgument(slots.size() == 1);
-            return (SlotRef) slots.get(0);
+            return slots;
         }
     }
 

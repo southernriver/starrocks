@@ -137,6 +137,23 @@ public class DescribeStmtTest {
         Assert.assertEquals("Key", columns.get(3).getName());
         Assert.assertEquals("Default", columns.get(4).getName());
         Assert.assertEquals("Extra", columns.get(5).getName());
+
+        List<List<String>> resultRows = execute.getResultRows();
+        Assert.assertEquals("store_id", resultRows.get(0).get(0));
+        Assert.assertEquals("int", resultRows.get(0).get(1));
+        Assert.assertEquals("YES", resultRows.get(0).get(2));
+
+        Assert.assertEquals("mv_sum_sale_amt", resultRows.get(1).get(0));
+        Assert.assertEquals("bigint", resultRows.get(1).get(1));
+        Assert.assertEquals("YES", resultRows.get(1).get(2));
+    }
+
+    @Test
+    public void testDescSyncMV1() throws Exception {
+        String mv = "CREATE MATERIALIZED VIEW store_amt AS\n" +
+                "SELECT store_id, SUM(sale_amt) as sale_amt\n" +
+                "FROM sales_records\n" +
+                "GROUP BY store_id;";
     }
 
     @Test
@@ -154,6 +171,15 @@ public class DescribeStmtTest {
         Assert.assertEquals("Key", columns.get(3).getName());
         Assert.assertEquals("Default", columns.get(4).getName());
         Assert.assertEquals("Extra", columns.get(5).getName());
+
+        List<List<String>> resultRows = execute.getResultRows();
+        Assert.assertEquals("store_id", resultRows.get(0).get(0));
+        Assert.assertEquals("int", resultRows.get(0).get(1));
+        Assert.assertEquals("YES", resultRows.get(0).get(2));
+
+        Assert.assertEquals("mv_sum_sale_amt", resultRows.get(1).get(0));
+        Assert.assertEquals("bigint", resultRows.get(1).get(1));
+        Assert.assertEquals("YES", resultRows.get(1).get(2));
     }
 
     @Test
