@@ -336,6 +336,12 @@ struct THdfsTable {
 
     // The prefixes of locations of partitions in this table
     5: optional list<string> partition_prefixes
+
+    // hive table hive_column_names
+    6: optional string hive_column_names
+
+    // hive table hive_column_types
+    7: optional string hive_column_types
 }
 
 struct TFileTable {

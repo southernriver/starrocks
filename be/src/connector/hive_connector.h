@@ -61,6 +61,7 @@ private:
 
     Status _init_partition_values();
     Status _init_scanner(RuntimeState* state);
+    vectorized::HdfsScanner* _create_rcfile_jni_scanner(vectorized::HdfsScannerParams* scanner_params);
 
     // =====================================
     ObjectPool _pool;

@@ -41,6 +41,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import static com.starrocks.catalog.HiveTable.HIVE_TABLE_COLUMN_NAMES;
+import static com.starrocks.catalog.HiveTable.HIVE_TABLE_COLUMN_TYPES;
 import static com.starrocks.catalog.HudiTable.HUDI_BASE_PATH;
 import static com.starrocks.catalog.HudiTable.HUDI_TABLE_COLUMN_NAMES;
 import static com.starrocks.catalog.HudiTable.HUDI_TABLE_COLUMN_TYPES;
@@ -103,19 +105,19 @@ public class HiveMetastoreApiConverter {
                 .setFullSchema(toFullSchemasForHiveTable(table))
                 .setTableLocation(toTableLocation(table.getSd(), table.getParameters()))
                 .setCreateTime(table.getCreateTime());
+        Map<String, String> hiveProperties = toHiveProperties(table);
         if (table.getParameters().containsKey(THiveConstants.TABLE_TYPE)) {
-            Map<String, String> properties = Maps.newHashMap();
-            properties.put(THiveConstants.TABLE_TYPE, table.getParameters().get(THiveConstants.TABLE_TYPE));
+            hiveProperties.put(THiveConstants.TABLE_TYPE, table.getParameters().get(THiveConstants.TABLE_TYPE));
             if (table.getParameters().containsKey(THiveConstants.THIVE_PARTITION_COLUMNS)) {
                 String thivePartitionColumns = table.getParameters().get(THiveConstants.THIVE_PARTITION_COLUMNS);
-                properties.put(THiveConstants.THIVE_PARTITION_COLUMNS, thivePartitionColumns);
+                hiveProperties.put(THiveConstants.THIVE_PARTITION_COLUMNS, thivePartitionColumns);
             }
             if (table.getParameters().containsKey(THiveConstants.THIVE_PARTITION_TYPES)) {
-                properties.put(THiveConstants.THIVE_PARTITION_TYPES,
+                hiveProperties.put(THiveConstants.THIVE_PARTITION_TYPES,
                         table.getParameters().get(THiveConstants.THIVE_PARTITION_TYPES));
             }
-            tableBuilder.setProperties(properties);
         }
+        tableBuilder.setProperties(hiveProperties);
         return tableBuilder.build();
     }
 
@@ -236,6 +238,39 @@ public class HiveMetastoreApiConverter {
             }
         }
         return dataColumnNames;
+    }
+
+    public static Map<String, String> toHiveProperties(Table metastoreTable) {
+        Map<String, String> hiveProperties = Maps.newHashMap();
+
+        StringBuilder columnNamesBuilder = new StringBuilder();
+        StringBuilder columnTypesBuilder = new StringBuilder();
+        List<FieldSchema> allFields = metastoreTable.getSd().getCols();
+        boolean isFirst = true;
+        for (FieldSchema hiveField : allFields) {
+            if (!isFirst) {
+                columnNamesBuilder.append(",");
+                columnTypesBuilder.append("#");
+            }
+
+            String columnName = hiveField.getName().toLowerCase(Locale.ROOT);
+            String columnType = hiveField.getType().toLowerCase(Locale.ROOT);
+            columnNamesBuilder.append(columnName);
+            columnTypesBuilder.append(columnType);
+            isFirst = false;
+        }
+        for (FieldSchema hiveField : metastoreTable.getPartitionKeys()) {
+            columnNamesBuilder.append(",");
+            columnTypesBuilder.append("#");
+            String columnName = hiveField.getName().toLowerCase(Locale.ROOT);
+            String columnType = hiveField.getType().toLowerCase(Locale.ROOT);
+            columnNamesBuilder.append(columnName);
+            columnTypesBuilder.append(columnType);
+        }
+        hiveProperties.put(HIVE_TABLE_COLUMN_NAMES, columnNamesBuilder.toString());
+        hiveProperties.put(HIVE_TABLE_COLUMN_TYPES, columnTypesBuilder.toString());
+
+        return hiveProperties;
     }
 
     public static Map<String, String> toHudiProperties(Table metastoreTable,

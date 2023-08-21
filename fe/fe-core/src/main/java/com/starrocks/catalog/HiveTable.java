@@ -86,7 +86,8 @@ public class HiveTable extends Table implements HiveMetaStoreTable {
     private static final String JSON_KEY_DATA_COLUMN_NAMES = "dataColumnNames";
     private static final String JSON_KEY_HIVE_PROPERTIES = "hiveProperties";
     public static final String HIVE_METASTORE_URIS = "hive.metastore.uris";
-
+    public static final String HIVE_TABLE_COLUMN_NAMES = "hive.table.column.names";
+    public static final String HIVE_TABLE_COLUMN_TYPES = "hive.table.column.types";
     private String catalogName;
     private String hiveDbName;
     private String hiveTableName;
@@ -286,6 +287,9 @@ public class HiveTable extends Table implements HiveMetaStoreTable {
             tPartition.setLocation(tPartitionLocation);
             tHdfsTable.putToPartitions(partitionId, tPartition);
         }
+
+        tHdfsTable.setHive_column_names(hiveProperties.get(HIVE_TABLE_COLUMN_NAMES));
+        tHdfsTable.setHive_column_types(hiveProperties.get(HIVE_TABLE_COLUMN_TYPES));
 
         TTableDescriptor tTableDescriptor = new TTableDescriptor(id, TTableType.HDFS_TABLE, fullSchema.size(),
                 0, hiveTableName, hiveDbName);

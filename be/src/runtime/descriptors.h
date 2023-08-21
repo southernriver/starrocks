@@ -171,6 +171,9 @@ public:
     virtual bool is_partition_col(const SlotDescriptor* slot) const;
     virtual int get_partition_col_index(const SlotDescriptor* slot) const;
     virtual HdfsPartitionDescriptor* get_partition(int64_t partition_id) const;
+    const std::string& get_hive_column_names() const {return _hive_column_names;}
+    const std::string& get_hive_column_types() const {return _hive_column_types;}
+    const std::vector<TColumn>& get_partition_columns() const { return _partition_columns; }
 
     Status create_key_exprs(RuntimeState* state, ObjectPool* pool, int32_t chunk_size) {
         for (auto& part : _partition_id_to_desc_map) {
@@ -185,6 +188,8 @@ protected:
     std::vector<TColumn> _partition_columns;
     std::map<int64_t, HdfsPartitionDescriptor*> _partition_id_to_desc_map;
     std::string _table_location;
+    std::string _hive_column_names;
+    std::string _hive_column_types;
 };
 
 class HdfsTableDescriptor : public HiveTableDescriptor {

@@ -9,13 +9,15 @@ public enum RemoteFileInputFormat {
     UNKNOWN,
     PARQUET,
     ORC,
-    TEXT;
+    TEXT,
+    RC_FILE;
 
     private static final ImmutableMap<String, RemoteFileInputFormat> VALID_INPUT_FORMATS =
             new ImmutableMap.Builder<String, RemoteFileInputFormat>()
                     .put("org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat", PARQUET)
                     .put("org.apache.hadoop.hive.ql.io.orc.OrcInputFormat", ORC)
                     .put("org.apache.hadoop.mapred.TextInputFormat", TEXT)
+                    .put("org.apache.hadoop.hive.ql.io.RCFileInputFormat", RC_FILE)
                     .build();
     private static final ImmutableMap<String, Boolean> FILE_FORMAT_SPLITTABLE_INFOS =
             new ImmutableMap.Builder<String, Boolean>()
@@ -23,6 +25,7 @@ public enum RemoteFileInputFormat {
                     .put("org.apache.hudi.hadoop.HoodieParquetInputFormat", true)
                     .put("org.apache.hadoop.hive.ql.io.orc.OrcInputFormat", true)
                     .put("org.apache.hadoop.mapred.TextInputFormat", true)
+                    .put("org.apache.hadoop.hive.ql.io.RCFileInputFormat", true)
                     .build();
 
     public static RemoteFileInputFormat fromHdfsInputFormatClass(String className) {
@@ -41,6 +44,8 @@ public enum RemoteFileInputFormat {
                 return THdfsFileFormat.ORC;
             case TEXT:
                 return THdfsFileFormat.TEXT;
+            case RC_FILE:
+                return THdfsFileFormat.RC_FILE;
             default:
                 break;
         }

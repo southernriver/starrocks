@@ -133,6 +133,8 @@ HdfsTableDescriptor::HdfsTableDescriptor(const TTableDescriptor& tdesc, ObjectPo
         auto* partition = pool->add(new HdfsPartitionDescriptor(tdesc.hdfsTable, entry.second));
         _partition_id_to_desc_map[entry.first] = partition;
     }
+    _hive_column_names = tdesc.hdfsTable.hive_column_names;
+    _hive_column_types = tdesc.hdfsTable.hive_column_types;
 }
 
 FileTableDescriptor::FileTableDescriptor(const TTableDescriptor& tdesc, ObjectPool* pool)
