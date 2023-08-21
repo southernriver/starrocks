@@ -15,24 +15,24 @@
 namespace starrocks::vectorized {
 
 bool PredicateParser::can_pushdown(const ColumnPredicate* predicate) const {
-    RETURN_IF(predicate->column_id() >= _schema.num_columns(), false);
-    const TabletColumn& column = _schema.column(predicate->column_id());
-    return _schema.keys_type() == KeysType::PRIMARY_KEYS ||
+    RETURN_IF(predicate->column_id() >= _schema->num_columns(), false);
+    const TabletColumn& column = _schema->column(predicate->column_id());
+    return _schema->keys_type() == KeysType::PRIMARY_KEYS ||
            column.aggregation() == FieldAggregationMethod::OLAP_FIELD_AGGREGATION_NONE;
 }
 
 bool PredicateParser::can_pushdown(const SlotDescriptor* slot_desc) const {
-    const size_t index = _schema.field_index(slot_desc->col_name());
-    CHECK(index <= _schema.num_columns());
-    const TabletColumn& column = _schema.column(index);
-    return _schema.keys_type() == KeysType::PRIMARY_KEYS ||
+    const size_t index = _schema->field_index(slot_desc->col_name());
+    CHECK(index <= _schema->num_columns());
+    const TabletColumn& column = _schema->column(index);
+    return _schema->keys_type() == KeysType::PRIMARY_KEYS ||
            column.aggregation() == FieldAggregationMethod::OLAP_FIELD_AGGREGATION_NONE;
 }
 
 ColumnPredicate* PredicateParser::parse_thrift_cond(const TCondition& condition) const {
-    const size_t index = _schema.field_index(condition.column_name);
-    RETURN_IF(index >= _schema.num_columns(), nullptr);
-    const TabletColumn& col = _schema.column(index);
+    const size_t index = _schema->field_index(condition.column_name);
+    RETURN_IF(index >= _schema->num_columns(), nullptr);
+    const TabletColumn& col = _schema->column(index);
     auto precision = col.precision();
     auto scale = col.scale();
     auto type = TypeUtils::to_storage_format_v2(col.type());
@@ -74,9 +74,9 @@ ColumnPredicate* PredicateParser::parse_thrift_cond(const TCondition& condition)
 
 StatusOr<ColumnPredicate*> PredicateParser::parse_expr_ctx(const SlotDescriptor& slot_desc, RuntimeState* state,
                                                            ExprContext* expr_ctx) const {
-    const size_t column_id = _schema.field_index(slot_desc.col_name());
-    RETURN_IF(column_id >= _schema.num_columns(), nullptr);
-    const TabletColumn& col = _schema.column(column_id);
+    const size_t column_id = _schema->field_index(slot_desc.col_name());
+    RETURN_IF(column_id >= _schema->num_columns(), nullptr);
+    const TabletColumn& col = _schema->column(column_id);
     auto precision = col.precision();
     auto scale = col.scale();
     auto type = TypeUtils::to_storage_format_v2(col.type());

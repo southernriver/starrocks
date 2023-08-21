@@ -32,6 +32,8 @@
 #include "json2pb/json_to_pb.h"
 #include "json2pb/pb_to_json.h"
 #include "storage/olap_common.h"
+#include "storage/tablet_schema.h"
+#include "storage/tablet_schema_cache.h"
 
 namespace starrocks {
 
@@ -67,6 +69,30 @@ public:
     void set_version(Version version) {
         _rowset_meta_pb->set_start_version(version.first);
         _rowset_meta_pb->set_end_version(version.second);
+    }
+
+    static bool check_schema_validation(const RowsetMetaPB& rowset_meta_pb) {
+        if (!config::force_reset_tablet_meta) {
+            return true;
+        }
+        std::unordered_set<int32_t> id_set;
+        bool valid = true;
+        std::stringstream record;
+        for (int i = 0; i < rowset_meta_pb.tablet_schema().column_size(); i++) {
+            const auto& column = rowset_meta_pb.tablet_schema().column(i);
+            int32_t unique_id = column.unique_id();
+            record << unique_id << ": " << column.name() << "\n";
+            if (id_set.count(unique_id) > 0) {
+                valid = false;
+            }
+            id_set.insert(unique_id);
+        }
+
+        if (!valid) {
+            LOG(WARNING) << "Fail to deserialize error rowset meta, : "
+                         << ", tablet_id: " << rowset_meta_pb.tablet_id() << ", record: " << record.str();
+        }
+        return valid;
     }
 
     bool has_version() const { return _rowset_meta_pb->has_start_version() && _rowset_meta_pb->has_end_version(); }
@@ -117,7 +143,12 @@ public:
 
     int64_t num_segments() const { return _rowset_meta_pb->num_segments(); }
 
-    void to_rowset_pb(RowsetMetaPB* rs_meta_pb) const { *rs_meta_pb = *_rowset_meta_pb; }
+    void to_rowset_pb(RowsetMetaPB* rs_meta_pb) const {
+        *rs_meta_pb = *_rowset_meta_pb;
+        if (_schema) {
+            _schema->to_schema_pb(rs_meta_pb->mutable_tablet_schema());
+        }
+    }
 
     RowsetMetaPB to_rowset_pb() const {
         RowsetMetaPB meta_pb;
@@ -176,11 +207,40 @@ public:
 
     uint32_t get_num_delete_files() const { return _rowset_meta_pb->num_delete_files(); }
 
-    const RowsetMetaPB& get_meta_pb() const { return *_rowset_meta_pb; }
+    const RowsetMetaPB get_meta_pb() const {
+        RowsetMetaPB rowset_meta_pb = *_rowset_meta_pb;
+
+        if (_schema) {
+            _schema->to_schema_pb(rowset_meta_pb.mutable_tablet_schema());
+        }
+        return rowset_meta_pb;
+    }
+
+    void set_tablet_schema(const TabletSchemaCSPtr& tablet_schema_ptr) {
+        if (check_schema_validation(*_rowset_meta_pb)) {
+            _schema = TabletSchemaCache::instance()->insert(tablet_schema_ptr->to_key());
+        }
+    }
+
+    void reset_schema() {
+        _schema = nullptr;
+        delete _rowset_meta_pb->release_tablet_schema();
+    }
+
+    const TabletSchemaCSPtr tablet_schema() { return _schema; }
 
 private:
     bool _deserialize_from_pb(std::string_view value) {
-        return _rowset_meta_pb->ParseFromArray(value.data(), value.size());
+        if (!_rowset_meta_pb->ParseFromArray(value.data(), value.size())) {
+            return false;
+        }
+        if (_rowset_meta_pb->has_tablet_schema()) {
+            if (check_schema_validation(*_rowset_meta_pb)) {
+                _schema = TabletSchemaCache::instance()->insert(_rowset_meta_pb->tablet_schema().SerializeAsString());
+            }
+            delete _rowset_meta_pb->release_tablet_schema();
+        }
+        return true;
     }
 
     void _init() {
@@ -216,6 +276,7 @@ private:
     std::unique_ptr<RowsetMetaPB> _rowset_meta_pb;
     RowsetId _rowset_id;
     bool _is_removed_from_rowset_meta = false;
+    TabletSchemaCSPtr _schema = nullptr;
 };
 
 } // namespace starrocks

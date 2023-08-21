@@ -49,6 +49,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import javax.annotation.Nullable;
 
 /**
@@ -123,6 +124,9 @@ public class Table extends MetaObject implements Writable {
     // table(view)'s comment
     @SerializedName(value = "comment")
     protected String comment = "";
+    // table readwrite lock
+    protected ReentrantReadWriteLock rwLock = new ReentrantReadWriteLock(true);
+    public volatile boolean isDropped = false;
 
     // not serialized field
     // record all materialized views based on this Table
@@ -452,6 +456,14 @@ public class Table extends MetaObject implements Writable {
     @Override
     public String toString() {
         return "Table [id=" + id + ", name=" + name + ", type=" + type + "]";
+    }
+
+    public void readLock() {
+        this.rwLock.readLock().lock();
+    }
+
+    public void readUnlock() {
+        this.rwLock.readLock().unlock();
     }
 
     /*

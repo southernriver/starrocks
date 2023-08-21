@@ -179,7 +179,7 @@ public class OlapTable extends Table implements GsonPostProcessable {
     @SerializedName(value = "tableProperty")
     protected TableProperty tableProperty;
 
-    private int maxColUniqueId = -1;
+    private int maxColUniqueId = Column.COLUMN_UNIQUE_ID_INIT_VALUE;
 
     public OlapTable() {
         this(TableType.OLAP);
@@ -1238,7 +1238,9 @@ public class OlapTable extends Table implements GsonPostProcessable {
 
         tempPartitions.write(out);
 
-        out.writeInt(maxColUniqueId);
+        if (GlobalStateMgr.withStateJournalVersion().moreThanOrEquals(FeMetaVersion.VERSION_96)) {
+            out.writeInt(maxColUniqueId);
+        }
     }
 
     @Override
@@ -1384,7 +1386,6 @@ public class OlapTable extends Table implements GsonPostProcessable {
         }
 
 
-        // reserve
         if (GlobalStateMgr.getCurrentStateJournalVersion() >= FeMetaVersion.VERSION_96) {
             maxColUniqueId = in.readInt();
         }
@@ -2015,6 +2016,24 @@ public class OlapTable extends Table implements GsonPostProcessable {
         tableProperty.modifyTableProperties(properties);
         tableProperty.setForeignKeyConstraints(foreignKeyConstraints);
     }
+
+    public Boolean getUseLightSchemaChange() {
+        if (tableProperty != null) {
+            return tableProperty.getUseSchemaLightChange();
+        }
+        // property is set false by default
+        return false;
+    }
+
+    public void setUseLightSchemaChange(boolean useLightSchemaChange) {
+        if (tableProperty == null) {
+            tableProperty = new TableProperty(new HashMap<>());
+        }
+        tableProperty.modifyTableProperties(PropertyAnalyzer.PROPERTIES_USE_LIGHT_SCHEMA_CHANGE,
+                Boolean.valueOf(useLightSchemaChange).toString());
+        tableProperty.buildUseLightSchemaChange();
+    }
+
 
     @Override
     public void onCreate() {

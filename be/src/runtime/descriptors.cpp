@@ -52,6 +52,7 @@ SlotDescriptor::SlotDescriptor(const TSlotDescriptor& tdesc)
           _parent(tdesc.parent),
           _null_indicator_offset(tdesc.nullIndicatorByte, tdesc.nullIndicatorBit),
           _col_name(tdesc.colName),
+          _col_unique_id(tdesc.col_unique_id),
           _slot_idx(tdesc.slotIdx),
           _slot_size(_type.get_slot_size()),
           _is_materialized(tdesc.isMaterialized) {}
@@ -62,6 +63,7 @@ SlotDescriptor::SlotDescriptor(const PSlotDescriptor& pdesc)
           _parent(pdesc.parent()),
           _null_indicator_offset(pdesc.null_indicator_byte(), pdesc.null_indicator_bit()),
           _col_name(pdesc.col_name()),
+          _col_unique_id(-1),
           _slot_idx(pdesc.slot_idx()),
           _slot_size(_type.get_slot_size()),
           _is_materialized(pdesc.is_materialized()) {}

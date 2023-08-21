@@ -83,6 +83,7 @@ import com.starrocks.task.PushTask;
 import com.starrocks.thrift.TBrokerRangeDesc;
 import com.starrocks.thrift.TBrokerScanRange;
 import com.starrocks.thrift.TBrokerScanRangeParams;
+import com.starrocks.thrift.TColumn;
 import com.starrocks.thrift.TDescriptorTable;
 import com.starrocks.thrift.TFileFormatType;
 import com.starrocks.thrift.TFileType;
@@ -106,6 +107,7 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -473,6 +475,11 @@ public class SparkLoadJob extends BulkLoadJob {
                             long indexId = index.getId();
                             int schemaHash = indexToSchemaHash.get(indexId);
 
+                            List<TColumn> columnsDesc = new ArrayList<TColumn>();
+                            for (Column column : table.getSchemaByIndexId(indexId)) {
+                                columnsDesc.add(column.toThrift());
+                            }
+
                             int bucket = 0;
                             for (Tablet tablet : index.getTablets()) {
                                 long tabletId = tablet.getId();
@@ -489,12 +496,13 @@ public class SparkLoadJob extends BulkLoadJob {
                                         long replicaId = replica.getId();
                                         tabletAllReplicas.add(replicaId);
                                         long backendId = replica.getBackendId();
-                                        Backend backend = GlobalStateMgr.getCurrentState().getCurrentSystemInfo()
+                                        Backend backend = GlobalStateMgr.getCurrentSystemInfo()
                                                 .getBackend(backendId);
 
                                         pushTask(backendId, tableId, partitionId, indexId, tabletId,
                                                 replicaId, schemaHash, params, batchTask, tabletMetaStr,
-                                                backend, replica, tabletFinishedReplicas, TTabletType.TABLET_TYPE_DISK);
+                                                backend, replica, tabletFinishedReplicas,
+                                                TTabletType.TABLET_TYPE_DISK, columnsDesc);
                                     }
 
                                     if (tabletAllReplicas.size() == 0) {
@@ -522,7 +530,7 @@ public class SparkLoadJob extends BulkLoadJob {
                                     pushTask(backend.getId(), tableId, partitionId, indexId, tabletId,
                                             tabletId, schemaHash, params, batchTask, tabletMetaStr,
                                             backend, new Replica(tabletId, backendId, -1, NORMAL),
-                                            tabletFinishedReplicas, TTabletType.TABLET_TYPE_LAKE);
+                                            tabletFinishedReplicas, TTabletType.TABLET_TYPE_LAKE, columnsDesc);
 
                                     if (tabletFinishedReplicas.contains(tabletId)) {
                                         quorumTablets.add(tabletId);
@@ -562,7 +570,7 @@ public class SparkLoadJob extends BulkLoadJob {
                           AgentBatchTask batchTask,
                           String tabletMetaStr,
                           Backend backend, Replica replica, Set<Long> tabletFinishedReplicas,
-                          TTabletType tabletType)
+                          TTabletType tabletType, List<TColumn> columnDesc)
             throws AnalysisException {
 
         if (!tabletToSentReplicaPushTask.containsKey(tabletId)
@@ -602,12 +610,13 @@ public class SparkLoadJob extends BulkLoadJob {
                         tBrokerRangeDesc.file_size);
             }
 
+            // TODO: differ local olap table and lake table
             PushTask pushTask = new PushTask(backendId, dbId, tableId, partitionId,
                     indexId, tabletId, replicaId, schemaHash,
                     0, id, TPushType.LOAD_V2,
                     TPriority.NORMAL, transactionId, taskSignature,
                     tBrokerScanRange, params.tDescriptorTable,
-                    params.useVectorized, timezone, tabletType);
+                    params.useVectorized, timezone, tabletType, columnDesc);
             if (AgentTaskQueue.addTask(pushTask)) {
                 batchTask.addTask(pushTask);
                 if (!tabletToSentReplicaPushTask.containsKey(tabletId)) {

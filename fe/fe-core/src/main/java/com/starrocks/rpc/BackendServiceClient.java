@@ -29,6 +29,8 @@ import com.starrocks.proto.PCancelPlanFragmentRequest;
 import com.starrocks.proto.PCancelPlanFragmentResult;
 import com.starrocks.proto.PExecBatchPlanFragmentsResult;
 import com.starrocks.proto.PExecPlanFragmentResult;
+import com.starrocks.proto.PFetchColIdsRequest;
+import com.starrocks.proto.PFetchColIdsResponse;
 import com.starrocks.proto.PFetchDataResult;
 import com.starrocks.proto.PPlanFragmentCancelReason;
 import com.starrocks.proto.PProxyRequest;
@@ -216,6 +218,18 @@ public class BackendServiceClient {
             throw new RpcException(address.hostname, e.getMessage());
         }
     }
+
+    public Future<PFetchColIdsResponse> getColIdsByTabletIds(TNetworkAddress address, PFetchColIdsRequest request)
+        throws RpcException {
+        try {
+            final PBackendService service = BrpcProxy.getBackendService(address);
+            return service.getColumnIdsByTabletIds(request);
+        } catch (Throwable e) {
+            LOG.warn("failed to get info, address={}:{}", address.getHostname(), address.getPort(), e);
+            throw new RpcException(address.hostname, e.getMessage());
+        }
+    }
+
 
     private static class SingletonHolder {
         private static final BackendServiceClient INSTANCE = new BackendServiceClient();

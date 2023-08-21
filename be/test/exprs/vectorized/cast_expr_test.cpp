@@ -2131,7 +2131,7 @@ TEST_F(VectorizedCastExprTest, json_to_array_with_const_input) {
 
 TEST_F(VectorizedCastExprTest, unsupported_test) {
     // can't cast arry<array<int>> to array<bool> rather than crash
-    expr_node.child_type = to_thrift(PrimitiveType::TYPE_ARRAY);
+    expr_node.child_type = to_thrift(LogicalType::TYPE_ARRAY);
     expr_node.child_type_desc = gen_multi_array_type_desc(to_thrift(TYPE_INT), 2);
     expr_node.type = gen_multi_array_type_desc(to_thrift(TYPE_BOOLEAN), 1);
 

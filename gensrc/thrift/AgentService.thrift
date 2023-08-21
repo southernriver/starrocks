@@ -104,6 +104,8 @@ struct TAlterTabletReqV2 {
     7: optional list<TAlterMaterializedViewParam> materialized_view_params
     8: optional TTabletType tablet_type
     9: optional i64 txn_id
+    10: optional list<Descriptors.TColumn> columns
+
 }
 
 struct TAlterMaterializedViewParam {
@@ -137,6 +139,7 @@ struct TPushReq {
     // 14 and 15 are used by spark load
     14: optional PlanNodes.TBrokerScanRange broker_scan_range
     15: optional Descriptors.TDescriptorTable desc_tbl
+    16: optional list<Descriptors.TColumn> columns_desc
 
     30: optional bool use_vectorized
     // 31 are used by spark load

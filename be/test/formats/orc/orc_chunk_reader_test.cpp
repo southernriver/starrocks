@@ -1814,7 +1814,7 @@ TEST_F(OrcChunkReaderTest, TestReadStructArrayMap) {
         */
         TypeDescriptor c2_map = TypeDescriptor::from_primtive_type(LogicalType::TYPE_MAP);
         c2_map.children.push_back(TypeDescriptor::from_primtive_type(LogicalType::TYPE_INT));
-        c2_map.children.push_back(TypeDescriptor::from_primtive_type(LogicalType::INVALID_TYPE));
+        c2_map.children.push_back(TypeDescriptor::from_primtive_type(LogicalType::TYPE_UNKNOWN));
 
         TypeDescriptor c2_array = TypeDescriptor::from_primtive_type(LogicalType::TYPE_ARRAY);
         c2_array.children.push_back(c2_map);

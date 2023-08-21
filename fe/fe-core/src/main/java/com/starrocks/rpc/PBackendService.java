@@ -8,6 +8,8 @@ import com.starrocks.proto.PCancelPlanFragmentRequest;
 import com.starrocks.proto.PCancelPlanFragmentResult;
 import com.starrocks.proto.PExecBatchPlanFragmentsResult;
 import com.starrocks.proto.PExecPlanFragmentResult;
+import com.starrocks.proto.PFetchColIdsRequest;
+import com.starrocks.proto.PFetchColIdsResponse;
 import com.starrocks.proto.PFetchDataResult;
 import com.starrocks.proto.PProxyRequest;
 import com.starrocks.proto.PProxyResult;
@@ -49,5 +51,8 @@ public interface PBackendService {
 
     @ProtobufRPC(serviceName = "PBackendService", methodName = "execute_command", onceTalkTimeout = 60000)
     Future<ExecuteCommandResultPB> executeCommandAsync(ExecuteCommandRequestPB request);
+
+    @ProtobufRPC(serviceName = "PBackendService", methodName = "get_column_ids_by_tablet_ids", onceTalkTimeout = 60000)
+    Future<PFetchColIdsResponse> getColumnIdsByTabletIds(PFetchColIdsRequest request);
 }
 

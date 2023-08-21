@@ -547,17 +547,17 @@ void FileReaderTest::_create_int_conjunct_ctxs(TExprOpcode::type opcode, SlotId 
     TExprNode node0;
     node0.node_type = TExprNodeType::BINARY_PRED;
     node0.opcode = opcode;
-    node0.child_type = TLogicalType::INT;
+    node0.child_type = TPrimitiveType::INT;
     node0.num_children = 2;
     node0.__isset.opcode = true;
     node0.__isset.child_type = true;
-    node0.type = gen_type_desc(TLogicalType::BOOLEAN);
+    node0.type = gen_type_desc(TPrimitiveType::BOOLEAN);
     node0.use_vectorized = true;
     nodes.emplace_back(node0);
 
     TExprNode node1;
     node1.node_type = TExprNodeType::SLOT_REF;
-    node1.type = gen_type_desc(TLogicalType::INT);
+    node1.type = gen_type_desc(TPrimitiveType::INT);
     node1.num_children = 0;
     TSlotRef t_slot_ref = TSlotRef();
     t_slot_ref.slot_id = slot_id;
@@ -569,7 +569,7 @@ void FileReaderTest::_create_int_conjunct_ctxs(TExprOpcode::type opcode, SlotId 
 
     TExprNode node2;
     node2.node_type = TExprNodeType::INT_LITERAL;
-    node2.type = gen_type_desc(TLogicalType::INT);
+    node2.type = gen_type_desc(TPrimitiveType::INT);
     node2.num_children = 0;
     TIntLiteral int_literal;
     int_literal.value = value;
@@ -596,17 +596,17 @@ void FileReaderTest::_create_string_conjunct_ctxs(TExprOpcode::type opcode, Slot
     TExprNode node0;
     node0.node_type = TExprNodeType::BINARY_PRED;
     node0.opcode = opcode;
-    node0.child_type = TLogicalType::VARCHAR;
+    node0.child_type = TPrimitiveType::VARCHAR;
     node0.num_children = 2;
     node0.__isset.opcode = true;
     node0.__isset.child_type = true;
-    node0.type = gen_type_desc(TLogicalType::BOOLEAN);
+    node0.type = gen_type_desc(TPrimitiveType::BOOLEAN);
     node0.use_vectorized = true;
     nodes.emplace_back(node0);
 
     TExprNode node1;
     node1.node_type = TExprNodeType::SLOT_REF;
-    node1.type = gen_type_desc(TLogicalType::VARCHAR);
+    node1.type = gen_type_desc(TPrimitiveType::VARCHAR);
     node1.num_children = 0;
     TSlotRef t_slot_ref = TSlotRef();
     t_slot_ref.slot_id = slot_id;
@@ -618,7 +618,7 @@ void FileReaderTest::_create_string_conjunct_ctxs(TExprOpcode::type opcode, Slot
 
     TExprNode node2;
     node2.node_type = TExprNodeType::STRING_LITERAL;
-    node2.type = gen_type_desc(TLogicalType::VARCHAR);
+    node2.type = gen_type_desc(TPrimitiveType::VARCHAR);
     node2.num_children = 0;
     TStringLiteral string_literal;
     string_literal.value = value;
@@ -1566,16 +1566,16 @@ TEST_F(FileReaderTest, TestReadMapColumnWithPartialMaterialize) {
     EXPECT_EQ(file_reader->_file_metadata->num_rows(), 8);
     TypeDescriptor type_map(LogicalType::TYPE_MAP);
     type_map.children.emplace_back(TypeDescriptor::from_primtive_type(LogicalType::TYPE_VARCHAR));
-    type_map.children.emplace_back(TypeDescriptor::from_primtive_type(LogicalType::INVALID_TYPE));
+    type_map.children.emplace_back(TypeDescriptor::from_primtive_type(LogicalType::TYPE_UNKNOWN));
 
     TypeDescriptor type_map_map(LogicalType::TYPE_MAP);
-    type_map_map.children.emplace_back(TypeDescriptor::from_primtive_type(LogicalType::INVALID_TYPE));
+    type_map_map.children.emplace_back(TypeDescriptor::from_primtive_type(LogicalType::TYPE_UNKNOWN));
     type_map_map.children.emplace_back(type_map);
 
     TypeDescriptor type_array(LogicalType::TYPE_ARRAY);
     type_array.children.emplace_back(TypeDescriptor::from_primtive_type(LogicalType::TYPE_INT));
     TypeDescriptor type_map_array(LogicalType::TYPE_MAP);
-    type_map_array.children.emplace_back(TypeDescriptor::from_primtive_type(LogicalType::INVALID_TYPE));
+    type_map_array.children.emplace_back(TypeDescriptor::from_primtive_type(LogicalType::TYPE_UNKNOWN));
     type_map_array.children.emplace_back(type_array);
 
     vectorized::ChunkPtr chunk = std::make_shared<vectorized::Chunk>();

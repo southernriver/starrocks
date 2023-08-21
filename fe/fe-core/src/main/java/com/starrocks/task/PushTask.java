@@ -31,6 +31,7 @@ import com.starrocks.analysis.Predicate;
 import com.starrocks.analysis.SlotRef;
 import com.starrocks.common.MarkedCountDownLatch;
 import com.starrocks.thrift.TBrokerScanRange;
+import com.starrocks.thrift.TColumn;
 import com.starrocks.thrift.TCondition;
 import com.starrocks.thrift.TDescriptorTable;
 import com.starrocks.thrift.TPriority;
@@ -73,11 +74,14 @@ public class PushTask extends AgentTask {
 
     private TTabletType tabletType;
 
+    // for light schema change
+    private List<TColumn> columnsDesc = null;
+
     public PushTask(TResourceInfo resourceInfo, long backendId, long dbId, long tableId, long partitionId,
                     long indexId, long tabletId, long replicaId, int schemaHash, long version,
                     int timeoutSecond, long loadJobId, TPushType pushType,
                     List<Predicate> conditions, TPriority priority, TTaskType taskType,
-                    long transactionId, long signature) {
+                    long transactionId, long signature, List<TColumn> columnsDesc) {
         super(resourceInfo, backendId, taskType, dbId, tableId, partitionId, indexId, tabletId, signature);
         this.replicaId = replicaId;
         this.schemaHash = schemaHash;
@@ -94,6 +98,7 @@ public class PushTask extends AgentTask {
         this.tBrokerScanRange = null;
         this.tDescriptorTable = null;
         this.useVectorized = true;
+        this.columnsDesc = columnsDesc;
     }
 
     // for cancel delete
@@ -110,10 +115,11 @@ public class PushTask extends AgentTask {
     public PushTask(long backendId, long dbId, long tableId, long partitionId, long indexId, long tabletId,
                     long replicaId, int schemaHash, int timeoutSecond, long loadJobId, TPushType pushType,
                     TPriority priority, long transactionId, long signature, TBrokerScanRange tBrokerScanRange,
-                    TDescriptorTable tDescriptorTable, boolean useVectorized, String timezone, TTabletType tabletType) {
+                    TDescriptorTable tDescriptorTable, boolean useVectorized, String timezone,
+            TTabletType tabletType, List<TColumn> columnsDesc) {
         this(null, backendId, dbId, tableId, partitionId, indexId,
                 tabletId, replicaId, schemaHash, -1, timeoutSecond, loadJobId, pushType, null,
-                priority, TTaskType.REALTIME_PUSH, transactionId, signature);
+                priority, TTaskType.REALTIME_PUSH, transactionId, signature, columnsDesc);
         this.tBrokerScanRange = tBrokerScanRange;
         this.tDescriptorTable = tDescriptorTable;
         this.useVectorized = useVectorized;
@@ -189,6 +195,7 @@ public class PushTask extends AgentTask {
                 LOG.warn("unknown push type. type: " + pushType.name());
                 break;
         }
+        request.setColumns_desc(columnsDesc);
 
         return request;
     }

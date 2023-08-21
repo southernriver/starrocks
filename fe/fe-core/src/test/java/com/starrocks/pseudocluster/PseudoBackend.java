@@ -17,6 +17,8 @@ import com.starrocks.proto.PCancelPlanFragmentRequest;
 import com.starrocks.proto.PCancelPlanFragmentResult;
 import com.starrocks.proto.PExecBatchPlanFragmentsResult;
 import com.starrocks.proto.PExecPlanFragmentResult;
+import com.starrocks.proto.PFetchColIdsRequest;
+import com.starrocks.proto.PFetchColIdsResponse;
 import com.starrocks.proto.PFetchDataResult;
 import com.starrocks.proto.PProxyRequest;
 import com.starrocks.proto.PProxyResult;
@@ -940,6 +942,11 @@ public class PseudoBackend {
         @Override
         public Future<ExecuteCommandResultPB> executeCommandAsync(ExecuteCommandRequestPB request) {
             throw new org.apache.commons.lang3.NotImplementedException("TODO");
+        }
+
+        @Override
+        public Future<PFetchColIdsResponse> getColumnIdsByTabletIds(PFetchColIdsRequest request) {
+            return null;
         }
     }
 

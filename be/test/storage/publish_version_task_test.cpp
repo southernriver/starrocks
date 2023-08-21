@@ -70,11 +70,11 @@ public:
         TabletManager* tablet_manager = starrocks::StorageEngine::instance()->tablet_manager();
         TabletSharedPtr tablet = tablet_manager->get_tablet(12345);
         ASSERT_TRUE(tablet != nullptr);
-        const TabletSchema& tablet_schema = tablet->tablet_schema();
+        const TabletSchemaCSPtr& tablet_schema = tablet->tablet_schema();
 
         // create rowset
         RowsetWriterContext rowset_writer_context;
-        create_rowset_writer_context(&rowset_writer_context, tablet->schema_hash_path(), &tablet_schema);
+        create_rowset_writer_context(&rowset_writer_context, tablet->schema_hash_path(), tablet_schema);
         std::unique_ptr<RowsetWriter> rowset_writer;
         ASSERT_TRUE(RowsetFactory::create_rowset_writer(rowset_writer_context, &rowset_writer).ok());
 
@@ -125,7 +125,7 @@ public:
     }
 
     static void create_rowset_writer_context(RowsetWriterContext* rowset_writer_context,
-                                             const std::string& schema_hash_path, const TabletSchema* tablet_schema) {
+                                             const std::string& schema_hash_path, const TabletSchemaCSPtr& tablet_schema) {
         RowsetId rowset_id;
         rowset_id.init(10000);
         rowset_writer_context->rowset_id = rowset_id;
@@ -139,7 +139,7 @@ public:
         rowset_writer_context->version.second = 2;
     }
 
-    static void rowset_writer_add_rows(std::unique_ptr<RowsetWriter>& writer, const TabletSchema& tablet_schema) {
+    static void rowset_writer_add_rows(std::unique_ptr<RowsetWriter>& writer, const TabletSchemaCSPtr& tablet_schema) {
         std::vector<std::string> test_data;
         auto schema = ChunkHelper::convert_schema(tablet_schema);
         auto chunk = ChunkHelper::new_chunk(schema, 1024);
@@ -155,10 +155,10 @@ public:
         ASSERT_TRUE(st.ok()) << st.to_string() << ", version:" << writer->version();
     }
 
-    TSlotDescriptor _create_slot_desc(PrimitiveType type, const std::string& col_name, int col_pos) {
+    TSlotDescriptor _create_slot_desc(LogicalType type, const std::string& col_name, int col_pos) {
         TSlotDescriptorBuilder builder;
 
-        if (type == PrimitiveType::TYPE_VARCHAR || type == PrimitiveType::TYPE_CHAR) {
+        if (type == LogicalType::TYPE_VARCHAR || type == LogicalType::TYPE_CHAR) {
             return builder.string_type(1024).column_name(col_name).column_pos(col_pos).nullable(false).build();
         } else {
             return builder.type(type).column_name(col_name).column_pos(col_pos).nullable(false).build();
@@ -187,7 +187,7 @@ public:
     }
 
 private:
-    PrimitiveType _primitive_type[3] = {PrimitiveType::TYPE_INT, PrimitiveType::TYPE_VARCHAR, PrimitiveType::TYPE_INT};
+    LogicalType _primitive_type[3] = {LogicalType::TYPE_INT, LogicalType::TYPE_VARCHAR, LogicalType::TYPE_INT};
 
     std::string _names[3] = {"k1", "k2", "v1"};
     RuntimeState _runtime_state;

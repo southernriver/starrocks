@@ -18,7 +18,8 @@ namespace starrocks {
 
 SegmentRewriter::SegmentRewriter() = default;
 
-Status SegmentRewriter::rewrite(const std::string& src_path, const std::string& dest_path, const TabletSchema& tschema,
+Status SegmentRewriter::rewrite(const std::string& src_path, const std::string& dest_path,
+                                const std::shared_ptr<const TabletSchema>& tschema,
                                 std::vector<uint32_t>& column_ids,
                                 std::vector<std::unique_ptr<vectorized::Column>>& columns, uint32_t segment_id,
                                 const FooterPointerPB& partial_rowset_footer) {
@@ -48,7 +49,7 @@ Status SegmentRewriter::rewrite(const std::string& src_path, const std::string& 
     }
 
     SegmentWriterOptions opts;
-    SegmentWriter writer(std::move(wfile), segment_id, &tschema, opts);
+    SegmentWriter writer(std::move(wfile), segment_id, tschema, opts);
     RETURN_IF_ERROR(writer.init(column_ids, false, &footer));
 
     auto schema = ChunkHelper::convert_schema_to_format_v2(tschema, column_ids);
@@ -65,7 +66,7 @@ Status SegmentRewriter::rewrite(const std::string& src_path, const std::string& 
     return Status::OK();
 }
 
-Status SegmentRewriter::rewrite(const std::string& src_path, const TabletSchema& tschema,
+Status SegmentRewriter::rewrite(const std::string& src_path, const std::shared_ptr<const TabletSchema>& tschema,
                                 std::vector<uint32_t>& column_ids,
                                 std::vector<std::unique_ptr<vectorized::Column>>& columns, uint32_t segment_id,
                                 const FooterPointerPB& partial_rowset_footer) {
@@ -82,7 +83,7 @@ Status SegmentRewriter::rewrite(const std::string& src_path, const TabletSchema&
     ASSIGN_OR_RETURN(auto wfile, fs->new_writable_file(fopts, src_path));
 
     SegmentWriterOptions opts;
-    SegmentWriter writer(std::move(wfile), segment_id, &tschema, opts);
+    SegmentWriter writer(std::move(wfile), segment_id, tschema, opts);
     RETURN_IF_ERROR(writer.init(column_ids, false, &footer));
 
     auto schema = ChunkHelper::convert_schema_to_format_v2(tschema, column_ids);

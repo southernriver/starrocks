@@ -325,7 +325,7 @@ Status TabletMetaManager::get_json_meta(DataDir* store, TTabletId tablet_id, TSc
     TabletMeta tablet_meta;
     RETURN_IF_ERROR(get_tablet_meta(store, tablet_id, schema_hash, &tablet_meta));
 
-    if (tablet_meta.tablet_schema_ptr()->keys_type() != PRIMARY_KEYS) {
+    if (tablet_meta.tablet_schema()->keys_type() != PRIMARY_KEYS) {
         json2pb::Pb2JsonOptions json_options;
         json_options.pretty_json = true;
         tablet_meta.to_json(json_meta, json_options);

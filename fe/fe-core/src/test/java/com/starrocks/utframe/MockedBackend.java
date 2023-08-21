@@ -26,6 +26,9 @@ import com.starrocks.proto.PCancelPlanFragmentRequest;
 import com.starrocks.proto.PCancelPlanFragmentResult;
 import com.starrocks.proto.PExecBatchPlanFragmentsResult;
 import com.starrocks.proto.PExecPlanFragmentResult;
+import com.starrocks.proto.PFetchColIdsRequest;
+import com.starrocks.proto.PFetchColIdsResponse;
+import com.starrocks.proto.PFetchColIdsResponse.PFetchColIdsResultEntry;
 import com.starrocks.proto.PFetchDataResult;
 import com.starrocks.proto.PProxyRequest;
 import com.starrocks.proto.PProxyResult;
@@ -82,6 +85,8 @@ import com.starrocks.thrift.TUniqueId;
 import mockit.Mock;
 import mockit.MockUp;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
@@ -396,6 +401,29 @@ public class MockedBackend {
         @Override
         public Future<ExecuteCommandResultPB> executeCommandAsync(ExecuteCommandRequestPB request) {
             return null;
+        }
+
+        @Override
+        public Future<PFetchColIdsResponse> getColumnIdsByTabletIds(PFetchColIdsRequest request) {
+            return executor.submit(() -> {
+                PFetchColIdsResponse result = new PFetchColIdsResponse();
+                StatusPB pStatus = new StatusPB();
+                pStatus.statusCode = 0;
+
+                result.status = pStatus;
+                result.entries = new ArrayList<>();
+                PFetchColIdsResultEntry entry = new PFetchColIdsResultEntry();
+                entry.indexId = request.params.get(0).indexId;
+                entry.colNameToId = new HashMap<>();
+                entry.colNameToId.put("timestamp", 0);
+                entry.colNameToId.put("type", 1);
+                entry.colNameToId.put("error_code", 2);
+                entry.colNameToId.put("error_msg", 3);
+                entry.colNameToId.put("op_id", 4);
+                entry.colNameToId.put("op_time", 5);
+                result.entries.add(entry);
+                return result;
+            });
         }
     }
 }

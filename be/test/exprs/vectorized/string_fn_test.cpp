@@ -637,7 +637,7 @@ PARALLEL_TEST(VecStringFunctionsTest, splitChinese) {
 
         columns.emplace_back(str);
         columns.emplace_back(delim);
-        ColumnPtr result = StringFunctions::split(ctx.get(), columns).value();
+        ColumnPtr result = StringFunctions::split(ctx.get(), columns);
         auto* col_array = down_cast<ArrayColumn*>(ColumnHelper::get_data_column(result.get()));
         ASSERT_EQ(
                 "['1上海','北','京'], ['北','京','.','南','京','.','东','京'], ['北 ','南','*东……',''], "
@@ -664,7 +664,7 @@ PARALLEL_TEST(VecStringFunctionsTest, splitChinese) {
         ctx->set_constant_columns(columns);
         ASSERT_TRUE(
                 StringFunctions::split_prepare(ctx.get(), FunctionContext::FunctionStateScope::FRAGMENT_LOCAL).ok());
-        ColumnPtr result = StringFunctions::split(ctx.get(), columns).value();
+        ColumnPtr result = StringFunctions::split(ctx.get(), columns);
         ASSERT_EQ("['a','地',' ','区','b'], [], ['地','s','h','北','j',' ','京',' ','g'], [',']",
                   result->debug_string());
         ASSERT_TRUE(StringFunctions::split_close(ctx.get(), FunctionContext::FunctionStateScope::FRAGMENT_LOCAL).ok());
@@ -735,77 +735,77 @@ PARALLEL_TEST(VecStringFunctionsTest, str_to_map) {
     auto delim_const = ConstColumn::create(const_col, chunk_size);
 
     {
-        auto res = StringFunctions::str_to_map(nullptr, {array_str_null, only_null}).value();
+        auto res = StringFunctions::str_to_map(nullptr, {array_str_null, only_null});
         ASSERT_EQ(res->debug_string(), "CONST: NULL Size : 7");
     }
     {
-        auto res = StringFunctions::str_to_map(nullptr, {array_str_null, map_delimiter_nullable}).value();
+        auto res = StringFunctions::str_to_map(nullptr, {array_str_null, map_delimiter_nullable});
         ASSERT_EQ(res->debug_string(),
                   "[{'':NULL}, NULL, {'NULL':NULL}, {'ab':'b','':NULL}, {'a':'中囸','道c:d过’':NULL}, "
                   "{'a':':c:b:d','':NULL}, NULL]");
     }
     {
-        auto res = StringFunctions::str_to_map(nullptr, {array_str_null, map_delimiter_notnull}).value();
+        auto res = StringFunctions::str_to_map(nullptr, {array_str_null, map_delimiter_notnull});
         ASSERT_EQ(res->debug_string(),
                   "[{'':NULL}, NULL, {'NULL':NULL}, {'ab':'b','':NULL}, {'a':'中囸','道c:d过’':NULL}, "
                   "{'a':':c:b:d','':NULL}, {'a':'b:b','':NULL}]");
     }
     {
-        auto res = StringFunctions::str_to_map(nullptr, {array_str_null, delim_const_empty}).value();
+        auto res = StringFunctions::str_to_map(nullptr, {array_str_null, delim_const_empty});
         ASSERT_EQ(res->debug_string(),
                   "[{'':NULL}, NULL, {'N':'ULL'}, {'a':'b:b','':NULL}, {'a':':b中囸','道':'c:d过’'}, "
                   "{'a':':c:b:d','':NULL}, {'a':'b:b','':NULL}]");
     }
     {
-        auto res = StringFunctions::str_to_map(nullptr, {array_str_null, delim_const_ch}).value();
+        auto res = StringFunctions::str_to_map(nullptr, {array_str_null, delim_const_ch});
         ASSERT_EQ(res->debug_string(),
                   "[{'':NULL}, NULL, {'NULL':NULL}, {'ab:b':NULL,'':NULL}, {'a:b':'囸','道c:d过’':NULL}, "
                   "{'a:c:b:d':NULL,'':NULL}, {'ab:b':NULL,'':NULL}]");
     }
     {
-        auto res = StringFunctions::str_to_map(nullptr, {array_str_null, delim_const}).value();
+        auto res = StringFunctions::str_to_map(nullptr, {array_str_null, delim_const});
         ASSERT_EQ(res->debug_string(),
                   "[{'':NULL}, NULL, {'NULL':NULL}, {'ab':'b','':NULL}, {'a':'b中囸','道c':'d过’'}, "
                   "{'a':'c:b:d','':NULL}, {'ab':'b','':NULL}]");
     }
     ///
     {
-        auto res = StringFunctions::str_to_map(nullptr, {array_str_notnull, only_null}).value();
+        auto res = StringFunctions::str_to_map(nullptr, {array_str_notnull, only_null});
         ASSERT_EQ(res->debug_string(), "CONST: NULL Size : 7");
     }
     {
-        auto res = StringFunctions::str_to_map(nullptr, {array_str_notnull, map_delimiter_nullable}).value();
+        auto res = StringFunctions::str_to_map(nullptr, {array_str_notnull, map_delimiter_nullable});
         ASSERT_EQ(res->debug_string(),
                   "[{'':NULL}, {'中国':'shang海'}, {'':NULL}, {'ab':'b','':NULL}, "
                   "{'a':'中囸','道c:d过’':NULL,'道c:d过':NULL}, {'a':':c:b:d','':NULL}, NULL]");
     }
     {
-        auto res = StringFunctions::str_to_map(nullptr, {array_str_notnull, map_delimiter_notnull}).value();
+        auto res = StringFunctions::str_to_map(nullptr, {array_str_notnull, map_delimiter_notnull});
         ASSERT_EQ(res->debug_string(),
                   "[{'':NULL}, {'中':':shang海'}, {'':NULL}, {'ab':'b','':NULL}, "
                   "{'a':'中囸','道c:d过’':NULL,'道c:d过':NULL}, {'a':':c:b:d','':NULL}, {'a':'b:b','':NULL}]");
     }
     {
-        auto res = StringFunctions::str_to_map(nullptr, {array_str_notnull, delim_const_empty}).value();
+        auto res = StringFunctions::str_to_map(nullptr, {array_str_notnull, delim_const_empty});
         ASSERT_EQ(res->debug_string(),
                   "[{'':NULL}, {'中':'国:shang海'}, {'':NULL}, {'a':'b:b','':NULL}, {'a':':b中囸','道':'c:d过'}, "
                   "{'a':':c:b:d','':NULL}, {'a':'b:b','':NULL}]");
     }
     {
-        auto res = StringFunctions::str_to_map(nullptr, {array_str_notnull, delim_const_ch}).value();
+        auto res = StringFunctions::str_to_map(nullptr, {array_str_notnull, delim_const_ch});
         ASSERT_EQ(res->debug_string(),
                   "[{'':NULL}, {'':'国:shang海'}, {'':NULL}, {'ab:b':NULL,'':NULL}, "
                   "{'a:b':'囸','道c:d过’':NULL,'道c:d过':NULL}, {'a:c:b:d':NULL,'':NULL}, {'ab:b':NULL,'':NULL}]");
     }
     {
-        auto res = StringFunctions::str_to_map(nullptr, {array_str_notnull, delim_const}).value();
+        auto res = StringFunctions::str_to_map(nullptr, {array_str_notnull, delim_const});
         ASSERT_EQ(res->debug_string(),
                   "[{'':NULL}, {'中国':'shang海'}, {'':NULL}, {'ab':'b','':NULL}, {'a':'b中囸','道c':'d过'}, "
                   "{'a':'c:b:d','':NULL}, {'ab':'b','':NULL}]");
     }
     ///
     {
-        auto res = StringFunctions::str_to_map(nullptr, {only_null, only_null}).value();
+        auto res = StringFunctions::str_to_map(nullptr, {only_null, only_null});
         ASSERT_EQ(res->debug_string(), "CONST: NULL Size : 7");
     }
 }

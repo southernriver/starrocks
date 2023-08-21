@@ -21,14 +21,13 @@
 #include "column/column_helper.h"
 #include "column/fixed_length_column.h"
 #include "common/logging.h"
-#include "exec/hdfs_scanner.h"
-#include "exprs/binary_predicate.h"
+#include "exec/vectorized/hdfs_scanner.h"
+#include "exprs/vectorized/binary_predicate.h"
 #include "exprs/expr_context.h"
 #include "formats/parquet/column_chunk_reader.h"
 #include "formats/parquet/metadata.h"
 #include "formats/parquet/page_reader.h"
 #include "fs/fs.h"
-#include "io/shared_buffered_input_stream.h"
 #include "runtime/descriptor_helper.h"
 #include "runtime/mem_tracker.h"
 
@@ -66,11 +65,11 @@ inline TupleDescriptor* create_tuple_descriptor(RuntimeState* state, ObjectPool*
 }
 
 inline void make_column_info_vector(const TupleDescriptor* tuple_desc,
-                                    std::vector<HdfsScannerContext::ColumnInfo>* columns) {
+                                    std::vector<vectorized::HdfsScannerContext::ColumnInfo>* columns) {
     columns->clear();
     for (int i = 0; i < tuple_desc->slots().size(); i++) {
         SlotDescriptor* slot = tuple_desc->slots()[i];
-        HdfsScannerContext::ColumnInfo c;
+        vectorized::HdfsScannerContext::ColumnInfo c;
         c.col_name = slot->col_name();
         c.col_idx = i;
         c.slot_id = slot->id();
@@ -80,7 +79,7 @@ inline void make_column_info_vector(const TupleDescriptor* tuple_desc,
     }
 }
 
-inline void assert_equal_chunk(const Chunk* expected, const Chunk* actual) {
+inline void assert_equal_chunk(const vectorized::Chunk* expected, const vectorized::Chunk* actual) {
     if (expected->debug_columns() != actual->debug_columns()) {
         std::cout << expected->debug_columns() << std::endl;
         std::cout << actual->debug_columns() << std::endl;

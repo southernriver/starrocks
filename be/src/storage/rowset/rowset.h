@@ -24,6 +24,7 @@
 #include <atomic>
 #include <memory>
 #include <mutex>
+#include <utility>
 #include <vector>
 
 #include "common/statusor.h"
@@ -121,13 +122,13 @@ private:
 
 class Rowset : public std::enable_shared_from_this<Rowset> {
 public:
-    Rowset(const TabletSchema* schema, std::string rowset_path, RowsetMetaSharedPtr rowset_meta);
+    Rowset(const TabletSchemaCSPtr&, std::string rowset_path, RowsetMetaSharedPtr rowset_meta);
     Rowset(const Rowset&) = delete;
     const Rowset& operator=(const Rowset&) = delete;
 
     virtual ~Rowset();
 
-    static std::shared_ptr<Rowset> create(const TabletSchema* schema, std::string rowset_path,
+    static std::shared_ptr<Rowset> create(const TabletSchemaCSPtr& schema, std::string rowset_path,
                                           RowsetMetaSharedPtr rowset_meta) {
         return std::make_shared<Rowset>(schema, std::move(rowset_path), std::move(rowset_meta));
     }
@@ -142,8 +143,9 @@ public:
     Status reload();
     Status reload_segment(int32_t segment_id);
 
-    const TabletSchema& schema() const { return *_schema; }
-    void set_schema(const TabletSchema* schema) { _schema = schema; }
+    const TabletSchema& schema_ref() const { return *_schema; }
+    const TabletSchemaCSPtr& schema() const { return _schema; }
+    void set_schema(const TabletSchemaCSPtr& schema) { _schema = schema; }
 
     StatusOr<vectorized::ChunkIteratorPtr> new_iterator(const vectorized::Schema& schema,
                                                         const RowsetReadOptions& options);
@@ -341,7 +343,7 @@ protected:
     // allow subclass to add custom logic when rowset is being published
     virtual void make_visible_extra(Version version) {}
 
-    const TabletSchema* _schema;
+    TabletSchemaCSPtr _schema;
     std::string _rowset_path;
     RowsetMetaSharedPtr _rowset_meta;
 
@@ -366,5 +368,7 @@ public:
 private:
     std::shared_ptr<Rowset> _rowset;
 };
+using TabletSchemaSPtr = std::shared_ptr<TabletSchema>;
+
 
 } // namespace starrocks

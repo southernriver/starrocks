@@ -151,6 +151,8 @@ int main(int argc, char** argv) {
         return -1;
     }
 
+    starrocks::TabletSchemaCache::create_global_schema_cache();
+
 #if defined(ENABLE_STATUS_FAILED)
     // read range of source code for inject errors.
     starrocks::Status::access_directory_of_inject();
@@ -325,6 +327,7 @@ int main(int argc, char** argv) {
 
     Aws::ShutdownAPI(aws_sdk_options);
 
+    starrocks::TabletSchemaCache::stop_and_join();
     heartbeat_thrift_server->stop();
     heartbeat_thrift_server->join();
 

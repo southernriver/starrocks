@@ -964,6 +964,16 @@ public class EditLog {
                     colddownMgr.replayAlterProperties(alter);
                     break;
                 }
+                case OperationType.OP_MODIFY_TABLE_ADD_OR_DROP_COLUMNS: {
+                    final TableAddOrDropColumnsInfo info = (TableAddOrDropColumnsInfo) journal.getData();
+                    globalStateMgr.getSchemaChangeHandler().replayModifyTableAddOrDropColumns(info);
+                    break;
+                }
+                case OperationType.OP_ALTER_LIGHT_SCHEMA_CHANGE: {
+                    final AlterLightSchemaChangeInfo info = (AlterLightSchemaChangeInfo) journal.getData();
+                    globalStateMgr.getSchemaChangeHandler().replayAlterLightSchChange(info);
+                    break;
+                }
                 default: {
                     if (Config.ignore_unknown_log_id) {
                         LOG.warn("UNKNOWN Operation Type {}", opCode);
@@ -1699,5 +1709,13 @@ public class EditLog {
 
     public void logAuthUpgrade(Map<String, Long> roleNameToId) {
         logEdit(OperationType.OP_AUTH_UPGRDE_V2, new AuthUpgradeInfo(roleNameToId));
+    }
+
+    public void logModifyTableAddOrDropColumns(TableAddOrDropColumnsInfo info) {
+        logEdit(OperationType.OP_MODIFY_TABLE_ADD_OR_DROP_COLUMNS, info);
+    }
+
+    public void logAlterLightSchemaChange(AlterLightSchemaChangeInfo info) {
+        logEdit(OperationType.OP_ALTER_LIGHT_SCHEMA_CHANGE, info);
     }
 }

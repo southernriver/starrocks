@@ -127,7 +127,7 @@ inline Status DeltaWriterImpl::reset_memtable() {
         ASSIGN_OR_RETURN(_tablet_schema, tablet.get_schema());
     }
     if (!_schema_initialized) {
-        _vectorized_schema = MemTable::convert_schema(_tablet_schema.get(), _slots);
+        _vectorized_schema = MemTable::convert_schema(_tablet_schema, _slots);
         _schema_initialized = true;
     }
     if (_slots != nullptr) {

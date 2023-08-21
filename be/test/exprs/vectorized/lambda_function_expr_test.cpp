@@ -257,7 +257,7 @@ std::vector<Expr*> VectorizedLambdaFunctionExprTest::create_lambda_expr(ObjectPo
     return lambda_funcs;
 }
 
-TypeDescriptor array_type(const PrimitiveType& child_type) {
+TypeDescriptor array_type(const LogicalType& child_type) {
     TypeDescriptor t;
     t.type = TYPE_ARRAY;
     t.children.resize(1);

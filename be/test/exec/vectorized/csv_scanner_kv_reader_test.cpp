@@ -687,7 +687,7 @@ TEST_F(CSVScannerKvReaderTest, test_file_not_ended_with_record_delimiter) {
 }
 
 TEST_F(CSVScannerKvReaderTest, test_empty) {
-    auto run_test = [this](PrimitiveType pt) {
+    auto run_test = [this](LogicalType pt) {
         std::vector<TypeDescriptor> types{TypeDescriptor(pt)};
         if (pt == TYPE_VARCHAR || pt == TYPE_CHAR) {
             types[0].len = 10;

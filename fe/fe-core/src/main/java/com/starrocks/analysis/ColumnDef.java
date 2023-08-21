@@ -415,7 +415,8 @@ public class ColumnDef {
     }
 
     public Column toColumn() {
-        return new Column(name, typeDef.getType(), isKey, aggregateType, isAllowNull, defaultValueDef, comment);
+        return new Column(name, typeDef.getType(), isKey, aggregateType,
+            isAllowNull, defaultValueDef, comment, Column.COLUMN_UNIQUE_ID_INIT_VALUE);
     }
 
     private String toDefaultExpr(Expr expr) {

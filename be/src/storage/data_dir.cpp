@@ -319,11 +319,23 @@ Status DataDir::load() {
                   << ", path: " << _path;
     }
 
+    for (int64_t tablet_id : tablet_ids) {
+        TabletSharedPtr tablet = _tablet_manager->get_tablet(tablet_id);
+        if (tablet && tablet->set_tablet_schema_into_rowset_meta()) {
+            TabletMetaManager::save(this, tablet->tablet_meta());
+        }
+    }
+
     // traverse rowset
     // 1. add committed rowset to txn map
     // 2. add visible rowset to tablet
     // ignore any errors when load tablet or rowset, because fe will repair them after report
     for (const auto& rowset_meta : dir_rowset_metas) {
+        if (config::force_reset_tablet_meta) {
+            rowset_meta->reset_schema();
+            RowsetMetaManager::save(get_meta(), rowset_meta->tablet_uid(), rowset_meta->get_meta_pb());
+        }
+
         TabletSharedPtr tablet = _tablet_manager->get_tablet(rowset_meta->tablet_id(), false);
         // tablet maybe dropped, but not drop related rowset meta
         if (tablet == nullptr) {
@@ -333,7 +345,7 @@ Status DataDir::load() {
             continue;
         }
         RowsetSharedPtr rowset;
-        Status create_status = RowsetFactory::create_rowset(&tablet->tablet_schema(), tablet->schema_hash_path(),
+        Status create_status = RowsetFactory::create_rowset(tablet->tablet_schema(), tablet->schema_hash_path(),
                                                             rowset_meta, &rowset);
         if (!create_status.ok()) {
             LOG(WARNING) << "Fail to create rowset from rowsetmeta,"
@@ -342,6 +354,11 @@ Status DataDir::load() {
         }
         if (rowset_meta->rowset_state() == RowsetStatePB::COMMITTED &&
             rowset_meta->tablet_uid() == tablet->tablet_uid()) {
+            if (!rowset_meta->tablet_schema()) {
+                auto tablet_schema_ptr = tablet->tablet_schema();
+                rowset_meta->set_tablet_schema(tablet_schema_ptr);
+                RowsetMetaManager::save(get_meta(), rowset_meta->tablet_uid(), rowset_meta->get_meta_pb());
+            }
             Status commit_txn_status = _txn_manager->commit_txn(
                     _kv_store, rowset_meta->partition_id(), rowset_meta->txn_id(), rowset_meta->tablet_id(),
                     rowset_meta->tablet_schema_hash(), rowset_meta->tablet_uid(), rowset_meta->load_id(), rowset, true);
@@ -354,9 +371,14 @@ Status DataDir::load() {
                           << " schema hash=" << rowset_meta->tablet_schema_hash()
                           << " txn_id: " << rowset_meta->txn_id();
             }
+
         } else if (rowset_meta->rowset_state() == RowsetStatePB::VISIBLE &&
                    rowset_meta->tablet_uid() == tablet->tablet_uid()) {
             Status publish_status = tablet->add_rowset(rowset, false);
+            if (!rowset_meta->tablet_schema()) {
+                rowset_meta->set_tablet_schema(tablet->tablet_schema());
+                RowsetMetaManager::save(get_meta(), rowset_meta->tablet_uid(), rowset_meta->get_meta_pb());
+            }
             if (!publish_status.ok() && !publish_status.is_already_exist()) {
                 LOG(WARNING) << "Fail to add visible rowset=" << rowset->rowset_id()
                              << " to tablet=" << rowset_meta->tablet_id() << " txn id=" << rowset_meta->txn_id()
@@ -370,6 +392,7 @@ Status DataDir::load() {
                          << " current valid tablet uid=" << tablet->tablet_uid();
         }
     }
+
     return Status::OK();
 }
 

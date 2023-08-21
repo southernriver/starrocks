@@ -85,6 +85,8 @@ public:
 
     static TabletMetaSharedPtr create();
 
+    static RowsetMetaSharedPtr& rowset_meta_with_max_rowset_version(std::vector<RowsetMetaSharedPtr> rowsets);
+
     explicit TabletMeta();
     TabletMeta(int64_t table_id, int64_t partition_id, int64_t tablet_id, int32_t schema_hash, uint64_t shard_id,
                const TTabletSchema& tablet_schema, uint32_t next_unique_id, bool enable_persistent_index,
@@ -137,11 +139,11 @@ public:
 
     bool in_restore_mode() const;
 
-    const TabletSchema& tablet_schema() const;
+    const TabletSchema& unsafe_tablet_schema_ref() const;
 
-    void set_tablet_schema(const std::shared_ptr<const TabletSchema>& tablet_schema) { _schema = tablet_schema; }
+    void set_tablet_schema(const TabletSchemaCSPtr& tablet_schema) { _schema = tablet_schema; }
 
-    std::shared_ptr<const TabletSchema>& tablet_schema_ptr() { return _schema; }
+    TabletSchemaCSPtr& tablet_schema() { return _schema; }
 
     const std::vector<RowsetMetaSharedPtr>& all_rs_metas() const;
     Status add_rs_meta(const RowsetMetaSharedPtr& rs_meta);
@@ -203,7 +205,7 @@ private:
     TabletState _tablet_state = TABLET_NOTREADY;
     // Note: Segment store the pointer of TabletSchema,
     // so this point should never change
-    std::shared_ptr<const TabletSchema> _schema = nullptr;
+    TabletSchemaCSPtr _schema = nullptr;
 
     std::vector<RowsetMetaSharedPtr> _rs_metas;
     std::vector<RowsetMetaSharedPtr> _inc_rs_metas;
@@ -302,7 +304,7 @@ inline bool TabletMeta::in_restore_mode() const {
     return _in_restore_mode;
 }
 
-inline const TabletSchema& TabletMeta::tablet_schema() const {
+inline const TabletSchema& TabletMeta::unsafe_tablet_schema_ref() const {
     return *_schema;
 }
 

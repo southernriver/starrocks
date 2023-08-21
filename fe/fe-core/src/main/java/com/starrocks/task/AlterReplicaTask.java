@@ -26,6 +26,7 @@ import com.google.common.collect.Lists;
 import com.starrocks.alter.AlterJobV2;
 import com.starrocks.analysis.Expr;
 import com.starrocks.analysis.SlotRef;
+import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.LocalTablet;
 import com.starrocks.catalog.MaterializedIndex;
@@ -38,11 +39,14 @@ import com.starrocks.persist.ReplicaPersistInfo;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.thrift.TAlterMaterializedViewParam;
 import com.starrocks.thrift.TAlterTabletReqV2;
+import com.starrocks.thrift.TColumn;
 import com.starrocks.thrift.TTabletType;
 import com.starrocks.thrift.TTaskType;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -65,20 +69,23 @@ public class AlterReplicaTask extends AgentTask implements Runnable {
     private final TTabletType tabletType;
     private final long txnId;
     private final Map<String, Expr> defineExprs;
+    private List<Column> baseSchemaColumns;
+
 
     public static AlterReplicaTask alterLocalTablet(long backendId, long dbId, long tableId, long partitionId, long rollupIndexId,
                                                     long rollupTabletId, long baseTabletId, long newReplicaId, int newSchemaHash,
-                                                    int baseSchemaHash, long version, long jobId) {
+                                                    int baseSchemaHash, long version, long jobId,
+                                                    List<Column> baseSchemaColumns) {
         return new AlterReplicaTask(backendId, dbId, tableId, partitionId, rollupIndexId, rollupTabletId,
                 baseTabletId, newReplicaId, newSchemaHash, baseSchemaHash, version, jobId, AlterJobV2.JobType.SCHEMA_CHANGE,
-                null, TTabletType.TABLET_TYPE_DISK, 0);
+                null, TTabletType.TABLET_TYPE_DISK, 0, baseSchemaColumns);
     }
 
     public static AlterReplicaTask alterLakeTablet(long backendId, long dbId, long tableId, long partitionId, long rollupIndexId,
                                                    long rollupTabletId, long baseTabletId, long version, long jobId, long txnId) {
         return new AlterReplicaTask(backendId, dbId, tableId, partitionId, rollupIndexId, rollupTabletId,
                 baseTabletId, -1, -1, -1, version, jobId, AlterJobV2.JobType.SCHEMA_CHANGE,
-                null, TTabletType.TABLET_TYPE_LAKE, txnId);
+                null, TTabletType.TABLET_TYPE_LAKE, txnId, Collections.emptyList());
     }
 
     public static AlterReplicaTask rollupLocalTablet(long backendId, long dbId, long tableId, long partitionId,
@@ -87,13 +94,13 @@ public class AlterReplicaTask extends AgentTask implements Runnable {
                                                      long jobId, Map<String, Expr> defineExprs) {
         return new AlterReplicaTask(backendId, dbId, tableId, partitionId, rollupIndexId, rollupTabletId,
                 baseTabletId, newReplicaId, newSchemaHash, baseSchemaHash, version, jobId, AlterJobV2.JobType.ROLLUP,
-                defineExprs, TTabletType.TABLET_TYPE_DISK, 0);
+                defineExprs, TTabletType.TABLET_TYPE_DISK, 0, Collections.emptyList());
     }
 
     private AlterReplicaTask(long backendId, long dbId, long tableId, long partitionId, long rollupIndexId, long rollupTabletId,
                              long baseTabletId, long newReplicaId, int newSchemaHash, int baseSchemaHash, long version,
                              long jobId, AlterJobV2.JobType jobType, Map<String, Expr> defineExprs, TTabletType tabletType,
-                             long txnId) {
+                             long txnId, List<Column> baseSchemaColumns) {
         super(null, backendId, TTaskType.ALTER, dbId, tableId, partitionId, rollupIndexId, rollupTabletId);
 
         this.baseTabletId = baseTabletId;
@@ -110,6 +117,8 @@ public class AlterReplicaTask extends AgentTask implements Runnable {
 
         this.tabletType = tabletType;
         this.txnId = txnId;
+
+        this.baseSchemaColumns = baseSchemaColumns;
     }
 
     public long getBaseTabletId() {
@@ -155,6 +164,15 @@ public class AlterReplicaTask extends AgentTask implements Runnable {
         }
         req.setTablet_type(tabletType);
         req.setTxn_id(txnId);
+
+        if (baseSchemaColumns != null) {
+            List<TColumn> columns = new ArrayList<TColumn>();
+            for (Column column : baseSchemaColumns) {
+                columns.add(column.toThrift());
+            }
+            req.setColumns(columns);
+        }
+
         return req;
     }
 

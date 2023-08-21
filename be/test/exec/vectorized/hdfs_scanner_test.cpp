@@ -1495,8 +1495,8 @@ A:            BINARY SNAPPY DO:693 FPO:1139 SZ:581/749/1.29 VC:100 ENC:PLAIN,RLE
 */
 
 TEST_F(HdfsScannerTest, TestParquetUppercaseFiledPredicate) {
-    SlotDesc parquet_descs[] = {{"id", TypeDescriptor::from_primtive_type(PrimitiveType::TYPE_INT)},
-                                {"a", TypeDescriptor::from_primtive_type(PrimitiveType::TYPE_VARCHAR, 22)},
+    SlotDesc parquet_descs[] = {{"id", TypeDescriptor::from_primtive_type(LogicalType::TYPE_INT)},
+                                {"a", TypeDescriptor::from_primtive_type(LogicalType::TYPE_VARCHAR, 22)},
                                 {""}};
 
     const std::string parquet_file = "./be/test/exec/test_data/parquet_scanner/upcase_field.parquet";
@@ -1587,10 +1587,10 @@ def array2_parquet():
 
 TEST_F(HdfsScannerTest, TestParquetArrayDecode) {
     TypeDescriptor array_type(TYPE_ARRAY);
-    array_type.children.emplace_back(TypeDescriptor::from_primtive_type(PrimitiveType::TYPE_INT));
+    array_type.children.emplace_back(TypeDescriptor::from_primtive_type(LogicalType::TYPE_INT));
 
     SlotDesc parquet_descs[] = {
-            {"id", TypeDescriptor::from_primtive_type(PrimitiveType::TYPE_INT)}, {"f00", array_type}, {""}};
+            {"id", TypeDescriptor::from_primtive_type(LogicalType::TYPE_INT)}, {"f00", array_type}, {""}};
 
     const std::string parquet_file = "./be/test/exec/test_data/parquet_scanner/array_decode.parquet";
 
@@ -1663,7 +1663,7 @@ def dict2_parquet():
 */
 
 TEST_F(HdfsScannerTest, TestParquetDictTwoPage) {
-    SlotDesc parquet_descs[] = {{"id", TypeDescriptor::from_primtive_type(PrimitiveType::TYPE_VARCHAR, 22)}, {""}};
+    SlotDesc parquet_descs[] = {{"id", TypeDescriptor::from_primtive_type(LogicalType::TYPE_VARCHAR, 22)}, {""}};
 
     const std::string parquet_file = "./be/test/exec/test_data/parquet_scanner/dict_two_page.parquet";
 
@@ -1758,35 +1758,35 @@ TEST_F(HdfsScannerTest, TestHudiMORArrayMapStruct) {
         GTEST_SKIP();
     }
 
-    TypeDescriptor C(PrimitiveType::TYPE_ARRAY);
-    TypeDescriptor C1(PrimitiveType::TYPE_ARRAY);
-    C1.children.push_back(TypeDescriptor::from_primtive_type(PrimitiveType::TYPE_INT));
+    TypeDescriptor C(LogicalType::TYPE_ARRAY);
+    TypeDescriptor C1(LogicalType::TYPE_ARRAY);
+    C1.children.push_back(TypeDescriptor::from_primtive_type(LogicalType::TYPE_INT));
     C.children.push_back(C1); // array<array<int>>
 
-    TypeDescriptor D(PrimitiveType::TYPE_MAP);
-    D.children.push_back(TypeDescriptor::from_primtive_type(PrimitiveType::TYPE_VARCHAR, 22));
+    TypeDescriptor D(LogicalType::TYPE_MAP);
+    D.children.push_back(TypeDescriptor::from_primtive_type(LogicalType::TYPE_VARCHAR, 22));
     D.children.push_back(C1); // map<string, array<int>>
 
-    TypeDescriptor E(PrimitiveType::TYPE_STRUCT);
+    TypeDescriptor E(LogicalType::TYPE_STRUCT);
     {
         E.children.push_back(C1); // a: array<int>
         E.field_names.emplace_back("a");
 
-        TypeDescriptor B0(PrimitiveType::TYPE_MAP);
-        B0.children.push_back(TypeDescriptor::from_primtive_type(PrimitiveType::TYPE_VARCHAR, 22));
-        B0.children.push_back(TypeDescriptor::from_primtive_type(PrimitiveType::TYPE_INT));
+        TypeDescriptor B0(LogicalType::TYPE_MAP);
+        B0.children.push_back(TypeDescriptor::from_primtive_type(LogicalType::TYPE_VARCHAR, 22));
+        B0.children.push_back(TypeDescriptor::from_primtive_type(LogicalType::TYPE_INT));
         E.children.push_back(B0);
         E.field_names.emplace_back("b");
 
-        TypeDescriptor C0(PrimitiveType::TYPE_STRUCT);
+        TypeDescriptor C0(LogicalType::TYPE_STRUCT);
         {
             C0.children.push_back(C1);
             C0.field_names.emplace_back("a");
 
-            TypeDescriptor B1(PrimitiveType::TYPE_STRUCT);
-            B1.children.push_back(TypeDescriptor::from_primtive_type(PrimitiveType::TYPE_INT));
+            TypeDescriptor B1(LogicalType::TYPE_STRUCT);
+            B1.children.push_back(TypeDescriptor::from_primtive_type(LogicalType::TYPE_INT));
             B1.field_names.emplace_back("a");
-            B1.children.push_back(TypeDescriptor::from_primtive_type(PrimitiveType::TYPE_VARCHAR, 22));
+            B1.children.push_back(TypeDescriptor::from_primtive_type(LogicalType::TYPE_VARCHAR, 22));
             B1.field_names.emplace_back("b");
             C0.children.push_back(B1);
             C0.field_names.emplace_back("b");
@@ -1796,8 +1796,8 @@ TEST_F(HdfsScannerTest, TestHudiMORArrayMapStruct) {
         E.field_names.emplace_back("c");
     }
 
-    SlotDesc parquet_descs[] = {{"a", TypeDescriptor::from_primtive_type(PrimitiveType::TYPE_INT)},
-                                {"b", TypeDescriptor::from_primtive_type(PrimitiveType::TYPE_VARCHAR, 22)},
+    SlotDesc parquet_descs[] = {{"a", TypeDescriptor::from_primtive_type(LogicalType::TYPE_INT)},
+                                {"b", TypeDescriptor::from_primtive_type(LogicalType::TYPE_VARCHAR, 22)},
                                 {"c", C},
                                 {"d", D},
                                 {"e", E},
@@ -1897,22 +1897,22 @@ TEST_F(HdfsScannerTest, TestHudiMORArrayMapStruct2) {
     // select a,b,c,d,e
     {
         // c: array<int>
-        TypeDescriptor C(PrimitiveType::TYPE_ARRAY);
-        C.children.push_back(TypeDescriptor::from_primtive_type(PrimitiveType::TYPE_INT));
+        TypeDescriptor C(LogicalType::TYPE_ARRAY);
+        C.children.push_back(TypeDescriptor::from_primtive_type(LogicalType::TYPE_INT));
 
         // d: map<string, int>
-        TypeDescriptor D(PrimitiveType::TYPE_MAP);
-        D.children.push_back(TypeDescriptor::from_primtive_type(PrimitiveType::TYPE_VARCHAR, 22));
-        D.children.push_back(TypeDescriptor::from_primtive_type(PrimitiveType::TYPE_INT));
+        TypeDescriptor D(LogicalType::TYPE_MAP);
+        D.children.push_back(TypeDescriptor::from_primtive_type(LogicalType::TYPE_VARCHAR, 22));
+        D.children.push_back(TypeDescriptor::from_primtive_type(LogicalType::TYPE_INT));
 
-        TypeDescriptor E(PrimitiveType::TYPE_STRUCT);
-        E.children.push_back(TypeDescriptor::from_primtive_type(PrimitiveType::TYPE_INT));
+        TypeDescriptor E(LogicalType::TYPE_STRUCT);
+        E.children.push_back(TypeDescriptor::from_primtive_type(LogicalType::TYPE_INT));
         E.field_names.emplace_back("a");
-        E.children.push_back(TypeDescriptor::from_primtive_type(PrimitiveType::TYPE_VARCHAR, 22));
+        E.children.push_back(TypeDescriptor::from_primtive_type(LogicalType::TYPE_VARCHAR, 22));
         E.field_names.emplace_back("b");
 
-        SlotDesc parquet_descs[] = {{"a", TypeDescriptor::from_primtive_type(PrimitiveType::TYPE_INT)},
-                                    {"b", TypeDescriptor::from_primtive_type(PrimitiveType::TYPE_VARCHAR, 22)},
+        SlotDesc parquet_descs[] = {{"a", TypeDescriptor::from_primtive_type(LogicalType::TYPE_INT)},
+                                    {"b", TypeDescriptor::from_primtive_type(LogicalType::TYPE_VARCHAR, 22)},
                                     {"c", C},
                                     {"d", D},
                                     {"e", E},
@@ -1936,10 +1936,10 @@ TEST_F(HdfsScannerTest, TestHudiMORArrayMapStruct2) {
 
     // select e but as <b:string, a:int>
     {
-        TypeDescriptor E(PrimitiveType::TYPE_STRUCT);
-        E.children.push_back(TypeDescriptor::from_primtive_type(PrimitiveType::TYPE_VARCHAR, 22));
+        TypeDescriptor E(LogicalType::TYPE_STRUCT);
+        E.children.push_back(TypeDescriptor::from_primtive_type(LogicalType::TYPE_VARCHAR, 22));
         E.field_names.emplace_back("b");
-        E.children.push_back(TypeDescriptor::from_primtive_type(PrimitiveType::TYPE_INT));
+        E.children.push_back(TypeDescriptor::from_primtive_type(LogicalType::TYPE_INT));
         E.field_names.emplace_back("a");
 
         SlotDesc parquet_descs[] = {{"e", E}, {""}};
@@ -1964,10 +1964,10 @@ TEST_F(HdfsScannerTest, TestHudiMORArrayMapStruct2) {
 
     // select e but as <B:string, a:int>
     {
-        TypeDescriptor E(PrimitiveType::TYPE_STRUCT);
-        E.children.push_back(TypeDescriptor::from_primtive_type(PrimitiveType::TYPE_VARCHAR, 22));
+        TypeDescriptor E(LogicalType::TYPE_STRUCT);
+        E.children.push_back(TypeDescriptor::from_primtive_type(LogicalType::TYPE_VARCHAR, 22));
         E.field_names.emplace_back("B");
-        E.children.push_back(TypeDescriptor::from_primtive_type(PrimitiveType::TYPE_INT));
+        E.children.push_back(TypeDescriptor::from_primtive_type(LogicalType::TYPE_INT));
         E.field_names.emplace_back("a");
 
         SlotDesc parquet_descs[] = {{"e", E}, {""}};
@@ -1992,8 +1992,8 @@ TEST_F(HdfsScannerTest, TestHudiMORArrayMapStruct2) {
 
     // select e but as <a:int>
     {
-        TypeDescriptor E(PrimitiveType::TYPE_STRUCT);
-        E.children.push_back(TypeDescriptor::from_primtive_type(PrimitiveType::TYPE_INT));
+        TypeDescriptor E(LogicalType::TYPE_STRUCT);
+        E.children.push_back(TypeDescriptor::from_primtive_type(LogicalType::TYPE_INT));
         E.field_names.emplace_back("a");
 
         SlotDesc parquet_descs[] = {{"e", E}, {""}};
@@ -2019,9 +2019,9 @@ TEST_F(HdfsScannerTest, TestHudiMORArrayMapStruct2) {
     // select d but only key
     {
         // d: map<string, int>
-        TypeDescriptor D(PrimitiveType::TYPE_MAP);
-        D.children.push_back(TypeDescriptor::from_primtive_type(PrimitiveType::TYPE_VARCHAR, 22));
-        D.children.push_back(TypeDescriptor::from_primtive_type(PrimitiveType::INVALID_TYPE));
+        TypeDescriptor D(LogicalType::TYPE_MAP);
+        D.children.push_back(TypeDescriptor::from_primtive_type(LogicalType::TYPE_VARCHAR, 22));
+        D.children.push_back(TypeDescriptor::from_primtive_type(LogicalType::TYPE_UNKNOWN));
 
         SlotDesc parquet_descs[] = {{"d", D}, {""}};
 
@@ -2097,7 +2097,7 @@ uuid = aa
 */
 
 TEST_F(HdfsScannerTest, TestParquetTimestampToDatetime) {
-    SlotDesc parquet_descs[] = {{"b", TypeDescriptor::from_primtive_type(PrimitiveType::TYPE_DATETIME)}, {""}};
+    SlotDesc parquet_descs[] = {{"b", TypeDescriptor::from_primtive_type(LogicalType::TYPE_DATETIME)}, {""}};
 
     const std::string parquet_file = "./be/test/exec/test_data/parquet_scanner/timestamp_to_datetime.parquet";
 

@@ -436,6 +436,7 @@ Status LocalTabletsChannel::_open_all_writers(const PTabletWriterOpenRequest& pa
         options.node_id = _node_id;
         options.timeout_ms = params.timeout_ms();
         options.write_quorum = params.write_quorum();
+        options.ptable_schema_param = params.schema();
         if (params.is_replicated_storage()) {
             for (auto& replica : tablet.replicas()) {
                 options.replicas.emplace_back(replica);

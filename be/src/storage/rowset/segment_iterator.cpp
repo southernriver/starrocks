@@ -427,7 +427,8 @@ Status SegmentIterator::_init_column_iterators(const Schema& schema) {
                 check_dict_enc = has_predicate;
             }
 
-            RETURN_IF_ERROR(_segment->new_column_iterator(cid, &_column_iterators[cid], _opts.use_page_cache));
+            RETURN_IF_ERROR(_segment->new_column_iterator(cid, &_column_iterators[cid], _opts.use_page_cache,
+                                                          _opts.tablet_schema));
 
             _obj_pool.add(_column_iterators[cid]);
             ColumnIteratorOptions iter_opts;
@@ -1478,7 +1479,7 @@ Status SegmentIterator::_init_bitmap_index_iterators() {
         ColumnId cid = pair.first;
         if (_bitmap_index_iterators[cid] == nullptr) {
             RETURN_IF_ERROR(_segment->new_bitmap_index_iterator(cid, &_bitmap_index_iterators[cid],
-                                                                _opts.use_page_cache));
+                                                                _opts.use_page_cache, _opts.tablet_schema));
             _has_bitmap_index |= (_bitmap_index_iterators[cid] != nullptr);
         }
     }

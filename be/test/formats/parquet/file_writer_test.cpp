@@ -34,11 +34,12 @@
 #include "runtime/descriptor_helper.h"
 #include "testutil/assert.h"
 
+using namespace starrocks::parquet;
 namespace starrocks {
-namespace parquet {
+namespace vectorized {
 
+using starrocks::vectorized::HdfsScannerContext;
 static HdfsScanStats g_hdfs_scan_stats;
-using starrocks::HdfsScannerContext;
 
 class FileWriterTest : public testing::Test {
 public:
@@ -139,33 +140,33 @@ protected:
 
 TEST_F(FileWriterTest, TestWriteIntegralTypes) {
     std::vector<TypeDescriptor> type_descs{
-            TypeDescriptor::from_logical_type(TYPE_TINYINT),
-            TypeDescriptor::from_logical_type(TYPE_SMALLINT),
-            TypeDescriptor::from_logical_type(TYPE_INT),
-            TypeDescriptor::from_logical_type(TYPE_BIGINT),
+            TypeDescriptor::from_primtive_type(TYPE_TINYINT),
+            TypeDescriptor::from_primtive_type(TYPE_SMALLINT),
+            TypeDescriptor::from_primtive_type(TYPE_INT),
+            TypeDescriptor::from_primtive_type(TYPE_BIGINT),
     };
 
     auto chunk = std::make_shared<Chunk>();
     {
-        auto col0 = ColumnHelper::create_column(TypeDescriptor::from_logical_type(TYPE_TINYINT), true);
+        auto col0 = ColumnHelper::create_column(TypeDescriptor::from_primtive_type(TYPE_TINYINT), true);
         std::vector<int8_t> int8_nums{INT8_MIN, INT8_MAX, 0, 1};
         auto count = col0->append_numbers(int8_nums.data(), size(int8_nums) * sizeof(int8_t));
         ASSERT_EQ(4, count);
         chunk->append_column(col0, chunk->num_columns());
 
-        auto col1 = ColumnHelper::create_column(TypeDescriptor::from_logical_type(TYPE_SMALLINT), true);
+        auto col1 = ColumnHelper::create_column(TypeDescriptor::from_primtive_type(TYPE_SMALLINT), true);
         std::vector<int16_t> int16_nums{INT16_MIN, INT16_MAX, 0, 1};
         count = col1->append_numbers(int16_nums.data(), size(int16_nums) * sizeof(int16_t));
         ASSERT_EQ(4, count);
         chunk->append_column(col1, chunk->num_columns());
 
-        auto col2 = ColumnHelper::create_column(TypeDescriptor::from_logical_type(TYPE_INT), true);
+        auto col2 = ColumnHelper::create_column(TypeDescriptor::from_primtive_type(TYPE_INT), true);
         std::vector<int32_t> int32_nums{INT32_MIN, INT32_MAX, 0, 1};
         count = col2->append_numbers(int32_nums.data(), size(int32_nums) * sizeof(int32_t));
         ASSERT_EQ(4, count);
         chunk->append_column(col2, chunk->num_columns());
 
-        auto col3 = ColumnHelper::create_column(TypeDescriptor::from_logical_type(TYPE_BIGINT), true);
+        auto col3 = ColumnHelper::create_column(TypeDescriptor::from_primtive_type(TYPE_BIGINT), true);
         std::vector<int64_t> int64_nums{INT64_MIN, INT64_MAX, 0, 1};
         count = col3->append_numbers(int64_nums.data(), size(int64_nums) * sizeof(int64_t));
         ASSERT_EQ(4, count);
@@ -225,7 +226,7 @@ TEST_F(FileWriterTest, TestWriteDecimal) {
 }
 
 TEST_F(FileWriterTest, TestWriteBoolean) {
-    auto type_bool = TypeDescriptor::from_logical_type(TYPE_BOOLEAN);
+    auto type_bool = TypeDescriptor::from_primtive_type(TYPE_BOOLEAN);
     std::vector<TypeDescriptor> type_descs{type_bool};
 
     auto chunk = std::make_shared<Chunk>();
@@ -253,7 +254,7 @@ TEST_F(FileWriterTest, TestWriteBoolean) {
 }
 
 TEST_F(FileWriterTest, TestWriteFloat) {
-    auto type_float = TypeDescriptor::from_logical_type(TYPE_FLOAT);
+    auto type_float = TypeDescriptor::from_primtive_type(TYPE_FLOAT);
     std::vector<TypeDescriptor> type_descs{type_float};
 
     auto chunk = std::make_shared<Chunk>();
@@ -282,7 +283,7 @@ TEST_F(FileWriterTest, TestWriteFloat) {
 }
 
 TEST_F(FileWriterTest, TestWriteDouble) {
-    auto type_float = TypeDescriptor::from_logical_type(TYPE_DOUBLE);
+    auto type_float = TypeDescriptor::from_primtive_type(TYPE_DOUBLE);
     std::vector<TypeDescriptor> type_descs{type_float};
 
     auto chunk = std::make_shared<Chunk>();
@@ -311,7 +312,7 @@ TEST_F(FileWriterTest, TestWriteDouble) {
 }
 
 TEST_F(FileWriterTest, TestWriteDate) {
-    auto type_date = TypeDescriptor::from_logical_type(TYPE_DATE);
+    auto type_date = TypeDescriptor::from_primtive_type(TYPE_DATE);
     std::vector<TypeDescriptor> type_descs{type_date};
 
     auto chunk = std::make_shared<Chunk>();
@@ -349,7 +350,7 @@ TEST_F(FileWriterTest, TestWriteDate) {
 }
 
 TEST_F(FileWriterTest, TestWriteDatetime) {
-    auto type_datetime = TypeDescriptor::from_logical_type(TYPE_DATETIME);
+    auto type_datetime = TypeDescriptor::from_primtive_type(TYPE_DATETIME);
     std::vector<TypeDescriptor> type_descs{type_datetime};
 
     auto chunk = std::make_shared<Chunk>();
@@ -387,7 +388,7 @@ TEST_F(FileWriterTest, TestWriteDatetime) {
 }
 
 TEST_F(FileWriterTest, TestWriteVarchar) {
-    auto type_varchar = TypeDescriptor::from_logical_type(TYPE_VARCHAR);
+    auto type_varchar = TypeDescriptor::from_primtive_type(TYPE_VARCHAR);
     std::vector<TypeDescriptor> type_descs{type_varchar};
 
     auto chunk = std::make_shared<Chunk>();
@@ -421,8 +422,8 @@ TEST_F(FileWriterTest, TestWriteVarchar) {
 TEST_F(FileWriterTest, TestWriteArray) {
     // type_descs
     std::vector<TypeDescriptor> type_descs;
-    auto type_int = TypeDescriptor::from_logical_type(TYPE_INT);
-    auto type_int_array = TypeDescriptor::from_logical_type(TYPE_ARRAY);
+    auto type_int = TypeDescriptor::from_primtive_type(TYPE_INT);
+    auto type_int_array = TypeDescriptor::from_primtive_type(TYPE_ARRAY);
     type_int_array.children.push_back(type_int);
     type_descs.push_back(type_int_array);
 
@@ -465,10 +466,10 @@ TEST_F(FileWriterTest, TestWriteArray) {
 TEST_F(FileWriterTest, TestWriteStruct) {
     // type_descs
     std::vector<TypeDescriptor> type_descs;
-    auto type_int_a = TypeDescriptor::from_logical_type(TYPE_SMALLINT);
-    auto type_int_b = TypeDescriptor::from_logical_type(TYPE_INT);
-    auto type_int_c = TypeDescriptor::from_logical_type(TYPE_BIGINT);
-    auto type_int_struct = TypeDescriptor::from_logical_type(TYPE_STRUCT);
+    auto type_int_a = TypeDescriptor::from_primtive_type(TYPE_SMALLINT);
+    auto type_int_b = TypeDescriptor::from_primtive_type(TYPE_INT);
+    auto type_int_c = TypeDescriptor::from_primtive_type(TYPE_BIGINT);
+    auto type_int_struct = TypeDescriptor::from_primtive_type(TYPE_STRUCT);
     type_int_struct.children = {type_int_a, type_int_b, type_int_c};
     type_int_struct.field_names = {"a", "b", "c"};
     type_descs.push_back(type_int_struct);
@@ -499,7 +500,11 @@ TEST_F(FileWriterTest, TestWriteStruct) {
         auto nullable_col_c = NullableColumn::create(data_col_c, null_col_c);
 
         Columns fields{nullable_col_a, nullable_col_b, nullable_col_c};
-        auto struct_column = StructColumn::create(fields, type_int_struct.field_names);
+        auto field_names_col = BinaryColumn::create();
+        for (auto& name: type_int_struct.field_names) {
+            field_names_col->append_string(name);
+        }
+        auto struct_column = StructColumn::create(fields, field_names_col);
         auto null_column = UInt8Column::create();
         null_column->append_numbers(nulls.data(), sizeof(uint8_t) * nulls.size());
         auto nullable_col = NullableColumn::create(struct_column, null_column);
@@ -522,9 +527,9 @@ TEST_F(FileWriterTest, TestWriteStruct) {
 TEST_F(FileWriterTest, TestWriteMap) {
     // type_descs
     std::vector<TypeDescriptor> type_descs;
-    auto type_int_key = TypeDescriptor::from_logical_type(TYPE_INT);
-    auto type_int_value = TypeDescriptor::from_logical_type(TYPE_INT);
-    auto type_int_map = TypeDescriptor::from_logical_type(TYPE_MAP);
+    auto type_int_key = TypeDescriptor::from_primtive_type(TYPE_INT);
+    auto type_int_value = TypeDescriptor::from_primtive_type(TYPE_INT);
+    auto type_int_map = TypeDescriptor::from_primtive_type(TYPE_MAP);
     type_int_map.children.push_back(type_int_key);
     type_int_map.children.push_back(type_int_value);
     type_descs.push_back(type_int_map);
@@ -576,9 +581,9 @@ TEST_F(FileWriterTest, TestWriteMap) {
 TEST_F(FileWriterTest, TestWriteNestedArray) {
     // type_descs
     std::vector<TypeDescriptor> type_descs;
-    auto type_int = TypeDescriptor::from_logical_type(TYPE_INT);
-    auto type_int_array = TypeDescriptor::from_logical_type(TYPE_ARRAY);
-    auto type_int_array_array = TypeDescriptor::from_logical_type(TYPE_ARRAY);
+    auto type_int = TypeDescriptor::from_primtive_type(TYPE_INT);
+    auto type_int_array = TypeDescriptor::from_primtive_type(TYPE_ARRAY);
+    auto type_int_array_array = TypeDescriptor::from_primtive_type(TYPE_ARRAY);
     type_int_array.children.push_back(type_int);
     type_int_array_array.children.push_back(type_int_array);
     type_descs.push_back(type_int_array_array);

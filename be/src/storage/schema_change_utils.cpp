@@ -10,8 +10,8 @@
 
 namespace starrocks::vectorized {
 
-ChunkChanger::ChunkChanger(const TabletSchema& tablet_schema) {
-    _schema_mapping.resize(tablet_schema.num_columns());
+ChunkChanger::ChunkChanger(const TabletSchemaCSPtr& tablet_schema) {
+    _schema_mapping.resize(tablet_schema->num_columns());
 }
 
 ChunkChanger::~ChunkChanger() {
@@ -193,7 +193,9 @@ const MaterializeTypeConverter* ChunkChanger::get_materialize_type_converter(con
 }
 
 bool ChunkChanger::change_chunk(ChunkPtr& base_chunk, ChunkPtr& new_chunk, const TabletMetaSharedPtr& base_tablet_meta,
-                                const TabletMetaSharedPtr& new_tablet_meta, MemPool* mem_pool) {
+                                const TabletMetaSharedPtr& new_tablet_meta, MemPool* mem_pool,
+                                const TabletSchemaCSPtr& base_tablet_schema) {
+    auto cur_base_tablet_schema = !base_tablet_schema ? base_tablet_meta->tablet_schema() : base_tablet_schema;
     if (new_chunk->num_columns() != _schema_mapping.size()) {
         LOG(WARNING) << "new chunk does not match with schema mapping rules. "
                      << "chunk_schema_size=" << new_chunk->num_columns()
@@ -205,8 +207,8 @@ bool ChunkChanger::change_chunk(ChunkPtr& base_chunk, ChunkPtr& new_chunk, const
         int ref_column = _schema_mapping[i].ref_column;
         if (ref_column >= 0) {
             LogicalType ref_type =
-                    TypeUtils::to_storage_format_v2(base_tablet_meta->tablet_schema().column(ref_column).type());
-            LogicalType new_type = TypeUtils::to_storage_format_v2(new_tablet_meta->tablet_schema().column(i).type());
+                    TypeUtils::to_storage_format_v2(cur_base_tablet_schema->column(ref_column).type());
+            LogicalType new_type = TypeUtils::to_storage_format_v2(new_tablet_meta->tablet_schema()->column(i).type());
             if (!_schema_mapping[i].materialized_function.empty()) {
                 const auto& materialized_function = _schema_mapping[i].materialized_function;
                 const MaterializeTypeConverter* converter =
@@ -219,7 +221,7 @@ bool ChunkChanger::change_chunk(ChunkPtr& base_chunk, ChunkPtr& new_chunk, const
                 ColumnPtr& base_col = base_chunk->get_column_by_index(ref_column);
                 ColumnPtr& new_col = new_chunk->get_column_by_index(i);
                 Field ref_field = ChunkHelper::convert_field_to_format_v2(
-                        ref_column, base_tablet_meta->tablet_schema().column(ref_column));
+                        ref_column, cur_base_tablet_schema->column(ref_column));
                 Status st = converter->convert_materialized(base_col, new_col, ref_field.type().get());
                 if (!st.ok()) {
                     return false;
@@ -227,10 +229,10 @@ bool ChunkChanger::change_chunk(ChunkPtr& base_chunk, ChunkPtr& new_chunk, const
                 continue;
             }
 
-            int reftype_precision = base_tablet_meta->tablet_schema().column(ref_column).precision();
-            int reftype_scale = base_tablet_meta->tablet_schema().column(ref_column).scale();
-            int newtype_precision = new_tablet_meta->tablet_schema().column(i).precision();
-            int newtype_scale = new_tablet_meta->tablet_schema().column(i).scale();
+            int reftype_precision = cur_base_tablet_schema->column(ref_column).precision();
+            int reftype_scale = cur_base_tablet_schema->column(ref_column).scale();
+            int newtype_precision = new_tablet_meta->tablet_schema()->column(i).precision();
+            int newtype_scale = new_tablet_meta->tablet_schema()->column(i).scale();
 
             ColumnPtr& base_col = base_chunk->get_column_by_index(ref_column);
             ColumnPtr& new_col = new_chunk->get_column_by_index(i);
@@ -248,7 +250,7 @@ bool ChunkChanger::change_chunk(ChunkPtr& base_chunk, ChunkPtr& new_chunk, const
                         }
                         Slice base_slice = base_datum.get_slice();
                         Slice slice;
-                        slice.size = new_tablet_meta->tablet_schema().column(i).length();
+                        slice.size = new_tablet_meta->tablet_schema()->column(i).length();
                         slice.data = reinterpret_cast<char*>(mem_pool->allocate(slice.size));
                         if (slice.data == nullptr) {
                             LOG(WARNING) << "failed to allocate memory in mem_pool";
@@ -273,9 +275,9 @@ bool ChunkChanger::change_chunk(ChunkPtr& base_chunk, ChunkPtr& new_chunk, const
                 }
 
                 Field ref_field = ChunkHelper::convert_field_to_format_v2(
-                        ref_column, base_tablet_meta->tablet_schema().column(ref_column));
+                        ref_column, cur_base_tablet_schema->column(ref_column));
                 Field new_field =
-                        ChunkHelper::convert_field_to_format_v2(i, new_tablet_meta->tablet_schema().column(i));
+                        ChunkHelper::convert_field_to_format_v2(i, new_tablet_meta->tablet_schema()->column(i));
 
                 Status st = converter->convert_column(ref_field.type().get(), *base_col, new_field.type().get(),
                                                       new_col.get(), mem_pool);
@@ -310,7 +312,7 @@ bool ChunkChanger::change_chunk(ChunkPtr& base_chunk, ChunkPtr& new_chunk, const
                 }
                 if (new_type < ref_type) {
                     LOG(INFO) << "type degraded while altering column. "
-                              << "column=" << new_tablet_meta->tablet_schema().column(i).name()
+                              << "column=" << new_tablet_meta->tablet_schema()->column(i).name()
                               << ", origin_type=" << logical_type_to_string(ref_type)
                               << ", alter_type=" << logical_type_to_string(new_type);
                 }
@@ -469,20 +471,20 @@ void SchemaChangeUtils::init_materialized_params(const TAlterTabletReqV2& reques
     }
 }
 
-Status SchemaChangeUtils::parse_request(const TabletSchema& base_schema, const TabletSchema& new_schema,
+Status SchemaChangeUtils::parse_request(const TabletSchemaCSPtr& base_schema, const TabletSchemaCSPtr& new_schema,
                                         ChunkChanger* chunk_changer,
                                         const MaterializedViewParamMap& materialized_view_param_map,
                                         bool has_delete_predicates, bool* sc_sorting, bool* sc_directly) {
     std::map<ColumnId, ColumnId> base_to_new;
-    for (int i = 0; i < new_schema.num_columns(); ++i) {
-        const TabletColumn& new_column = new_schema.column(i);
+    for (int i = 0; i < new_schema->num_columns(); ++i) {
+        const TabletColumn& new_column = new_schema->column(i);
         std::string column_name(new_column.name());
         ColumnMapping* column_mapping = chunk_changer->get_mutable_column_mapping(i);
 
         if (materialized_view_param_map.find(column_name) != materialized_view_param_map.end()) {
             AlterMaterializedViewParam mvParam = materialized_view_param_map.find(column_name)->second;
             column_mapping->materialized_function = mvParam.mv_expr;
-            int32_t column_index = base_schema.field_index(mvParam.origin_column_name);
+            int32_t column_index = base_schema->field_index(mvParam.origin_column_name);
             if (column_index >= 0) {
                 column_mapping->ref_column = column_index;
                 base_to_new[column_index] = i;
@@ -494,7 +496,7 @@ Status SchemaChangeUtils::parse_request(const TabletSchema& base_schema, const T
             }
         }
 
-        int32_t column_index = base_schema.field_index(column_name);
+        int32_t column_index = base_schema->field_index(column_name);
         if (column_index >= 0) {
             column_mapping->ref_column = column_index;
             base_to_new[column_index] = i;
@@ -505,7 +507,7 @@ Status SchemaChangeUtils::parse_request(const TabletSchema& base_schema, const T
         {
             column_mapping->ref_column = -1;
 
-            if (i < base_schema.num_short_key_columns()) {
+            if (i < base_schema->num_short_key_columns()) {
                 *sc_directly = true;
             }
 
@@ -541,7 +543,7 @@ Status SchemaChangeUtils::parse_request(const TabletSchema& base_schema, const T
     // If the reference sequence of the Key column is out of order, it needs to be reordered
     int num_default_value = 0;
 
-    for (int i = 0; i < new_schema.num_key_columns(); ++i) {
+    for (int i = 0; i < new_schema->num_key_columns(); ++i) {
         ColumnMapping* column_mapping = chunk_changer->get_mutable_column_mapping(i);
 
         if (column_mapping->ref_column < 0) {
@@ -555,7 +557,7 @@ Status SchemaChangeUtils::parse_request(const TabletSchema& base_schema, const T
         }
     }
 
-    if (base_schema.keys_type() != new_schema.keys_type()) {
+    if (base_schema->keys_type() != new_schema->keys_type()) {
         // only when base table is dup and mv is agg
         // the rollup job must be reagg.
         *sc_sorting = true;
@@ -569,7 +571,7 @@ Status SchemaChangeUtils::parse_request(const TabletSchema& base_schema, const T
     // followings need resort:
     //      old keys:    A   B   C   D
     //      new keys:    A   B
-    if (new_schema.keys_type() != KeysType::DUP_KEYS && new_schema.num_key_columns() < base_schema.num_key_columns()) {
+    if (new_schema->keys_type() != KeysType::DUP_KEYS && new_schema->num_key_columns() < base_schema->num_key_columns()) {
         // this is a table with aggregate key type, and num of key columns in new schema
         // is less, which means the data in new tablet should be more aggregated.
         // so we use sorting schema change to sort and merge the data.
@@ -577,19 +579,19 @@ Status SchemaChangeUtils::parse_request(const TabletSchema& base_schema, const T
         return Status::OK();
     }
 
-    if (base_schema.num_short_key_columns() != new_schema.num_short_key_columns()) {
+    if (base_schema->num_short_key_columns() != new_schema->num_short_key_columns()) {
         // the number of short_keys changed, can't do linked schema change
         *sc_directly = true;
         return Status::OK();
     }
 
-    for (size_t i = 0; i < new_schema.num_columns(); ++i) {
+    for (size_t i = 0; i < new_schema->num_columns(); ++i) {
         ColumnMapping* column_mapping = chunk_changer->get_mutable_column_mapping(i);
         if (column_mapping->ref_column < 0) {
             continue;
         } else {
-            auto& new_column = new_schema.column(i);
-            auto& ref_column = base_schema.column(column_mapping->ref_column);
+            auto& new_column = new_schema->column(i);
+            auto& ref_column = base_schema->column(column_mapping->ref_column);
             if (new_column.type() != ref_column.type()) {
                 *sc_directly = true;
                 return Status::OK();

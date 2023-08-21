@@ -485,8 +485,8 @@ CONF_Int32(memory_max_alignment, "16");
 // write buffer size before flush
 CONF_mInt64(write_buffer_size, "104857600");
 
-CONF_Int64(query_process_max_memory_limit_bytes, "0"); // 100GB
-CONF_Int32(query_process_max_memory_limit_percent, "90");         // 90%
+CONF_Int64(query_process_max_memory_limit_bytes, "0");    // 100GB
+CONF_Int32(query_process_max_memory_limit_percent, "90"); // 90%
 // Following 2 configs limit the memory consumption of load process on a Backend.
 // eg: memory limit to 80% of mem limit config but up to 100GB(default)
 // NOTICE(cmy): set these default values very large because we don't want to
@@ -937,5 +937,7 @@ CONF_mBool(enable_auto_evict_update_cache, "true");
 CONF_Bool(enable_preload_column_mode_update_cache, "true");
 
 CONF_mInt64(load_tablet_timeout_seconds, "30");
+
+CONF_Bool(force_reset_tablet_meta, "false");
 
 } // namespace starrocks::config
