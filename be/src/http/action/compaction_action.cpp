@@ -83,6 +83,15 @@ Status CompactionAction::_handle_show_compaction(HttpRequest* req, std::string* 
     return Status::OK();
 }
 
+Status CompactionAction::_handle_show_task_num(HttpRequest* req, std::string* result) {
+    CompactionManager::CompactionTaskNum compaction_task_num;
+    Status st = StorageEngine::instance()->compaction_manager()->get_compaction_task_num(compaction_task_num);
+    if (st.ok()) {
+        *result = compaction_task_num.to_string();
+    }
+    return st;
+}
+
 Status get_params(HttpRequest* req, uint64_t* tablet_id) {
     std::string req_tablet_id = req->param(TABLET_ID_KEY);
 
@@ -333,6 +342,8 @@ void CompactionAction::handle(HttpRequest* req) {
         st = _handle_show_repairs(req, &json_result);
     } else if (_type == CompactionActionType::SUBMIT_REPAIR) {
         st = _handle_submit_repairs(req, &json_result);
+    } else if (_type == CompactionActionType::SHOW_NUM) {
+        st = _handle_show_task_num(req, &json_result);
     } else {
         st = Status::NotSupported("Action not supported");
     }
