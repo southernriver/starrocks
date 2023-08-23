@@ -237,9 +237,9 @@ public:
 
         // update compaction metric
         float divided = 1000 * 1000 * 1000;
-        StarRocksMetrics::instance()->update_compaction_task_cost_time.set_value(timer.elapsed_time() / divided);
-        StarRocksMetrics::instance()->update_compaction_task_rate.set_value(total_input_size /
-                                                                            (timer.elapsed_time() / divided));
+        StarRocksMetrics::instance()->update_compaction_task_cost_time_ns.set_value(timer.elapsed_time());
+        StarRocksMetrics::instance()->update_compaction_task_byte_per_second.set_value(
+                total_input_size / (timer.elapsed_time() / divided + 1));
         StarRocksMetrics::instance()->update_compaction_deltas_total.increment(rowsets.size());
         StarRocksMetrics::instance()->update_compaction_bytes_total.increment(total_input_size);
         StarRocksMetrics::instance()->update_compaction_outputs_total.increment(1);
@@ -525,9 +525,8 @@ Status compaction_merge_rowsets(Tablet& tablet, int64_t version, const vector<Ro
                                 RowsetWriter* writer, const MergeConfig& cfg,
                                 const starrocks::TabletSchemaCSPtr& cur_tablet_schema) {
     Schema schema = [&cur_tablet_schema, &tablet]() {
-        const starrocks::TabletSchemaCSPtr final_tablet_schema = cur_tablet_schema == nullptr
-                ? tablet.tablet_schema()
-                : cur_tablet_schema;
+        const starrocks::TabletSchemaCSPtr final_tablet_schema =
+                cur_tablet_schema == nullptr ? tablet.tablet_schema() : cur_tablet_schema;
         if (final_tablet_schema->sort_key_idxes().empty()) {
             return ChunkHelper::get_sort_key_schema_by_primary_key_format_v2(final_tablet_schema);
         } else {
