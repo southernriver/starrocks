@@ -55,7 +55,7 @@ public class PulsarProgress extends RoutineLoadProgress {
         // TODO: tmp code for compatibility
         for (String partition : partitions) {
             if (!partitionToInitialPosition.containsKey(partition)) {
-                partitionToInitialPosition.put(partition, MessageId.latest);
+                partitionToInitialPosition.put(partition, MessageId.earliest);
             }
         }
 
@@ -73,7 +73,7 @@ public class PulsarProgress extends RoutineLoadProgress {
     public MessageId getInitialPositionByPartition(String partition) {
         // TODO: tmp code for compatibility
         if (!partitionToInitialPosition.containsKey(partition)) {
-            partitionToInitialPosition.put(partition, MessageId.latest);
+            partitionToInitialPosition.put(partition, MessageId.earliest);
         }
         return partitionToInitialPosition.get(partition);
     }
