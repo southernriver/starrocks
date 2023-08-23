@@ -527,7 +527,7 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
     }
 
     public int getTimeoutSecond() {
-        int value = Integer.parseInt(jobProperties.get(CreateRoutineLoadStmt.TIMEOUT_SECOND));
+        int value = Integer.parseInt(jobProperties.getOrDefault(CreateRoutineLoadStmt.TIMEOUT_SECOND, "0"));
         if (value == 0) {
             return (int) Config.routine_load_task_timeout_second;
         }
@@ -535,7 +535,7 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
     }
 
     public int getConsumeSecond() {
-        int value = Integer.parseInt(jobProperties.get(CreateRoutineLoadStmt.CONSUME_SECOND));
+        int value = Integer.parseInt(jobProperties.getOrDefault(CreateRoutineLoadStmt.CONSUME_SECOND, "0"));
         if (value == 0) {
             return (int) Config.routine_load_task_consume_second;
         }
