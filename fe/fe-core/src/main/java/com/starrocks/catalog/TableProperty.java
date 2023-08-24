@@ -410,6 +410,9 @@ public class TableProperty implements Writable, GsonPostProcessable {
     }
 
     public QueryRewriteConsistencyMode getForceExternalTableQueryRewrite() {
+        if (this.forceExternalTableQueryRewrite == null) {
+            return TableProperty.QueryRewriteConsistencyMode.defaultForExternalTable();
+        }
         return this.forceExternalTableQueryRewrite;
     }
 
@@ -422,6 +425,9 @@ public class TableProperty implements Writable, GsonPostProcessable {
     }
 
     public QueryRewriteConsistencyMode getOlapTableQueryRewrite() {
+        if (this.olapTableQueryRewrite == null) {
+            return TableProperty.QueryRewriteConsistencyMode.defaultForOlapTable();
+        }
         return this.olapTableQueryRewrite;
     }
 
