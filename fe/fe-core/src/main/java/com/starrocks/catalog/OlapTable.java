@@ -1306,9 +1306,7 @@ public class OlapTable extends Table implements GsonPostProcessable {
 
         tempPartitions.write(out);
 
-        if (GlobalStateMgr.withStateJournalVersion().moreThanOrEquals(FeMetaVersion.VERSION_96)) {
-            out.writeInt(maxColUniqueId);
-        }
+        out.writeInt(maxColUniqueId);
     }
 
     @Override

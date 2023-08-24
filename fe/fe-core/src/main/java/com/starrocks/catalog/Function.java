@@ -668,9 +668,7 @@ public class Function implements Writable {
         }
         writeOptionString(output, libUrl);
         writeOptionString(output, checksum);
-        if (GlobalStateMgr.withStateJournalVersion().moreThanOrEquals(FeMetaVersion.VERSION_94)) {
-            output.writeBoolean(isLoadAllClass);
-        }
+        output.writeBoolean(isLoadAllClass);
     }
 
     @Override
