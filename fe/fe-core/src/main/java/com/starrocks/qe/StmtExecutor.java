@@ -446,7 +446,8 @@ public class StmtExecutor {
                 }
 
                 // sql's blacklist is enabled through enable_sql_blacklist.
-                if (Config.enable_sql_blacklist && !parsedStmt.isExplain()) {
+                if (Config.enable_sql_blacklist && !parsedStmt.isExplain()
+                        && SqlBlackList.getInstance().sqlBlackListMap.size() > 0) {
                     OriginStatement origStmt = parsedStmt.getOrigStmt();
                     if (origStmt != null) {
                         String originSql = origStmt.originStmt.trim()
@@ -604,7 +605,8 @@ public class StmtExecutor {
 
             if (parsedStmt instanceof InsertStmt) {
                 // sql's blacklist is enabled through enable_sql_blacklist.
-                if (Config.enable_sql_blacklist && !parsedStmt.isExplain()) {
+                if (Config.enable_sql_blacklist && !parsedStmt.isExplain()
+                        && SqlBlackList.getInstance().sqlBlackListMap.size() > 0) {
                     OriginStatement origStmt = parsedStmt.getOrigStmt();
                     if (origStmt != null) {
                         String originSql = origStmt.originStmt.trim()

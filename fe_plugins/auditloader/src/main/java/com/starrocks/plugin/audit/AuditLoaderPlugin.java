@@ -136,7 +136,7 @@ public class AuditLoaderPlugin extends Plugin implements AuditPlugin {
         this.auditBuffer.append(event.dataSource).append("\t");
         this.auditBuffer.append(event.requestType).append("\t");
         this.auditBuffer.append(event.feIp).append("\t");
-        String stmt = truncateByBytes(event.stmt).replace("\t", " ").replace("\n", " ");
+        String stmt = truncateByBytes(event.stmt).replace("\t", " ").replace("\n", " ").replace("\r", " ");
         LOG.debug("receive audit event with stmt: {}", stmt);
         this.auditBuffer.append(stmt).append("\t");
         this.auditBuffer.append(event.digest).append("\t");
