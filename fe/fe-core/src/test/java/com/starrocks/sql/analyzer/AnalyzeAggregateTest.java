@@ -1,6 +1,7 @@
 // This file is licensed under the Elastic License 2.0. Copyright 2021-present, StarRocks Inc.
 package com.starrocks.sql.analyzer;
 
+import com.starrocks.common.Config;
 import com.starrocks.sql.ast.QueryRelation;
 import com.starrocks.sql.ast.QueryStatement;
 import com.starrocks.utframe.UtFrameUtils;
@@ -101,6 +102,27 @@ public class AnalyzeAggregateTest {
                 "ORDER BY contains aggregate function and applies to the result of a non-aggregated query");
         analyzeFail("SELECT v1 FROM t0 WHERE true ORDER BY sum(1)",
                 "must be an aggregate expression or appear in GROUP BY clause");
+    }
+
+    @Test
+    public void testDistinctWithGroupBy() {
+        // test with
+        Config.support_distinct_with_groupby = true;
+        try {
+            analyzeSuccess("select distinct v1 from t0 group by v1");
+            analyzeFail("select distinct v1, v3 from t0 group by v1, v2",
+                    "items list of SELECT DISTINCT should be the same with GROUP BY list");
+            analyzeSuccess("select distinct case when v1 > 0 then v1 else v2 end"
+                    + " from t0 group by case when v1 > 0 then v1 else v2 end");
+            analyzeSuccess("select distinct case when v1 > 0 then v1 else v2 end as t from t0 group by t");
+            analyzeFail("select distinct case when v1 > 0 then v1 else v2 end"
+                            + " from t0 group by case when v2 > 0 then v2 else v1 end",
+                    "items list of SELECT DISTINCT should be the same with GROUP BY list");
+            analyzeFail("select distinct v2 from t0 group by v1,v2",
+                    "SELECT DISTINCT fields should be as the same size with GROUP BY list");
+        } finally {
+            Config.support_distinct_with_groupby = false;
+        }
     }
 
     @Test

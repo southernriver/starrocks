@@ -39,17 +39,24 @@ public class AstToSQLBuilder {
         return new AST2SQLBuilderVisitor(false).visit(statement);
     }
 
-    private static class AST2SQLBuilderVisitor extends AstToStringBuilder.AST2StringBuilderVisitor {
+    public static class AST2SQLBuilderVisitor extends AstToStringBuilder.AST2StringBuilderVisitor {
 
         private final boolean simple;
+        private final boolean withoutTbl;
 
         public AST2SQLBuilderVisitor(boolean simple) {
             this.simple = simple;
+            this.withoutTbl = false;
+        }
+
+        public AST2SQLBuilderVisitor(boolean simple, boolean withoutTbl) {
+            this.simple = simple;
+            this.withoutTbl = withoutTbl;
         }
 
         private String buildColumnName(TableName tableName, String fieldName, String columnName) {
             String res = "";
-            if (tableName != null) {
+            if (tableName != null && !withoutTbl) {
                 if (!simple) {
                     res = tableName.toSql();
                 } else {

@@ -2056,4 +2056,9 @@ public class Config extends ConfigBase {
     @ConfField(mutable = true)
     public static boolean support_server_side_prepared_statement = false;
 
+    /**
+     * support distinct and group by on the same fields
+     */
+    @ConfField(mutable = true)
+    public static boolean support_distinct_with_groupby = false;
 }

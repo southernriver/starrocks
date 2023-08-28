@@ -18,6 +18,7 @@ import com.starrocks.analysis.SlotRef;
 import com.starrocks.catalog.FunctionSet;
 import com.starrocks.catalog.PrimitiveType;
 import com.starrocks.catalog.Type;
+import com.starrocks.common.Config;
 import com.starrocks.common.TreeNode;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.sql.ast.AstVisitor;
@@ -59,7 +60,7 @@ public class SelectAnalyzer {
         analyzeWhere(whereClause, analyzeState, sourceScope);
 
         List<Expr> outputExpressions =
-                analyzeSelect(selectList, fromRelation, groupByClause != null, analyzeState, sourceScope);
+                analyzeSelect(selectList, fromRelation, groupByClause, analyzeState, sourceScope);
         Scope outputScope = analyzeState.getOutputScope();
 
         List<Expr> groupByExpressions = new ArrayList<>(
@@ -181,7 +182,7 @@ public class SelectAnalyzer {
         }
     }
 
-    private List<Expr> analyzeSelect(SelectList selectList, Relation fromRelation, boolean hasGroupByClause,
+    private List<Expr> analyzeSelect(SelectList selectList, Relation fromRelation, GroupByClause groupByClause,
                                      AnalyzeState analyzeState, Scope scope) {
         ImmutableList.Builder<Expr> outputExpressionBuilder = ImmutableList.builder();
         ImmutableList.Builder<Field> outputFields = ImmutableList.builder();
@@ -272,6 +273,53 @@ public class SelectAnalyzer {
             }
 
             if (selectList.isDistinct()) {
+                if (!Config.support_distinct_with_groupby) {
+                    if (groupByClause != null) {
+                        throw new SemanticException(
+                                "cannot combine SELECT DISTINCT with aggregate functions or GROUP BY");
+                    }
+                } else if (groupByClause != null) {
+                    if (groupByClause.getGroupingExprs().size() != selectList.getItems().size()) {
+                        throw new SemanticException("SELECT DISTINCT fields should be as the same size with GROUP BY list");
+                    }
+                    for (Expr groupByExpr : groupByClause.getGroupingExprs()) {
+                        boolean match = false;
+                        if (groupByExpr instanceof SlotRef) {
+                            String label = ((SlotRef) groupByExpr).getLabel();
+                            // find ref in select list
+                            for (SelectListItem selectItem : selectList.getItems()) {
+                                // maybe match alias
+                                String alias;
+                                if ((alias = selectItem.getAlias()) != null && alias.equals(label)) {
+                                    match = true;
+                                    break;
+                                }
+                                Expr selectExpr;
+                                if ((selectExpr = selectItem.getExpr()) instanceof SlotRef) {
+                                    if (Optional.ofNullable(((SlotRef) selectExpr).getLabel()).map(e -> e.equals(label))
+                                            .orElse(false)) {
+                                        match = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        } else {
+                            String normalizeExprStr = groupByExpr.toSqlWithoutTbl();
+                            for (SelectListItem selectItem : selectList.getItems()) {
+                                // match groupByExpr with normalized string
+                                if (Optional.ofNullable(selectItem.getExpr())
+                                        .map(e -> e.toSqlWithoutTbl().equals(normalizeExprStr)).orElse(false)) {
+                                    match = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (!match) {
+                            throw new SemanticException(
+                                    "items list of SELECT DISTINCT should be the same with GROUP BY list");
+                        }
+                    }
+                }
                 outputExpressionBuilder.build().forEach(expr -> {
                     if (!expr.getType().canDistinct()) {
                         throw new SemanticException("DISTINCT can only be applied to comparable types : %s",
@@ -283,9 +331,6 @@ public class SelectAnalyzer {
                     }
                 });
 
-                if (hasGroupByClause) {
-                    throw new SemanticException("cannot combine SELECT DISTINCT with aggregate functions or GROUP BY");
-                }
                 analyzeState.setIsDistinct(true);
             }
         }
