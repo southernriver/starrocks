@@ -121,28 +121,9 @@ public:
         _total_scan_bytes += scan_bytes;
         _delta_scan_bytes += scan_bytes;
     }
-    void incr_cur_scan_items(const QueryStatisticsItemPB stats_item) {
-        incr_cur_scan_rows_num(stats_item.scan_rows());
-        incr_cur_scan_bytes(stats_item.scan_bytes());
-        if (stats_item.table_id() > 0 && (stats_item.scan_rows() > 0 || stats_item.scan_bytes() > 0)) {
-            std::lock_guard<SpinLock> l(_lock);
-            _total_scan_stats_items.emplace_back(stats_item);
-            _delta_scan_stats_items.emplace_back(stats_item);
-        }
-    }
     int64_t cpu_cost() const { return _total_cpu_cost_ns; }
     int64_t cur_scan_rows_num() const { return _total_scan_rows_num; }
     int64_t get_scan_bytes() const { return _total_scan_bytes; }
-    const std::vector<QueryStatisticsItemPB>& get_total_scan_stats_items() {
-        std::lock_guard<SpinLock> l(_lock);
-        return _total_scan_stats_items;
-    };
-    vector<QueryStatisticsItemPB>* get_and_clean_delta_scan_stats_items() {
-        std::lock_guard<SpinLock> l(_lock);
-        auto* tmp_items = new std::vector<QueryStatisticsItemPB>(0);
-        std::swap(*tmp_items, _delta_scan_stats_items);
-        return tmp_items;
-    };
 
     // Query start time, used to check how long the query has been running
     // To ensure that the minimum run time of the query will not be killed by the big query checking mechanism
@@ -192,18 +173,14 @@ private:
     std::once_flag _query_trace_init_flag;
     std::shared_ptr<starrocks::debug::QueryTrace> _query_trace;
 
-    // Lock for scan_stats_items vector
-    SpinLock _lock;
     std::once_flag _init_query_once;
     int64_t _query_begin_time = 0;
     std::atomic<int64_t> _total_cpu_cost_ns = 0;
     std::atomic<int64_t> _total_scan_rows_num = 0;
     std::atomic<int64_t> _total_scan_bytes = 0;
-    std::vector<QueryStatisticsItemPB> _total_scan_stats_items;
     std::atomic<int64_t> _delta_cpu_cost_ns = 0;
     std::atomic<int64_t> _delta_scan_rows_num = 0;
     std::atomic<int64_t> _delta_scan_bytes = 0;
-    std::vector<QueryStatisticsItemPB> _delta_scan_stats_items;
     bool _is_result_sink = false;
     std::shared_ptr<QueryStatisticsRecvr> _sub_plan_query_statistics_recvr; // For receive
 

@@ -21,8 +21,6 @@
 
 #include "runtime/query_statistics.h"
 
-#include "gutil/stl_util.h"
-
 namespace starrocks {
 
 void QueryStatistics::to_pb(PQueryStatistics* statistics) {
@@ -43,12 +41,10 @@ void QueryStatistics::clear() {
     _stats_items.clear();
 }
 
-void QueryStatistics::add_stats_item(const QueryStatisticsItemPB& stats_item) {
+void QueryStatistics::add_stats_item(QueryStatisticsItemPB& stats_item) {
+    this->_stats_items.emplace_back(stats_item);
     this->scan_rows += stats_item.scan_rows();
     this->scan_bytes += stats_item.scan_bytes();
-    if (stats_item.table_id() > 0 && (stats_item.scan_rows() > 0 || stats_item.scan_bytes() > 0)) {
-        this->_stats_items.emplace_back(stats_item);
-    }
 }
 
 void QueryStatistics::add_scan_stats(int64_t scan_rows, int64_t scan_bytes) {
@@ -74,7 +70,6 @@ void QueryStatistics::merge(int sender_id, QueryStatistics& other) {
     mem_cost_bytes = std::max<int64_t>(mem_cost_bytes, mem_bytes);
 
     _stats_items.insert(_stats_items.end(), other._stats_items.begin(), other._stats_items.end());
-    STLClearObject(&other._stats_items);
 }
 
 void QueryStatistics::merge_pb(const PQueryStatistics& statistics) {

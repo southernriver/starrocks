@@ -140,12 +140,7 @@ std::shared_ptr<QueryStatistics> QueryContext::intermediate_query_statistic() {
     if (_is_result_sink) {
         return query_statistic;
     }
-    std::vector<QueryStatisticsItemPB>* stats_items = get_and_clean_delta_scan_stats_items();
-    for (const auto& stats_item : *stats_items) {
-        query_statistic->add_stats_item(stats_item);
-    }
-    STLClearObject(stats_items);
-
+    query_statistic->add_scan_stats(_delta_scan_rows_num.exchange(0), _delta_scan_bytes.exchange(0));
     query_statistic->add_cpu_costs(_delta_cpu_cost_ns.exchange(0));
     query_statistic->add_mem_costs(mem_cost_bytes());
     _sub_plan_query_statistics_recvr->aggregate(query_statistic.get());
@@ -155,9 +150,7 @@ std::shared_ptr<QueryStatistics> QueryContext::intermediate_query_statistic() {
 std::shared_ptr<QueryStatistics> QueryContext::final_query_statistic() {
     DCHECK(_is_result_sink) << "must be the result sink";
     auto res = std::make_shared<QueryStatistics>();
-    for (const auto& stats_item : get_total_scan_stats_items()) {
-        res->add_stats_item(stats_item);
-    }
+    res->add_scan_stats(_total_scan_rows_num, _total_scan_bytes);
     res->add_cpu_costs(_total_cpu_cost_ns);
     res->add_mem_costs(mem_cost_bytes());
 
