@@ -575,6 +575,7 @@ public class ExternalTableExportConfig {
         try {
             IcebergUtil.createTable(table, normalizedEtTableName, properties, brokerDesc);
         } catch (IOException | UserException e) {
+            LOG.error(e.getMessage(), e);
             throw new SemanticException(e.getMessage(), e);
         }
     }

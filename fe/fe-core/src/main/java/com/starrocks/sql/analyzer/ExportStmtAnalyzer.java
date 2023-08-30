@@ -89,7 +89,6 @@ public class ExportStmtAnalyzer {
             // check path is valid
             // generate file name prefix
             statement.checkTable(mgr);
-            statement.checkType(table);
 
             // check broker whether exist
             BrokerDesc brokerDesc = statement.getBrokerDesc();
@@ -119,6 +118,9 @@ public class ExportStmtAnalyzer {
                     }
                 }
             }
+
+            statement.checkType(table);
+
             // check properties
             try {
                 statement.checkProperties(statement.getProperties());
