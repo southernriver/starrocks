@@ -327,7 +327,8 @@ set(EXEC_FILES
         ./util/cpu_usage_info_test.cpp
         ./gutil/sysinfo-test.cc
         ./service/lake_service_test.cpp
-        )
+        ./storage/compaction_parallelization_test.cpp
+)
 
 if ("${USE_STAROS}" STREQUAL "ON")
     list(APPEND EXEC_FILES ./fs/fs_starlet_test.cpp)

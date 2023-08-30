@@ -272,6 +272,10 @@ public:
 
     bool contains_version(Version version) const { return rowset_meta()->version().contains(version); }
 
+    void set_is_compacting(bool flag) { is_compacting.store(flag); }
+
+    bool get_is_compacting() { return is_compacting.load(); }
+
     DeletePredicatePB* mutable_delete_predicate() { return _rowset_meta->mutable_delete_predicate(); }
 
     static bool comparator(const RowsetSharedPtr& left, const RowsetSharedPtr& right) {
@@ -358,6 +362,8 @@ private:
     int64_t _mem_usage() const { return sizeof(Rowset) + _rowset_path.length(); }
 
     std::vector<SegmentSharedPtr> _segments;
+
+    std::atomic<bool> is_compacting{false};
 };
 
 class RowsetReleaseGuard {
