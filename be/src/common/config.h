@@ -940,4 +940,6 @@ CONF_mInt64(load_tablet_timeout_seconds, "30");
 
 CONF_Bool(force_reset_tablet_meta, "false");
 
+// Max size of key columns size of primary key table, default value is 128 bytes
+CONF_mInt32(primary_key_limit_size, "128");
 } // namespace starrocks::config
