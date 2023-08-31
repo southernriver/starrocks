@@ -24,7 +24,6 @@ package com.starrocks.metric;
 import com.starrocks.common.Config;
 import com.starrocks.qe.QueryDetail;
 import com.starrocks.qe.QueryDetailQueue;
-import org.apache.commons.lang3.tuple.Triple;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -136,10 +135,13 @@ public class MetricCalculator extends TimerTask {
         if (Config.enable_routine_load_lag_metrics) {
             MetricRepo.updateRoutineLoadProcessMetrics();
         }
+
         // <lastFinishTimestamp, mean>
-        Triple<Long, Double, Double> metricsPair = MetricRepo.getSchemaChangeLatencyMetrics(lastSchemaChangeFinishTime);
-        this.lastSchemaChangeFinishTime = metricsPair.getLeft();
-        MetricRepo.GAUGE_SCHEMA_CHANGE_LATENCY_MEAN.setValue(metricsPair.getMiddle());
-        MetricRepo.GAUGE_SCHEMA_CHANGE_LATENCY_MAX.setValue(metricsPair.getRight());
+        SchemaChangeMetricEntry metricEntry = MetricRepo.getSchemaChangeLatencyMetrics(lastSchemaChangeFinishTime);
+        this.lastSchemaChangeFinishTime = metricEntry.getLastFinishTimestamp();
+        MetricRepo.GAUGE_SCHEMA_CHANGE_LATENCY_MEAN.setValue(metricEntry.getScMean());
+        MetricRepo.GAUGE_SCHEMA_CHANGE_LATENCY_MAX.setValue(metricEntry.getScMax());
+        MetricRepo.GAUGE_LIGHT_SCHEMA_CHANGE_LATENCY_MEAN.setValue(metricEntry.getLscMean());
+        MetricRepo.GAUGE_LIGHT_SCHEMA_CHANGE_LATENCY_MAX.setValue(metricEntry.getLscMax());
     }
 }

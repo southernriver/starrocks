@@ -27,6 +27,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
 import com.starrocks.alter.Alter;
 import com.starrocks.alter.AlterJobV2;
+import com.starrocks.alter.SchemaChangeJobV2;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.Table;
 import com.starrocks.catalog.TabletInvertedIndex;
@@ -55,11 +56,12 @@ import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.service.ExecuteEnv;
 import com.starrocks.system.Backend;
 import com.starrocks.system.SystemInfoService;
-import org.apache.commons.lang3.tuple.Triple;
+import org.apache.commons.collections4.CollectionUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -117,6 +119,8 @@ public final class MetricRepo {
     public static LongCounterMetric COUNTER_ROUTINE_LOAD_PAUSED;
     public static LongCounterMetric COUNTER_MAX_ROUTINE_LOAD_TASK_PER_BE;
     public static LongCounterMetric COUNTER_HOT_COLD_QUERY;
+    public static LongCounterMetric COUNTER_LIGHT_SCHEMA_CHANGE;
+    public static LongCounterMetric COUNTER_SCHEMA_CHANGE;
 
     public static Histogram HISTO_QUERY_LATENCY;
     public static Histogram HISTO_QUERY_LATENCY_INTERNAL;
@@ -146,7 +150,9 @@ public final class MetricRepo {
     public static GaugeMetricImpl<Long> GAUGE_STACKED_JOURNAL_NUM;
 
     public static GaugeMetricImpl<Double> GAUGE_SCHEMA_CHANGE_LATENCY_MEAN;
+    public static GaugeMetricImpl<Double> GAUGE_LIGHT_SCHEMA_CHANGE_LATENCY_MEAN;
     public static GaugeMetricImpl<Double> GAUGE_SCHEMA_CHANGE_LATENCY_MAX;
+    public static GaugeMetricImpl<Double> GAUGE_LIGHT_SCHEMA_CHANGE_LATENCY_MAX;
 
     public static List<GaugeMetricImpl<Long>> GAUGE_ROUTINE_LOAD_LAGS;
     public static List<GaugeMetricImpl<Long>> GAUGE_ROUTINE_LOAD_TIME_LAGS;
@@ -357,12 +363,26 @@ public final class MetricRepo {
         GAUGE_SCHEMA_CHANGE_LATENCY_MEAN.setValue(0.0);
         STARROCKS_METRIC_REGISTER.addMetric(GAUGE_SCHEMA_CHANGE_LATENCY_MEAN);
 
+        GAUGE_LIGHT_SCHEMA_CHANGE_LATENCY_MEAN
+                = new GaugeMetricImpl<>("light_schema_change_latency_mean",
+                MetricUnit.MILLISECONDS, "mean of light schema change");
+        GAUGE_LIGHT_SCHEMA_CHANGE_LATENCY_MEAN.addLabel(new MetricLabel("type", "mean"));
+        GAUGE_LIGHT_SCHEMA_CHANGE_LATENCY_MEAN.setValue(0.0);
+        STARROCKS_METRIC_REGISTER.addMetric(GAUGE_LIGHT_SCHEMA_CHANGE_LATENCY_MEAN);
+
         GAUGE_SCHEMA_CHANGE_LATENCY_MAX
                 = new GaugeMetricImpl<>("schema_change_latency_max",
                 MetricUnit.MILLISECONDS, "max latency of schema change");
         GAUGE_SCHEMA_CHANGE_LATENCY_MAX.addLabel(new MetricLabel("type", "max"));
         GAUGE_SCHEMA_CHANGE_LATENCY_MAX.setValue(0.0);
         STARROCKS_METRIC_REGISTER.addMetric(GAUGE_SCHEMA_CHANGE_LATENCY_MAX);
+
+        GAUGE_LIGHT_SCHEMA_CHANGE_LATENCY_MAX
+                = new GaugeMetricImpl<>("light_schema_change_latency_max",
+                MetricUnit.MILLISECONDS, "max latency of light schema change");
+        GAUGE_LIGHT_SCHEMA_CHANGE_LATENCY_MAX.addLabel(new MetricLabel("type", "max"));
+        GAUGE_LIGHT_SCHEMA_CHANGE_LATENCY_MAX.setValue(0.0);
+        STARROCKS_METRIC_REGISTER.addMetric(GAUGE_LIGHT_SCHEMA_CHANGE_LATENCY_MAX);
 
 
         // 2. counter
@@ -468,6 +488,14 @@ public final class MetricRepo {
         COUNTER_HOT_COLD_QUERY = new LongCounterMetric("hot_cold_query", MetricUnit.REQUESTS,
                 "total number of hot cold query");
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_HOT_COLD_QUERY);
+
+        COUNTER_LIGHT_SCHEMA_CHANGE = new LongCounterMetric("light_schema_change_count", MetricUnit.NOUNIT,
+                "total count of light schema change");
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_LIGHT_SCHEMA_CHANGE);
+
+        COUNTER_SCHEMA_CHANGE = new LongCounterMetric("schema_change_count", MetricUnit.NOUNIT,
+                "total count of schema change");
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_SCHEMA_CHANGE);
 
         // 3. histogram
         HISTO_QUERY_LATENCY = METRIC_REGISTER.histogram(MetricRegistry.name("query", "latency", "ms"));
@@ -595,28 +623,52 @@ public final class MetricRepo {
         } // end for backends
     }
 
-    public static Triple<Long, Double, Double> getSchemaChangeLatencyMetrics(long lastFinishSchemaChangeTimestamp) {
+    public static SchemaChangeMetricEntry getSchemaChangeLatencyMetrics(long lastFinishSchemaChangeTimestamp) {
         if (!GlobalStateMgr.getCurrentState().isLeader()) {
-            return Triple.of(lastFinishSchemaChangeTimestamp, 0d, 0d);
+            return SchemaChangeMetricEntry.create(lastFinishSchemaChangeTimestamp);
         }
 
         List<AlterJobV2> alterJobsV2 = GlobalStateMgr.getCurrentState().getAlterInstance().getSchemaChangeHandler()
                 .getAlterJobsV2ByLastTimestamp(lastFinishSchemaChangeTimestamp);
         if (alterJobsV2.isEmpty()) {
-            return Triple.of(lastFinishSchemaChangeTimestamp, 0d, 0d);
+            return SchemaChangeMetricEntry.create(lastFinishSchemaChangeTimestamp);
         }
-        List<AlterJobV2> sortedJobsV2 =
-                alterJobsV2.stream().sorted(Comparator.comparingLong(AlterJobV2::getFinishedTimeMs))
+        List<SchemaChangeJobV2> sortedJobsV2 =
+                alterJobsV2.stream()
+                        .filter(job -> job instanceof SchemaChangeJobV2)
+                        .map(job -> (SchemaChangeJobV2) job)
+                        .sorted(Comparator.comparingLong(AlterJobV2::getFinishedTimeMs))
                         .collect(Collectors.toList());
+
+        Map<Boolean, List<SchemaChangeJobV2>> schemaMapper =
+                sortedJobsV2.stream().collect(Collectors.groupingBy(SchemaChangeJobV2::isLightSchemaChangeJob));
+
         long lastFinishTimestamp = sortedJobsV2.get(sortedJobsV2.size() - 1).getFinishedTimeMs();
 
-        double mean =
-                sortedJobsV2.stream().mapToLong(job -> job.getFinishedTimeMs() - job.getCreateTimeMs()).summaryStatistics()
-                        .getAverage();
-        double max = sortedJobsV2.stream().mapToLong(job -> job.getFinishedTimeMs() - job.getCreateTimeMs()).summaryStatistics()
-                .getMax();
+        SchemaChangeMetricEntry schemaChangeMetricEntry = SchemaChangeMetricEntry.create(lastFinishTimestamp);
 
-        return Triple.of(lastFinishTimestamp, mean, max);
+        // for light schema change
+        List<SchemaChangeJobV2> lscSchemaChangeJobs = schemaMapper.getOrDefault(true, Collections.emptyList());
+        buildJobMetrics(schemaChangeMetricEntry, lscSchemaChangeJobs);
+
+        // for normal schema change
+        List<SchemaChangeJobV2> schemaChangeJobs = schemaMapper.getOrDefault(false, Collections.emptyList());
+        buildJobMetrics(schemaChangeMetricEntry, schemaChangeJobs);
+
+        return schemaChangeMetricEntry;
+    }
+
+    private static void buildJobMetrics(SchemaChangeMetricEntry schemaChangeMetricEntry,
+            List<SchemaChangeJobV2> schemaChangeJobs) {
+        if (CollectionUtils.isNotEmpty(schemaChangeJobs)) {
+            double scMean = schemaChangeJobs.stream()
+                    .mapToLong(job -> job.getFinishedTimeMs() - job.getCreateTimeMs()).summaryStatistics()
+                    .getAverage();
+            double scMax = schemaChangeJobs.stream()
+                    .mapToLong(job -> job.getFinishedTimeMs() - job.getCreateTimeMs()).summaryStatistics()
+                    .getMax();
+            schemaChangeMetricEntry.setLscMean(scMean).setLscMax(scMax);
+        }
     }
 
     public static void updateRoutineLoadProcessMetrics() {
@@ -889,6 +941,8 @@ public final class MetricRepo {
     private static void collectAlterJobLatencyMetrics(MetricVisitor visitor) {
         visitor.visit(GAUGE_SCHEMA_CHANGE_LATENCY_MEAN);
         visitor.visit(GAUGE_SCHEMA_CHANGE_LATENCY_MAX);
+        visitor.visit(GAUGE_LIGHT_SCHEMA_CHANGE_LATENCY_MEAN);
+        visitor.visit(GAUGE_LIGHT_SCHEMA_CHANGE_LATENCY_MAX);
     }
 
     private static void collectRoutineLoadIngestMetrics(MetricVisitor visitor) {

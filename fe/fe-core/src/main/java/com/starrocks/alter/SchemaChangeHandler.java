@@ -73,6 +73,7 @@ import com.starrocks.common.util.DynamicPartitionUtil;
 import com.starrocks.common.util.ListComparator;
 import com.starrocks.common.util.PropertyAnalyzer;
 import com.starrocks.common.util.WriteQuorum;
+import com.starrocks.metric.MetricRepo;
 import com.starrocks.mysql.privilege.PrivPredicate;
 import com.starrocks.persist.AlterLightSchemaChangeInfo;
 import com.starrocks.persist.TableAddOrDropColumnsInfo;
@@ -1243,6 +1244,8 @@ public class SchemaChangeHandler extends AlterHandler {
             LOG.debug("schema change[{}-{}-{}] check pass.", dbId, tableId, alterIndexId);
         } // end for indices
 
+        Optional.ofNullable(MetricRepo.COUNTER_SCHEMA_CHANGE).ifPresent(m -> m.increase(1L));
+
         return jobBuilder.build();
     }
 
@@ -2074,13 +2077,13 @@ public class SchemaChangeHandler extends AlterHandler {
         }
 
         //for compatibility, we need create a finished state schema change job v2
-
         SchemaChangeJobV2 schemaChangeJob = new SchemaChangeJobV2(jobId, db.getId(), olapTable.getId(),
-                olapTable.getName(), 1000);
+                olapTable.getName(), 1000, true);
         schemaChangeJob.setJobState(AlterJobV2.JobState.FINISHED);
         schemaChangeJob.setFinishedTimeMs(System.currentTimeMillis());
         this.addAlterJobV2(schemaChangeJob);
 
+        Optional.ofNullable(MetricRepo.COUNTER_LIGHT_SCHEMA_CHANGE).ifPresent(m -> m.increase(1L));
         LOG.info("finished modify table's add or drop columns. table: {}, is replay: {}", olapTable.getName(),
                 isReplay);
     }

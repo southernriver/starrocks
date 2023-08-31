@@ -140,9 +140,17 @@ public class SchemaChangeJobV2 extends AlterJobV2 {
     private long startTime;
     @SerializedName(value = "sortKeyIdxes")
     private List<Integer> sortKeyIdxes;
+    @SerializedName(value = "isLightSchemaChangeJob")
+    private boolean isLightSchemaChangeJob;
 
     // save all schema change tasks
     private AgentBatchTask schemaChangeBatchTask = new AgentBatchTask();
+
+    public SchemaChangeJobV2(long jobId, long dbId, long tableId, String tableName, long timeoutMs,
+                             boolean isLightSchemaChangeJob) {
+        super(jobId, JobType.SCHEMA_CHANGE, dbId, tableId, tableName, timeoutMs);
+        this.isLightSchemaChangeJob = isLightSchemaChangeJob;
+    }
 
     public SchemaChangeJobV2(long jobId, long dbId, long tableId, String tableName, long timeoutMs) {
         super(jobId, JobType.SCHEMA_CHANGE, dbId, tableId, tableName, timeoutMs);
@@ -199,6 +207,10 @@ public class SchemaChangeJobV2 extends AlterJobV2 {
 
     public void setSortKeyIdxes(List<Integer> sortKeyIdxes) {
         this.sortKeyIdxes = sortKeyIdxes;
+    }
+
+    public boolean isLightSchemaChangeJob() {
+        return isLightSchemaChangeJob;
     }
 
     /**
