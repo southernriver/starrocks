@@ -132,6 +132,10 @@ public:
     // common interface
     void clear();
 
+    HllDataType get_type(){
+        return _type;
+    }
+
 private:
     using ElementSet = phmap::flat_hash_set<uint64_t>;
 

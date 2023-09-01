@@ -35,6 +35,13 @@ public:
      * @return: HllColumn
      */
     DEFINE_VECTORIZED_FN(hll_empty);
+
+    /**
+     * @param:
+     * @paramType columns: [TYPE_VARCHAR]
+     * @return TYPE_OBJECT
+     */
+    DEFINE_VECTORIZED_FN(base64_to_hll);
 };
 
 } // namespace vectorized
