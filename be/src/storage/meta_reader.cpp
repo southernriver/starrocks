@@ -72,13 +72,15 @@ Status MetaReader::_init_params(const MetaReaderParams& read_params) {
 Status MetaReader::_build_collect_context(const MetaReaderParams& read_params) {
     _collect_context.seg_collecter_params.max_cid = 0;
     _collect_context.seg_collecter_params.use_page_cache = !_params.runtime_state->disable_storage_page_cache();
+
+    auto tablet_schema = _tablet->tablet_schema();
     for (const auto& it : *(read_params.id_to_names)) {
         std::string col_name = "";
         std::string collect_field = "";
         RETURN_IF_ERROR(SegmentMetaCollecter::parse_field_and_colname(it.second, &collect_field, &col_name));
 
-        int32_t index = _tablet->field_index(col_name);
-        if (index < 0) {
+        int32_t unique_index = tablet_schema->field_index(col_name);
+        if (unique_index < 0) {
             std::stringstream ss;
             ss << "invalid column name: " << it.second;
             LOG(WARNING) << ss.str();
@@ -86,15 +88,16 @@ Status MetaReader::_build_collect_context(const MetaReaderParams& read_params) {
         }
 
         // get column type
-        LogicalType type = _tablet->tablet_schema()->column(index).type();
+        LogicalType type = tablet_schema->column_by_unique(unique_index).type();
         _collect_context.seg_collecter_params.field_type.emplace_back(type);
 
         // get collect field
         _collect_context.seg_collecter_params.fields.emplace_back(collect_field);
 
         // get column id
-        _collect_context.seg_collecter_params.cids.emplace_back(index);
-        _collect_context.seg_collecter_params.max_cid = std::max(_collect_context.seg_collecter_params.max_cid, index);
+        _collect_context.seg_collecter_params.cids.emplace_back(unique_index);
+        _collect_context.seg_collecter_params.max_cid =
+                std::max(_collect_context.seg_collecter_params.max_cid, unique_index);
 
         // get result slot id
         _collect_context.result_slot_ids.emplace_back(it.first);
@@ -107,7 +110,7 @@ Status MetaReader::_build_collect_context(const MetaReaderParams& read_params) {
             _collect_context.seg_collecter_params.read_page.emplace_back(false);
         }
     }
-    _collect_context.seg_collecter_params.tablet_schema = read_params.tablet->tablet_schema();
+    _collect_context.seg_collecter_params.tablet_schema = tablet_schema;
     return Status::OK();
 }
 

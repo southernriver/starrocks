@@ -43,14 +43,6 @@ Status Compaction::do_compaction() {
     return st;
 }
 
-const RowsetSharedPtr& tablet_meta_with_max_rowset_version(std::vector<RowsetSharedPtr> rowsets) {
-    return *std::max_element(
-            rowsets.begin(), rowsets.end(),
-            [](const RowsetSharedPtr& a, const RowsetSharedPtr& b) {
-                return a->version() < b->version();
-            });
-}
-
 Status Compaction::do_compaction_impl() {
     OlapStopWatch watch;
     int64_t start_time = UnixMillis();
@@ -76,14 +68,14 @@ Status Compaction::do_compaction_impl() {
         return iterator_num_res.status();
     }
 
-    const TabletSchemaCSPtr& cur_tablet_schema =
-            tablet_meta_with_max_rowset_version(_input_rowsets)->schema();
+    const TabletSchemaCSPtr cur_tablet_schema =
+            CompactionUtils::tablet_meta_with_max_rowset_version(_input_rowsets)->schema();
 
     size_t segment_iterator_num = iterator_num_res.value();
     CompactionAlgorithm algorithm = CompactionUtils::choose_compaction_algorithm(
-            _tablet->num_columns(), config::vertical_compaction_max_columns_per_group, segment_iterator_num);
+            cur_tablet_schema->num_columns(), config::vertical_compaction_max_columns_per_group, segment_iterator_num);
     if (algorithm == VERTICAL_COMPACTION) {
-        CompactionUtils::split_column_into_groups(_tablet->num_columns(), cur_tablet_schema->sort_key_idxes(),
+        CompactionUtils::split_column_into_groups(cur_tablet_schema->num_columns(), cur_tablet_schema->sort_key_idxes(),
                                                   config::vertical_compaction_max_columns_per_group, &_column_groups);
     }
 

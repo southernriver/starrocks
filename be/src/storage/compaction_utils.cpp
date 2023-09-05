@@ -66,6 +66,15 @@ Status CompactionUtils::construct_output_rowset_writer(Tablet* tablet, uint32_t 
     return Status::OK();
 }
 
+
+const RowsetSharedPtr& CompactionUtils::tablet_meta_with_max_rowset_version(std::vector<RowsetSharedPtr> rowsets) {
+    return *std::max_element(
+            rowsets.begin(), rowsets.end(),
+            [](const RowsetSharedPtr& a, const RowsetSharedPtr& b) {
+                return a->version() < b->version();
+            });
+}
+
 uint32_t CompactionUtils::get_segment_max_rows(int64_t max_segment_file_size, int64_t input_row_num,
                                                int64_t input_rowsets_size) {
     // The range of config::max_segment_file_size is between [1, INT64_MAX]

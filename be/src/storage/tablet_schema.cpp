@@ -571,6 +571,15 @@ size_t TabletSchema::field_index(std::string_view field_name) const {
     return -1;
 }
 
+size_t TabletSchema::field_unique_index(std::string_view field_name) const {
+    for (auto& column : _cols) {
+        if (column.name() == field_name) {
+            return column.unique_id();
+        }
+    }
+    return -1;
+}
+
 int32_t TabletSchema::field_index(int32_t col_unique_id) const {
     const auto& found = _field_id_to_index.find(col_unique_id);
     return (found == _field_id_to_index.end()) ? -1 : found->second;
@@ -583,6 +592,12 @@ const std::vector<TabletColumn>& TabletSchema::columns() const {
 const TabletColumn& TabletSchema::column(size_t ordinal) const {
     DCHECK(ordinal < num_columns()) << "ordinal:" << ordinal << ", num_columns:" << num_columns();
     return _cols[ordinal];
+}
+
+const TabletColumn& TabletSchema::column_by_unique(size_t column_unique_id) const {
+    auto field_index_id = field_index(column_unique_id);
+    DCHECK(field_index_id >= 0) << "unique_id:" << column_unique_id << " can not be found";
+    return _cols[field_index_id];
 }
 
 bool operator==(const TabletColumn& a, const TabletColumn& b) {

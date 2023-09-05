@@ -24,7 +24,10 @@ std::shared_ptr<CompactionTask> CompactionTaskFactory::create_compaction_task() 
         return nullptr;
     }
     size_t segment_iterator_num = iterator_num_res.value();
-    size_t num_columns = _tablet->num_columns();
+
+    const TabletSchemaCSPtr cur_tablet_schema =
+            CompactionUtils::tablet_meta_with_max_rowset_version(_input_rowsets)->schema();
+    size_t num_columns = cur_tablet_schema->num_columns();
     CompactionAlgorithm algorithm = CompactionUtils::choose_compaction_algorithm(
             num_columns, config::vertical_compaction_max_columns_per_group, segment_iterator_num);
     std::shared_ptr<CompactionTask> compaction_task;

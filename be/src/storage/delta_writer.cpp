@@ -171,18 +171,18 @@ Status DeltaWriter::_init() {
         }
     }();
 
-    // build tablet schema in request level
-    auto tablet_schema_ptr = _tablet->tablet_schema();
+    // build tablet schema in request level, old tablet schema should not be used in the future.
+    auto old_tablet_schema = _tablet->tablet_schema();
     _build_current_tablet_schema(_opt.index_id,
-                                 _opt.ptable_schema_param, _tablet->tablet_schema());
+                                 _opt.ptable_schema_param, old_tablet_schema);
 
     // maybe partial update, change to partial tablet schema
-    if (tablet_schema_ptr->keys_type() == KeysType::PRIMARY_KEYS &&
-        partial_cols_num < tablet_schema_ptr->num_columns()) {
+    if (_tablet_schema->keys_type() == KeysType::PRIMARY_KEYS &&
+        partial_cols_num < _tablet_schema->num_columns()) {
         writer_context.referenced_column_ids.reserve(partial_cols_num);
         for (auto i = 0; i < partial_cols_num; ++i) {
             const auto& slot_col_name = (*_opt.slots)[i]->col_name();
-            int32_t index = _tablet->field_index(slot_col_name);
+            int32_t index = _tablet_schema->field_index(slot_col_name);
             if (index < 0) {
                 auto msg = strings::Substitute("Invalid column name: $0", slot_col_name);
                 LOG(WARNING) << msg;
@@ -199,12 +199,12 @@ Status DeltaWriter::_init() {
             // If tablet is a new created tablet and has no historical data, average_row_size is 0
             // And we use schema size as average row size. If there are complex type(i.e. BITMAP/ARRAY) or varchar,
             // we will consider it as 16 bytes.
-            average_row_size = tablet_schema_ptr->estimate_row_size(16);
+            average_row_size = _tablet_schema->estimate_row_size(16);
             _memtable_buffer_row = config::write_buffer_size / average_row_size;
         }
         writer_context.partial_update_tablet_schema =
-                TabletSchema::create(*tablet_schema_ptr, writer_context.referenced_column_ids);
-        auto sort_key_idxes = tablet_schema_ptr->sort_key_idxes();
+                TabletSchema::create(*_tablet_schema, writer_context.referenced_column_ids);
+        auto sort_key_idxes = _tablet_schema->sort_key_idxes();
         std::sort(sort_key_idxes.begin(), sort_key_idxes.end());
         if (!std::includes(writer_context.referenced_column_ids.begin(), writer_context.referenced_column_ids.end(),
                            sort_key_idxes.begin(), sort_key_idxes.end())) {
@@ -214,7 +214,7 @@ Status DeltaWriter::_init() {
         writer_context.tablet_schema = writer_context.partial_update_tablet_schema;
         _tablet_schema = writer_context.partial_update_tablet_schema;
     } else {
-        if (tablet_schema_ptr->keys_type() == KeysType::PRIMARY_KEYS && !_opt.merge_condition.empty()) {
+        if (_tablet_schema->keys_type() == KeysType::PRIMARY_KEYS && !_opt.merge_condition.empty()) {
             writer_context.merge_condition = _opt.merge_condition;
         }
         writer_context.tablet_schema = _tablet_schema;

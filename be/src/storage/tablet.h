@@ -102,10 +102,6 @@ public:
     // propreties encapsulated in TabletSchema
     KeysType keys_type() const;
     size_t num_columns() const;
-    size_t num_key_columns() const;
-    size_t num_rows_per_row_block() const;
-    size_t next_unique_id() const;
-    size_t field_index(const string& field_name) const;
     std::string schema_debug_string() const;
     std::string debug_string() const;
 
@@ -394,24 +390,9 @@ inline KeysType Tablet::keys_type() const {
     return tablet_schema()->keys_type();
 }
 
+// TODO: Need to refactor cause by that tablet_schema may be changed in update writing phase
 inline size_t Tablet::num_columns() const {
     return tablet_schema()->num_columns();
-}
-
-inline size_t Tablet::num_key_columns() const {
-    return tablet_schema()->num_key_columns();
-}
-
-inline size_t Tablet::num_rows_per_row_block() const {
-    return tablet_schema()->num_rows_per_row_block();
-}
-
-inline size_t Tablet::next_unique_id() const {
-    return tablet_schema()->next_column_unique_id();
-}
-
-inline size_t Tablet::field_index(const string& field_name) const {
-    return tablet_schema()->field_index(field_name);
 }
 
 } // namespace starrocks

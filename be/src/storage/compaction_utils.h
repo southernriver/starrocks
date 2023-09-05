@@ -8,6 +8,7 @@
 #include "common/status.h"
 #include "storage/olap_common.h"
 #include "tablet_schema.h"
+#include "storage/rowset/rowset.h"
 
 namespace starrocks {
 
@@ -43,6 +44,8 @@ public:
                                                  const TabletSchemaCSPtr* tablet_schema = nullptr);
 
     static uint32_t get_segment_max_rows(int64_t max_segment_file_size, int64_t input_row_num, int64_t input_size);
+
+    static const RowsetSharedPtr& tablet_meta_with_max_rowset_version(std::vector<RowsetSharedPtr> rowsets);
 
     static void split_column_into_groups(size_t num_columns, const std::vector<ColumnId>& sort_key_idxes,
                                          int64_t max_columns_per_group,
