@@ -267,7 +267,7 @@ public class LowCardinalityTest extends PlanTestBase {
         Assert.assertTrue(plan.contains("  2:Decode\n" +
                 "  |  <dict id 10> : <string id 3>"));
         String thrift = getThriftPlan(sql);
-        Assert.assertTrue(thrift.contains("TGlobalDict(columnId:10, strings:[6D 6F 63 6B], ids:[1])"));
+        Assert.assertTrue(thrift.contains("TGlobalDict(columnId:10, strings:[6D 6F 63 6B], ids:[1]"));
     }
 
     @Test

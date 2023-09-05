@@ -217,7 +217,7 @@ public class CacheDictManager implements IDictManager {
     }
 
     @Override
-    public void updateGlobalDict(long tableId, String columnName, long versionTime) {
+    public void updateGlobalDict(long tableId, String columnName, long collectVersion, long versionTime) {
         ColumnIdentifier columnIdentifier = new ColumnIdentifier(tableId, columnName);
         if (!dictStatistics.asMap().containsKey(columnIdentifier)) {
             return;
@@ -229,9 +229,16 @@ public class CacheDictManager implements IDictManager {
                 Optional<ColumnDict> columnOptional = columnFuture.get();
                 if (columnOptional.isPresent()) {
                     ColumnDict columnDict = columnOptional.get();
-                    ColumnDict newColumnDict = new ColumnDict(columnDict.getDict(), versionTime);
-                    dictStatistics.put(columnIdentifier, CompletableFuture.completedFuture(Optional.of(newColumnDict)));
-                    LOG.debug("update dict for column {}, version {}", columnName, versionTime);
+                    long lastVersion = columnDict.getVersionTime();
+                    long dictCollectVersion = columnDict.getCollectedVersionTime();
+                    if (collectVersion != dictCollectVersion) {
+                        LOG.info("remove dict by unmatched version {}:{}", collectVersion, dictCollectVersion);
+                        removeGlobalDict(tableId, columnName);
+                        return;
+                    }
+                    columnDict.updateVersionTime(versionTime);
+                    LOG.info("update dict for table {} column {} from version {} to {}", tableId, columnName,
+                            lastVersion, versionTime);
                 }
             } catch (Exception e) {
                 LOG.warn(String.format("update dict cache for %d: %s failed", tableId, columnName), e);
