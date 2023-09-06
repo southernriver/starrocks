@@ -252,7 +252,7 @@ public class HiveMetaClient {
     }
 
     public Partition addPartitions(Table table, String partitionName) {
-        if (Config.enable_check_tdw_pri) {
+        if (Config.is_tdw_hive) {
             addPartitionToTdw(table, partitionName);
             return null;
         }

@@ -246,11 +246,15 @@ public class ExportExportingTask extends PriorityLeaderTask {
 
             String finalExportedFile = exportedFile;
             futures.add(ExportJob.getIoExec().submit(() -> {
-                String failMsg = moveFile(job, exportedTempFile, finalExportedFile);
-                if (failMsg != null) {
-                    return new Status(TStatusCode.INTERNAL_ERROR, failMsg);
+                try {
+                    String failMsg = moveFile(job, exportedTempFile, finalExportedFile);
+                    if (failMsg != null) {
+                        return new Status(TStatusCode.INTERNAL_ERROR, failMsg);
+                    }
+                    job.addExportedFile(finalExportedFile);
+                } catch (Exception e) {
+                    LOG.error(e.getMessage(), e);
                 }
-                job.addExportedFile(finalExportedFile);
                 return null;
             }));
             fileIndex++;

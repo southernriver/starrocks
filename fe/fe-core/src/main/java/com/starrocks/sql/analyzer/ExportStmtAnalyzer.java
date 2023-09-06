@@ -106,7 +106,7 @@ public class ExportStmtAnalyzer {
                     throw new SemanticException("failed to get alive broker");
                 }
             } else {
-                String user = Config.enable_check_tdw_pri ? TdwUtil.getCurrentTdwUserName() :
+                String user = Config.is_tdw_hive ? TdwUtil.getCurrentTdwUserName() :
                         (ConnectContext.get() == null ? null : ConnectContext.get().getQualifiedUser());
                 String userInBroker = brokerDesc.getProperties().get(HdfsFsManager.USER_NAME_KEY);
                 if (user != null) {

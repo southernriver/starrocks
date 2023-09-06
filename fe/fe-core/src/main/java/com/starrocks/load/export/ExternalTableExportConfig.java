@@ -194,7 +194,7 @@ public class ExternalTableExportConfig {
     }
 
     private boolean isTdwHive(Table table) {
-        return Config.enable_check_tdw_pri && table.getType() == Table.TableType.HIVE;
+        return Config.is_tdw_hive && table.getType() == Table.TableType.HIVE;
     }
 
     private String getTargetExportPartition(Table table, Table externalTable, String partition) {
@@ -330,7 +330,7 @@ public class ExternalTableExportConfig {
 
     private void prepareForHive(HiveTable hiveTable, String originalTargetPartitionName) {
         String targetPartitionName = originalTargetPartitionName;
-        if (Config.enable_check_tdw_pri) {
+        if (Config.is_tdw_hive) {
             targetPartitionName = targetPartitionName.replaceAll(TdwUtil.TDW_PARTITION_PREFIX_SEPARATOR, "")
                     .replaceAll("-", "");
         }
@@ -395,7 +395,7 @@ public class ExternalTableExportConfig {
                     try {
                         // only the partitionValue after '=' matters
                         List<String> partitionNames;
-                        if (Config.enable_check_tdw_pri) {
+                        if (Config.is_tdw_hive) {
                             // /p_;2023-03-24/ -> [p_=2023-03-24]
                             partitionNames = Collections.singletonList(
                                     originalTargetPartitionName.replaceAll(TdwUtil.TDW_PARTITION_PREFIX_SEPARATOR,
@@ -505,12 +505,12 @@ public class ExternalTableExportConfig {
     private void fillFromPath(PartitionSpec spec, String partitionPath, PartitionKey data)
             throws UnsupportedEncodingException {
         String[] partitions = partitionPath.split("/", -1);
-        org.apache.iceberg.relocated.com.google.common.base.Preconditions.checkArgument(
+        Preconditions.checkArgument(
                 partitions.length <= spec.fields().size(),
                 "Invalid partition data, too many fields (expecting %s): %s",
                 spec.fields().size(),
                 partitionPath);
-        org.apache.iceberg.relocated.com.google.common.base.Preconditions.checkArgument(
+        Preconditions.checkArgument(
                 partitions.length >= spec.fields().size(),
                 "Invalid partition data, not enough fields (expecting %s): %s",
                 spec.fields().size(),
@@ -519,7 +519,7 @@ public class ExternalTableExportConfig {
         for (int i = 0; i < partitions.length; i += 1) {
             PartitionField field = spec.fields().get(i);
             String[] parts = partitions[i].split("=", 2);
-            org.apache.iceberg.relocated.com.google.common.base.Preconditions.checkArgument(
+            Preconditions.checkArgument(
                     parts.length == 2 && parts[0] != null && field.name().equals(parts[0]),
                     "Invalid partition: %s",
                     partitions[i]);

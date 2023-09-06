@@ -796,6 +796,10 @@ public class ExportJob implements Writable {
     }
 
     public Status releaseSnapshots() {
+        // recovered from image
+        if (exportTable == null) {
+            return Status.OK;
+        }
         switch (exportTable.getType()) {
             case OLAP:
             case MYSQL:

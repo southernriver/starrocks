@@ -94,7 +94,7 @@ public class IcebergUtil {
         ConnectorMetadata connectorMetadata = GlobalStateMgr.getCurrentState().getMetadataMgr()
                 .getOptionalMetadata(catalogName).get();
         Map<String, String> properties = new HashMap<>(prop);
-        if (!Config.enable_check_tdw_pri) {
+        if (!Config.is_tdw_hive) {
             properties.put(TableProperties.ENGINE_HIVE_ENABLED, "true");
             properties.put("external.table.purge", "true");
         }

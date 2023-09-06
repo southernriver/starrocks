@@ -471,11 +471,15 @@ public class ColddownJob implements Writable {
     private void applySchemaChange() {
         if (ExternalTableExportConfig.isAutomaticallyUpdateTargetTableSchema(targetProperties) && columnNames == null) {
             ExportJob.getIoExec().submit(() -> {
-                OlapTable table = (OlapTable) MetaUtils.getTable(dbId, tableId);
-                ExternalTableExportConfig externalTableExportConfig =
-                        new ExternalTableExportConfig(tableName, properties, targetProperties, brokerDesc);
-                synchronized (schemaChangeLockObject) {
-                    externalTableExportConfig.applySchemaChange(table, columnNames != null);
+                try {
+                    OlapTable table = (OlapTable) MetaUtils.getTable(dbId, tableId);
+                    ExternalTableExportConfig externalTableExportConfig =
+                            new ExternalTableExportConfig(tableName, properties, targetProperties, brokerDesc);
+                    synchronized (schemaChangeLockObject) {
+                        externalTableExportConfig.applySchemaChange(table, columnNames != null);
+                    }
+                } catch (Exception e) {
+                    LOG.error(e.getMessage(), e);
                 }
             });
         }

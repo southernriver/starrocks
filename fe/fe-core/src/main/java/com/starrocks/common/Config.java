@@ -1404,6 +1404,8 @@ public class Config extends ConfigBase {
     @ConfField
     public static int tdw_check_priv_timeout = 3000;
     @ConfField
+    public static boolean is_tdw_hive = true;
+    @ConfField
     public static boolean enable_check_tdw_pri = true;
     @ConfField
     public static String tdw_pri_username = "";
