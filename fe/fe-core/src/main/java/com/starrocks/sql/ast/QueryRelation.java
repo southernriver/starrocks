@@ -11,6 +11,7 @@ import com.starrocks.sql.analyzer.FieldId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 public abstract class QueryRelation extends Relation {
@@ -43,7 +44,7 @@ public abstract class QueryRelation extends Relation {
     }
 
     public void clearOrder() {
-        sortClause.clear();
+        Optional.ofNullable(sortClause).ifPresent(List::clear);
     }
 
     public LimitElement getLimit() {
