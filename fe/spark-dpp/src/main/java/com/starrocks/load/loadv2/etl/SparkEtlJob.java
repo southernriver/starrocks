@@ -115,10 +115,16 @@ public class SparkEtlJob {
                     }
                     if (funcName.equalsIgnoreCase(BITMAP_DICT_FUNC)) {
                         bitmapDictColumns.add(columnName.toLowerCase());
-                    } else if (!funcName.equalsIgnoreCase(TO_BITMAP_FUNC)) {
+                    } else if (funcName.equalsIgnoreCase(TO_BITMAP_FUNC)) {
+                        // remove to_bitmap, create new mappings.
+                        // fox example to_bitmap(_col1) -> (_col1)
+                        EtlColumnMapping newColumnMapping = new EtlColumnMapping(exprStr.trim().substring(9));
+                        newColumnMappings.put(mappingEntry.getKey(), newColumnMapping);
+                    } else {
                         newColumnMappings.put(mappingEntry.getKey(), mappingEntry.getValue());
                     }
                 }
+                LOG.info("reset new columnMappings = " + newColumnMappings);
                 // reset new columnMappings
                 fileGroup.columnMappings = newColumnMappings;
             }
