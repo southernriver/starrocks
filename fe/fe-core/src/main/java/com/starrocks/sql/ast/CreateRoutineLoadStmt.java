@@ -118,6 +118,7 @@ public class CreateRoutineLoadStmt extends DdlStmt {
     public static final String PULSAR_PARTITIONS_PROPERTY = "pulsar_partitions";
     public static final String PULSAR_INITIAL_POSITIONS_PROPERTY = "pulsar_initial_positions";
     public static final String PULSAR_DEFAULT_INITIAL_POSITION = "pulsar_default_initial_position";
+    public static final String PULSAR_AUTH_TOKEN = "auth.token";
 
     // tube type properties
     public static final String TUBE_MASTER_ADDR_PROPERTY = "tube_master_addr";
@@ -833,9 +834,6 @@ public class CreateRoutineLoadStmt extends DdlStmt {
         // check subscription
         pulsarSubscription =
                 Strings.nullToEmpty(dataSourceProperties.get(PULSAR_SUBSCRIPTION_PROPERTY)).replaceAll(" ", "");
-        if (Strings.isNullOrEmpty(pulsarSubscription)) {
-            throw new AnalysisException(PULSAR_SUBSCRIPTION_PROPERTY + " is a required property");
-        }
 
         // check custom pulsar property before check partitions,
         // because partitions can use pulsar_default_position property

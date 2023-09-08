@@ -51,6 +51,10 @@ public class PulsarProgress extends RoutineLoadProgress {
         }
     }
 
+    public Map<String, MessageId> getPartitionToInitialPosition() {
+        return partitionToInitialPosition;
+    }
+
     public Map<String, MessageId> getPartitionToInitialPosition(List<String> partitions) {
         // TODO: tmp code for compatibility
         for (String partition : partitions) {

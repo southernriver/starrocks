@@ -38,7 +38,13 @@ import com.starrocks.transaction.TransactionState;
 import com.starrocks.transaction.TransactionStatus;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.pulsar.client.api.ClientBuilder;
+import org.apache.pulsar.client.api.Consumer;
 import org.apache.pulsar.client.api.MessageId;
+import org.apache.pulsar.client.api.PulsarClient;
+import org.apache.pulsar.client.api.PulsarClientException;
+import org.apache.pulsar.client.api.SubscriptionType;
+import org.apache.pulsar.client.impl.auth.AuthenticationToken;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -71,10 +77,12 @@ public class PulsarRoutineLoadJob extends RoutineLoadJob {
 
     public static final String POSITION_LATEST = "POSITION_LATEST"; // 0
     public static final String POSITION_EARLIEST = "POSITION_EARLIEST"; // 1
-    public static final long POSITION_LATEST_VAL = 0;
-    public static final long POSITION_EARLIEST_VAL = 1;
 
     private MessageId defaultInitialPosition = null;
+    private String authToken = null;
+
+    private PulsarClient pulsarClient = null;
+    private Map<String, Consumer> pulsarConsumers = Maps.newHashMap();
 
     public PulsarRoutineLoadJob() {
         // for serialization, id is dummy
@@ -104,6 +112,88 @@ public class PulsarRoutineLoadJob extends RoutineLoadJob {
 
     public Map<String, String> getConvertedCustomProperties() {
         return convertedCustomProperties;
+    }
+
+    private void startConsumers() {
+        if (subscription.isEmpty()) {
+            return;
+        }
+
+        clearConsumers();
+        try {
+            ClientBuilder builder = PulsarClient.builder().serviceUrl(serviceUrl);
+            if (authToken != null) {
+                builder.authentication(new AuthenticationToken(authToken));
+            }
+            pulsarClient = builder.build();
+        } catch (PulsarClientException e) {
+            String errMsg = "Failed to create pulsar client for topic: " + topic;
+            throw new UserException(errMsg, e);
+        }
+
+        for (String partition : currentPulsarPartitions) {
+            try {
+                Consumer consumer = pulsarClient.newConsumer()
+                        .topic(partition)
+                        .subscriptionName(subscription)
+                        .receiverQueueSize(1)
+                        .subscriptionType(SubscriptionType.Shared)
+                        .subscribe();
+                pulsarConsumers.put(partition, consumer);
+            } catch (PulsarClientException e) {
+                String errMsg = "Failed to subscribe topic: " + partition;
+                throw new UserException(errMsg, e);
+            }
+        }
+    }
+
+    private void clearConsumers() {
+        if (subscription.isEmpty()) {
+            return;
+        }
+
+        pulsarConsumers.entrySet().forEach(entry -> {
+            try {
+                entry.getValue().close();
+            } catch (PulsarClientException e) {
+                LOG.warn("Failed to close pulsar consumer for partition: " + entry.getKey() + ". " + e.getMessage());
+            }
+        });
+        pulsarConsumers.clear();
+
+        if (pulsarClient != null) {
+            try {
+                pulsarClient.close();
+            } catch (PulsarClientException e) {
+                LOG.warn("Failed to close pulsar client for topic: " + topic + ". " + e.getMessage());
+            } finally {
+                pulsarClient = null;
+            }
+        }
+    }
+
+    @Override
+    protected void executeRunning() {
+        super.executeRunning();
+        startConsumers();
+    }
+
+    @Override
+    protected void executePause(ErrorReason reason) {
+        super.executePause(reason);
+        clearConsumers();
+    }
+
+    @Override
+    protected void executeStop() {
+        super.executeStop();
+        clearConsumers();
+    }
+
+    @Override
+    protected void executeCancel(ErrorReason reason) {
+        super.executeCancel(reason);
+        clearConsumers();
     }
 
     @Override
@@ -143,6 +233,14 @@ public class PulsarRoutineLoadJob extends RoutineLoadJob {
             try {
                 this.defaultInitialPosition = CreateRoutineLoadStmt.getPulsarPosition(
                         convertedCustomProperties.remove(CreateRoutineLoadStmt.PULSAR_DEFAULT_INITIAL_POSITION));
+            } catch (AnalysisException e) {
+                throw new DdlException(e.getMessage());
+            }
+        }
+
+        if (convertedCustomProperties.containsKey(CreateRoutineLoadStmt.PULSAR_AUTH_TOKEN)) {
+            try {
+                this.authToken = convertedCustomProperties.get(CreateRoutineLoadStmt.PULSAR_AUTH_TOKEN);
             } catch (AnalysisException e) {
                 throw new DdlException(e.getMessage());
             }
@@ -250,6 +348,24 @@ public class PulsarRoutineLoadJob extends RoutineLoadJob {
     protected void updateProgress(RLTaskTxnCommitAttachment attachment) throws UserException {
         super.updateProgress(attachment);
         this.progress.update(attachment);
+
+        if (!subscription.isEmpty()) {
+            // Pulsar reader can't subscribe user defined subscription, so here ack this subscription to update progress.
+            Map<String, MessageId> ackPositions =
+                    ((PulsarProgress) attachment.getProgress()).getPartitionToInitialPosition();
+            for (Map.Entry<String, MessageId> ackPosition : ackPositions.entrySet()) {
+                if (pulsarConsumers.containsKey(ackPosition.getKey())) {
+                    try {
+                        pulsarConsumers.get(ackPosition.getKey()).seek(ackPosition.getValue());
+                    } catch (PulsarClientException e) {
+                        LOG.warn("Failed to ack pulsar partition: " + ackPosition.getKey() + " for position: " +
+                                ackPosition.getValue() + ". " + e.getMessage());
+                    }
+                } else {
+                    LOG.warn("Can't find consumer for partition: " + ackPosition.getKey());
+                }
+            }
+        }
     }
 
     @Override
@@ -530,12 +646,23 @@ public class PulsarRoutineLoadJob extends RoutineLoadJob {
 
     @Override
     public void modifyDataSourceProperties(RoutineLoadDataSourceProperties dataSourceProperties) throws DdlException {
+        String pulsarSubscription = "";
         List<Pair<String, MessageId>> partitionInitialPositions = Lists.newArrayList();
         Map<String, String> customPulsarProperties = Maps.newHashMap();
 
         if (dataSourceProperties.hasAnalyzedProperties()) {
+            pulsarSubscription = dataSourceProperties.getPulsarSubscription();
             partitionInitialPositions = dataSourceProperties.getPulsarPartitionInitialPositions();
             customPulsarProperties = dataSourceProperties.getCustomPulsarProperties();
+        }
+
+        // modify subscription
+        if (!pulsarSubscription.isEmpty()) {
+            if (pulsarSubscription.equals("empty")) {
+                subscription = "";
+            } else {
+                subscription = pulsarSubscription;
+            }
         }
 
         // modify partition positions

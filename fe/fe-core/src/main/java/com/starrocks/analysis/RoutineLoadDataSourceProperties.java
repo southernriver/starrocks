@@ -47,6 +47,7 @@ public class RoutineLoadDataSourceProperties {
             .build();
 
     private static final ImmutableSet<String> CONFIGURABLE_PULSAR_PROPERTIES_SET = new ImmutableSet.Builder<String>()
+            .add(CreateRoutineLoadStmt.PULSAR_SUBSCRIPTION_PROPERTY)
             .add(CreateRoutineLoadStmt.PULSAR_PARTITIONS_PROPERTY)
             .add(CreateRoutineLoadStmt.PULSAR_INITIAL_POSITIONS_PROPERTY)
             .build();
@@ -68,6 +69,8 @@ public class RoutineLoadDataSourceProperties {
     @SerializedName(value = "customKafkaProperties")
     private Map<String, String> customKafkaProperties = Maps.newHashMap();
 
+    @SerializedName(value = "pulsarSubscription")
+    private String pulsarSubscription;
     @SerializedName(value = "pulsarPartitionInitialPositions")
     private List<Pair<String, MessageId>> pulsarPartitionInitialPositions = Lists.newArrayList();
     @SerializedName(value = "customPulsarProperties")
@@ -95,7 +98,8 @@ public class RoutineLoadDataSourceProperties {
         if (type.equals("KAFKA")) {
             return !kafkaPartitionOffsets.isEmpty() || !customKafkaProperties.isEmpty();
         } else if (type.equals("PULSAR")) {
-            return !pulsarPartitionInitialPositions.isEmpty() || !customPulsarProperties.isEmpty();
+            return !pulsarSubscription.isEmpty() || !pulsarPartitionInitialPositions.isEmpty() ||
+                    !customPulsarProperties.isEmpty();
         } else if (type.equals("TUBE")) {
             return tubeConsumePosition != null;
         } else if (type.equals("ICEBERG")) {
@@ -115,6 +119,10 @@ public class RoutineLoadDataSourceProperties {
 
     public Map<String, String> getCustomKafkaProperties() {
         return customKafkaProperties;
+    }
+
+    public String getPulsarSubscription() {
+        return pulsarSubscription;
     }
 
     public List<Pair<String, MessageId>> getPulsarPartitionInitialPositions() {
@@ -202,6 +210,12 @@ public class RoutineLoadDataSourceProperties {
         // check custom properties
         CreateRoutineLoadStmt.analyzePulsarCustomProperties(properties, customPulsarProperties);
 
+        // check subscription
+        final String subscription = properties.get(CreateRoutineLoadStmt.PULSAR_SUBSCRIPTION_PROPERTY);
+        if (subscription != null) {
+            pulsarSubscription = subscription;
+        }
+
         // check partitions
         final String pulsarPartitionsString = properties.get(CreateRoutineLoadStmt.PULSAR_PARTITIONS_PROPERTY);
         if (pulsarPartitionsString != null) {
@@ -261,6 +275,9 @@ public class RoutineLoadDataSourceProperties {
             sb.append(", kafka partition offsets: ").append(kafkaPartitionOffsets);
             sb.append(", custom properties: ").append(customKafkaProperties);
         } else if (type.equals("PULSAR")) {
+            if (!pulsarSubscription.isEmpty()) {
+                sb.append(", pulsar subscription: ").append(pulsarSubscription);
+            }
             if (!pulsarPartitionInitialPositions.isEmpty()) {
                 sb.append(", pulsar partition initial positions: ").append(pulsarPartitionInitialPositions);
             }

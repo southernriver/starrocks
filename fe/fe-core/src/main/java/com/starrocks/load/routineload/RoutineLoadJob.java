@@ -1213,11 +1213,11 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
                 .build());
     }
 
-    private void executeRunning() {
+    protected void executeRunning() {
         state = JobState.RUNNING;
     }
 
-    private void executePause(ErrorReason reason) {
+    protected void executePause(ErrorReason reason) {
         // remove all of task in jobs and change job state to paused
         pauseReason = reason;
         state = JobState.PAUSED;
@@ -1225,19 +1225,19 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
         clearTasks();
     }
 
-    private void executeNeedSchedule() {
+    protected void executeNeedSchedule() {
         state = JobState.NEED_SCHEDULE;
         pauseTimestamp = -1;
         clearTasks();
     }
 
-    private void executeStop() {
+    protected void executeStop() {
         state = JobState.STOPPED;
         clearTasks();
         endTimestamp = System.currentTimeMillis();
     }
 
-    private void executeCancel(ErrorReason reason) {
+    protected void executeCancel(ErrorReason reason) {
         cancelReason = reason;
         state = JobState.CANCELLED;
         clearTasks();
