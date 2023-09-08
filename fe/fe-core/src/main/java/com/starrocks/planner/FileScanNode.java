@@ -353,10 +353,12 @@ public class FileScanNode extends LoadScanNode {
                 }
                 FunctionCallExpr fn = (FunctionCallExpr) expr;
                 if (!fn.getFnName().getFunction().equalsIgnoreCase(FunctionSet.HLL_HASH) &&
-                        !fn.getFnName().getFunction().equalsIgnoreCase("hll_empty")) {
-                    throw new AnalysisException("HLL column must use hll_hash function, like "
-                            + destSlotDesc.getColumn().getName() + "=hll_hash(xxx) or " +
-                            destSlotDesc.getColumn().getName() + "=hll_empty()");
+                        !fn.getFnName().getFunction().equalsIgnoreCase("hll_empty") &&
+                        !fn.getFnName().getFunction().equalsIgnoreCase("base64_to_hll")) {
+                    throw new AnalysisException("HLL column must use " + FunctionSet.HLL_HASH + " function, like "
+                            + destSlotDesc.getColumn().getName() + "=" + FunctionSet.HLL_HASH
+                            + "(xxx) or " + destSlotDesc.getColumn().getName() + "=hll_empty()"
+                            + " or " + destSlotDesc.getColumn().getName() + "=base64_to_hll(base64_input)");
                 }
                 expr.setType(Type.HLL);
             }

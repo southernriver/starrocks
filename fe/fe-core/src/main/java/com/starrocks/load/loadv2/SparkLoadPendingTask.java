@@ -548,14 +548,15 @@ public class SparkLoadPendingTask extends LoadTask {
         }
 
         String msg = "HLL column must use hll function, like " + columnName + "=hll_hash(xxx) or "
-                + columnName + "=hll_empty()";
+                + columnName + "=hll_empty() or " + columnName + "=base64_to_hll(base64_input)";
         if (!(expr instanceof FunctionCallExpr)) {
             throw new LoadException(msg);
         }
         FunctionCallExpr fn = (FunctionCallExpr) expr;
         String functionName = fn.getFnName().getFunction();
         if (!functionName.equalsIgnoreCase(FunctionSet.HLL_HASH)
-                && !functionName.equalsIgnoreCase("hll_empty")) {
+                && !functionName.equalsIgnoreCase("hll_empty")
+                && !functionName.equalsIgnoreCase("base64_to_hll")) {
             throw new LoadException(msg);
         }
     }
