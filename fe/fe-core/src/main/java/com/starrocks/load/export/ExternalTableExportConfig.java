@@ -8,7 +8,7 @@ import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import com.starrocks.analysis.BrokerDesc;
 import com.starrocks.analysis.TableName;
-import com.starrocks.analysis.TimestampArithmeticExpr;
+import com.starrocks.analysis.TimestampArithmeticExpr.TimeUnit;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.DynamicPartitionProperty;
 import com.starrocks.catalog.HiveTable;
@@ -226,10 +226,9 @@ public class ExternalTableExportConfig {
                 throw new SemanticException("Partition column " + partitionColumn + " is not in export column list");
             }
             PrimitiveType primitiveType = partitionColumnType.getPrimitiveType();
-            targetPartitionExpr = "%P" + getPartitionFormat(primitiveType, TimestampArithmeticExpr.TimeUnit.DAY);
+            targetPartitionExpr = "%P" + getPartitionFormat(primitiveType, TimeUnit.DAY);
         } else if (Strings.isNullOrEmpty(targetPartitionExpr)) {
-            targetPartitionExpr = guessPartitionExpr(externalTable,
-                    TimestampArithmeticExpr.TimeUnit.valueOf(timeUnitValue.toUpperCase()));
+            targetPartitionExpr = guessPartitionExpr(externalTable, TimeUnit.valueOf(timeUnitValue.toUpperCase()));
         }
         if (tableProperties.containsKey(DynamicPartitionProperty.PREFIX)) {
             String prefixValue = tableProperties.get(DynamicPartitionProperty.PREFIX);
@@ -253,7 +252,7 @@ public class ExternalTableExportConfig {
         String day = "";
         String hour = "00";
         String minute = "00";
-        switch (TimestampArithmeticExpr.TimeUnit.valueOf(timeUnitValue.toUpperCase())) {
+        switch (TimeUnit.valueOf(timeUnitValue.toUpperCase())) {
             case MINUTE:
                 year = partition.substring(0, 4);
                 month = partition.substring(4, 6);
@@ -295,7 +294,7 @@ public class ExternalTableExportConfig {
         return exportPartition;
     }
 
-    private String guessPartitionExpr(Table table, TimestampArithmeticExpr.TimeUnit timeUnit) {
+    private String guessPartitionExpr(Table table, TimeUnit timeUnit) {
         if (!table.isUnPartitioned() || table.getType() == Table.TableType.ICEBERG) {
             // try best to build a targetPartitionExpr
             List<String> partitionColumnNames = table.getPartitionColumnNames();
@@ -312,7 +311,7 @@ public class ExternalTableExportConfig {
         throw new SemanticException("either target_partition or target_partition_expr should be specified");
     }
 
-    private String getPartitionFormat(PrimitiveType primitiveType, TimestampArithmeticExpr.TimeUnit timeUnit) {
+    private String getPartitionFormat(PrimitiveType primitiveType, TimeUnit timeUnit) {
         switch (timeUnit) {
             case MINUTE:
                 return primitiveType.isIntegerType() ? "%Y%m%d%H%i" : "%Y-%m-%d-%H-%i";
@@ -320,9 +319,15 @@ public class ExternalTableExportConfig {
                 return primitiveType.isIntegerType() ? "%Y%m%d%H" :
                         primitiveType == PrimitiveType.DATETIME ? "%Y-%m-%dT%H%3A00Z" : "%Y-%m-%d-%H";
             case DAY:
-                return primitiveType.isIntegerType() || primitiveType.isCharFamily() ? "%Y%m%d" : "%Y-%m-%d";
+                if (primitiveType.isIntegerType() || primitiveType.isCharFamily()) {
+                    return "%Y%m%d";
+                } else if (primitiveType == PrimitiveType.DATETIME) {
+                    return "%Y-%m-%dT%H%3A00Z";
+                } else {
+                    return "%Y-%m-%d";
+                }
             case MONTH:
-                return primitiveType.isIntegerType() ? "%Y%m" : "%Y-%m";
+                return primitiveType.isIntegerType() ? "%Y%m01" : "%Y-%m-01";
             default:
                 return null;
         }

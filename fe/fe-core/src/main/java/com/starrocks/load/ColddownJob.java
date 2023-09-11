@@ -490,34 +490,38 @@ public class ColddownJob implements Writable {
         final Object current = this;
         ExecutorService exec = submitToIoThread ? ExportJob.getIoExec() : MoreExecutors.newDirectExecutorService();
         exec.submit(() -> {
-            TableRef tableRef = new TableRef(tableName, null, new PartitionNames(false,
-                    Collections.singletonList(partition.getName())));
-            ExportStmt exportStmt = new ExportStmt(tableRef, columnNames, whereExpr, type, targetProperties,
-                    properties, brokerDesc) {
-                @Override
-                protected void checkExternalTable(ExternalTableExportConfig externalTableExportConfig, Table table) {
-                    Table externalTable;
-                    synchronized (schemaChangeLockObject) {
-                        externalTable = externalTableExportConfig.applySchemaChange(table, getColumnNames() == null);
+            try {
+                TableRef tableRef = new TableRef(tableName, null, new PartitionNames(false,
+                        Collections.singletonList(partition.getName())));
+                ExportStmt exportStmt = new ExportStmt(tableRef, columnNames, whereExpr, type, targetProperties,
+                        properties, brokerDesc) {
+                    @Override
+                    protected void checkExternalTable(ExternalTableExportConfig externalTableExportConfig, Table table) {
+                        Table externalTable;
+                        synchronized (schemaChangeLockObject) {
+                            externalTable = externalTableExportConfig.applySchemaChange(table, getColumnNames() == null);
+                        }
+                        externalTableExportConfig.prepareProperties(table, externalTable, getPartitions().get(0));
+                        prepareExternalTableExportProperties(externalTableExportConfig);
                     }
-                    externalTableExportConfig.prepareProperties(table, externalTable, getPartitions().get(0));
-                    prepareExternalTableExportProperties(externalTableExportConfig);
-                }
-            };
-            ExportStmtAnalyzer.ExportAnalyzerVisitor.visitExportStatement(exportStmt,
-                    GlobalStateMgr.getCurrentState(), MetaUtils.getTable(tableName));
-            UUID queryId = UUID.randomUUID();
+                };
+                ExportStmtAnalyzer.ExportAnalyzerVisitor.visitExportStatement(exportStmt,
+                        GlobalStateMgr.getCurrentState(), MetaUtils.getTable(tableName));
+                UUID queryId = UUID.randomUUID();
 
-            // lock to ensure runningExportJobs can be judged correctly
-            synchronized (current) {
-                Pair<ExportJob, Boolean> runningExportJob = runningExportJobs.get(partition.getId());
-                if (runningExportJob != null) {
-                    return null;
+                // lock to ensure runningExportJobs can be judged correctly
+                synchronized (current) {
+                    Pair<ExportJob, Boolean> runningExportJob = runningExportJobs.get(partition.getId());
+                    if (runningExportJob != null) {
+                        return null;
+                    }
+                    ExportJob exportJob = GlobalStateMgr.getCurrentState().getExportMgr().addExportJob(queryId, exportStmt);
+                    exportJob.setTotalExportedRowCount(totalExportedRows);
+                    exportJob.setTotalExportedBytesCount(totalExportedBytes);
+                    runningExportJobs.put(partition.getId(), Pair.create(exportJob, triggeredByTtl));
                 }
-                ExportJob exportJob = GlobalStateMgr.getCurrentState().getExportMgr().addExportJob(queryId, exportStmt);
-                exportJob.setTotalExportedRowCount(totalExportedRows);
-                exportJob.setTotalExportedBytesCount(totalExportedBytes);
-                runningExportJobs.put(partition.getId(), Pair.create(exportJob, triggeredByTtl));
+            } catch (Exception e) {
+                LOG.error("failed to run export job for partition " + partition.getName() + " of colddown job " + name, e);
             }
             return null;
         });
@@ -549,6 +553,10 @@ public class ColddownJob implements Writable {
         // rangeSize can be negative due to integer overflow
         if (rangeSize > 0 && rangeSize < partitions.size()) {
             partitions = partitions.subList(0, rangeSize);
+        }
+        if (partitions.isEmpty()) {
+            LOG.info("no partition of job {} need to be colddown", name);
+            return;
         }
         for (Partition partition : partitions) {
             submitColddownPartition(partition, false, true, false, true, properties);
@@ -584,8 +592,6 @@ public class ColddownJob implements Writable {
             throws Exception {
         ColddownMgr colddownMgr = GlobalStateMgr.getCurrentState().getColddownMgr();
         Pair<ExportJob, Boolean> runningExportJob = runningExportJobs.get(partition.getId());
-        // TODO: if partition is changed after last export job submitted,
-        //  should we cancel last one and submit new one if it is not triggered by ttl?
         if (runningExportJob != null) {
             return true;
         }
@@ -639,10 +645,14 @@ public class ColddownJob implements Writable {
 
         long coldDownWaitMillis = getColddownWaitSeconds() * 1000;
         if (triggeredByTtl) {
+            LOG.info("partition {} of colddown job {} triggers ttl, submit export job",
+                    partition.getName(), name);
             submitExportJob(partition, true, properties, submitToIoThread);
         } else if (!checkStable) {
             submitExportJob(partition, false, properties, submitToIoThread);
         } else if (System.currentTimeMillis() - partition.getVisibleVersionTime() > coldDownWaitMillis) {
+            LOG.info("partition {} of colddown job {} is stable for {} milliseconds, submit export job",
+                    partition.getName(), name, coldDownWaitMillis);
             submitExportJob(partition, false, properties, submitToIoThread);
         }
         return true;
