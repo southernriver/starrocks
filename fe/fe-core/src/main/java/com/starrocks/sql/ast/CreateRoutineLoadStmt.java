@@ -864,7 +864,7 @@ public class CreateRoutineLoadStmt extends DdlStmt {
 
         // get pulsar default initial position if set
         MessageId pulsarDefaultInitialPosition = null;
-        if (customPulsarProperties.containsKey(KAFKA_DEFAULT_OFFSETS)) {
+        if (customPulsarProperties.containsKey(PULSAR_DEFAULT_INITIAL_POSITION)) {
             pulsarDefaultInitialPosition =
                     getPulsarPosition(customPulsarProperties.get(PULSAR_DEFAULT_INITIAL_POSITION));
         }
