@@ -2063,4 +2063,10 @@ public class Config extends ConfigBase {
      */
     @ConfField(mutable = true)
     public static boolean support_distinct_with_groupby = false;
+
+    /**
+     * handle meta conflicts when upgrade from lake house version
+     */
+    @ConfField(mutable = true)
+    public static boolean support_upgrade_from_lakehouse_version = false;
 }

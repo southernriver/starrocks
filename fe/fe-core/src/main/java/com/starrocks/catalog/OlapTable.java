@@ -1452,7 +1452,8 @@ public class OlapTable extends Table implements GsonPostProcessable {
         }
 
 
-        if (GlobalStateMgr.getCurrentStateJournalVersion() >= FeMetaVersion.VERSION_96) {
+        if (Config.support_upgrade_from_lakehouse_version
+                || GlobalStateMgr.getCurrentStateJournalVersion() >= FeMetaVersion.VERSION_96) {
             maxColUniqueId = in.readInt();
         }
 

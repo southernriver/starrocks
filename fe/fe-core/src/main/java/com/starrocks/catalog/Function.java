@@ -26,6 +26,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.starrocks.analysis.FunctionName;
 import com.starrocks.analysis.HdfsURI;
+import com.starrocks.common.Config;
 import com.starrocks.common.FeMetaVersion;
 import com.starrocks.common.io.Text;
 import com.starrocks.common.io.Writable;
@@ -698,7 +699,8 @@ public class Function implements Writable {
         if (hasChecksum) {
             checksum = Text.readString(input);
         }
-        if (GlobalStateMgr.getCurrentStateJournalVersion() >= FeMetaVersion.VERSION_94) {
+        if (!Config.support_upgrade_from_lakehouse_version
+                && GlobalStateMgr.getCurrentStateJournalVersion() >= FeMetaVersion.VERSION_94) {
             isLoadAllClass = input.readBoolean();
         }
     }
