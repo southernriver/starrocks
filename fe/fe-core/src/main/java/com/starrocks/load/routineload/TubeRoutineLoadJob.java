@@ -133,11 +133,18 @@ public class TubeRoutineLoadJob extends RoutineLoadJob {
             desireTaskConcurrentNum = Config.max_routine_load_task_concurrent_num;
         }
 
-        LOG.debug("current concurrent task number is min" +
-                        "(desire task concurrent num: {}, alive be num: {}, config: {})", desireTaskConcurrentNum, aliveBeNum,
-                Config.max_routine_load_task_concurrent_num);
-        currentTaskConcurrentNum =
-                Math.min(Math.min(desireTaskConcurrentNum, aliveBeNum), Config.max_routine_load_task_concurrent_num);
+        if (isTaskNumExceedBeNum()) {
+            LOG.debug("current concurrent task number is min(desire task concurrent num: {}, config: {})",
+                    desireTaskConcurrentNum, Config.max_routine_load_task_concurrent_num);
+            currentTaskConcurrentNum = Math.min(desireTaskConcurrentNum, Config.max_routine_load_task_concurrent_num);
+        } else {
+            LOG.debug(
+                    "current concurrent task number is min(desire task concurrent num: {}, alive be num: {}, config: " +
+                            "{})",
+                    desireTaskConcurrentNum, aliveBeNum, Config.max_routine_load_task_concurrent_num);
+            currentTaskConcurrentNum = Math.min(Math.min(desireTaskConcurrentNum, aliveBeNum),
+                    Config.max_routine_load_task_concurrent_num);
+        }
         return currentTaskConcurrentNum;
     }
 
