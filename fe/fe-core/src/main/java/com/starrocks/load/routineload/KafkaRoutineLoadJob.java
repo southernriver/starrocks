@@ -622,6 +622,33 @@ public class KafkaRoutineLoadJob extends RoutineLoadJob {
     }
 
     @Override
+    Map<String, Object> getDataSourceProperties() {
+        Map<String, Object> properties = Maps.newHashMap();
+        properties.put(CreateRoutineLoadStmt.KAFKA_BROKER_LIST_PROPERTY, brokerList);
+        properties.put(CreateRoutineLoadStmt.KAFKA_TOPIC_PROPERTY, topic);
+
+        if (customKafkaPartitions != null && customKafkaPartitions.size() != 0) {
+            Map<Integer, Long> offsetMap = ((KafkaProgress) progress).getPartitionIdToOffset(customKafkaPartitions);
+            List<String> partitionStr = new ArrayList<>();
+            List<String> offsetStr = new ArrayList<>();
+            for (int i = 0; i < customKafkaPartitions.size(); i++) {
+                partitionStr.add(customKafkaPartitions.get(i).toString());
+                offsetStr.add(offsetMap.get(customKafkaPartitions.get(i)).toString());
+            }
+            properties.put(CreateRoutineLoadStmt.KAFKA_PARTITIONS_PROPERTY, String.join(", ", partitionStr));
+            properties.put(CreateRoutineLoadStmt.KAFKA_OFFSETS_PROPERTY, String.join(", ", offsetStr));
+        }
+
+        if (customProperties != null) {
+            for (Map.Entry<String, String> entry : customProperties.entrySet()) {
+                properties.put("property." + entry.getKey(), entry.getValue());
+            }
+        }
+
+        return properties;
+    }
+
+    @Override
     public void modifyDataSourceProperties(RoutineLoadDataSourceProperties dataSourceProperties) throws DdlException {
         List<Pair<Integer, Long>> kafkaPartitionOffsets = Lists.newArrayList();
         Map<String, String> customKafkaProperties = Maps.newHashMap();

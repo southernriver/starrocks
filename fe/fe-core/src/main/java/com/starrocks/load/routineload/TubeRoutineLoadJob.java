@@ -310,6 +310,25 @@ public class TubeRoutineLoadJob extends RoutineLoadJob {
     }
 
     @Override
+    Map<String, Object> getDataSourceProperties() {
+        Map<String, Object> properties = Maps.newHashMap();
+        properties.put(CreateRoutineLoadStmt.TUBE_MASTER_ADDR_PROPERTY, masterAddr);
+        properties.put(CreateRoutineLoadStmt.TUBE_TOPIC_PROPERTY, topic);
+        properties.put(CreateRoutineLoadStmt.TUBE_GROUP_NAME_PROPERTY, groupName);
+        if (filters == null) {
+            properties.put("tube_filters", EMPTY_FILTER);
+        } else {
+            properties.put("tube_filters", filters);
+        }
+
+        if (consumePosition != null) {
+            properties.put(CreateRoutineLoadStmt.TUBE_CONSUME_POSITION, String.valueOf(consumePosition));
+        }
+
+        return properties;
+    }
+
+    @Override
     public void modifyDataSourceProperties(RoutineLoadDataSourceProperties dataSourceProperties) throws DdlException {
         Integer consumePosition = null;
 

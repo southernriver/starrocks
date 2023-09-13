@@ -330,6 +330,10 @@ public abstract class AstVisitor<R, C> {
         return visitShowStatement(statement, context);
     }
 
+    public R visitShowCreateRoutineLoadStatement(ShowCreateRoutineLoadStmt statement, C context) {
+        return visitShowStatement(statement, context);
+    }
+
     // ------------------------------------------- Admin Statement -----------------------------------------------------
 
     public R visitAdminSetConfigStatement(AdminSetConfigStmt statement, C context) {

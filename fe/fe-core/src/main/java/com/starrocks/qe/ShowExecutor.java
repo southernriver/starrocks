@@ -123,6 +123,7 @@ import com.starrocks.sql.ast.ShowColumnStmt;
 import com.starrocks.sql.ast.ShowComputeNodesStmt;
 import com.starrocks.sql.ast.ShowCreateDbStmt;
 import com.starrocks.sql.ast.ShowCreateExternalCatalogStmt;
+import com.starrocks.sql.ast.ShowCreateRoutineLoadStmt;
 import com.starrocks.sql.ast.ShowCreateTableStmt;
 import com.starrocks.sql.ast.ShowDataStmt;
 import com.starrocks.sql.ast.ShowDbStmt;
@@ -170,6 +171,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -220,6 +222,8 @@ public class ShowExecutor {
             handleShowCreateTable();
         } else if (stmt instanceof ShowCreateDbStmt) {
             handleShowCreateDb();
+        } else if (stmt instanceof ShowCreateRoutineLoadStmt) {
+            handleShowCreateRoutine();
         } else if (stmt instanceof ShowProcesslistStmt) {
             handleShowProcesslist();
         } else if (stmt instanceof ShowEnginesStmt) {
@@ -729,6 +733,38 @@ public class ShowExecutor {
             showCreateInternalCatalogTable(showStmt);
         } else {
             showCreateExternalCatalogTable(tbl, catalogName);
+        }
+    }
+
+    private void handleShowCreateRoutine() {
+        ShowCreateRoutineLoadStmt showStmt = (ShowCreateRoutineLoadStmt) stmt;
+        //TableName tbl = showStmt.getTbl();
+        List<List<String>> rows = Lists.newArrayList();
+
+        // if job exists
+        List<RoutineLoadJob> routineLoadJobList;
+        try {
+            routineLoadJobList = GlobalStateMgr.getCurrentState().getRoutineLoadManager()
+                    .getJob(showStmt.getDbFullName(),
+                            showStmt.getJobName(),
+                            true);
+        } catch (MetaNotFoundException e) {
+            LOG.warn(e.getMessage(), e);
+            throw new AnalysisException(e.getMessage());
+        }
+
+        if (routineLoadJobList != null) {
+            // fill with create statement
+            for (RoutineLoadJob job : routineLoadJobList) {
+                rows.add(Arrays.asList(showStmt.getDbFullName() + "." + showStmt.getJobName(),
+                        job.getOrigStmt().originStmt));
+            }
+            resultSet = new ShowResultSet(showStmt.getMetaData(), rows);
+        } else {
+            throw new AnalysisException("There is no job named " + showStmt.getJobName()
+                    + " in db " + showStmt.getDbFullName()
+                    + ". Include history? " + "true" +
+                    ", you can try `show all routine load` if you want to list running, stopped and cancelled jobs of this db");
         }
     }
 

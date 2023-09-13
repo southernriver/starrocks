@@ -42,6 +42,7 @@ import com.starrocks.sql.ast.ShowAuthenticationStmt;
 import com.starrocks.sql.ast.ShowColumnStmt;
 import com.starrocks.sql.ast.ShowCreateDbStmt;
 import com.starrocks.sql.ast.ShowCreateExternalCatalogStmt;
+import com.starrocks.sql.ast.ShowCreateRoutineLoadStmt;
 import com.starrocks.sql.ast.ShowCreateTableStmt;
 import com.starrocks.sql.ast.ShowDataStmt;
 import com.starrocks.sql.ast.ShowDbStmt;
@@ -170,6 +171,14 @@ public class ShowStmtAnalyzer {
                 ErrorReport.reportSemanticException(ErrorCode.ERR_NO_TABLES_USED);
             }
             node.getTbl().normalization(context);
+            return null;
+        }
+
+        @Override
+        public Void visitShowCreateRoutineLoadStatement(ShowCreateRoutineLoadStmt node, ConnectContext context) {
+            String db = node.getDbFullName();
+            db = getDatabaseName(db, context);
+            node.setDbFullName(db);
             return null;
         }
 

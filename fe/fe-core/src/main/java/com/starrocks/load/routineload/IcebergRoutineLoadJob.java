@@ -94,7 +94,8 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
     private String icebergTable = null;
     private String icebergConsumePosition = null;
     private BrokerDesc brokerDesc;
-    // iceberg properties, property prefix will be mapped to iceberg custom parameters, which can be extended in the future
+    // iceberg properties, property prefix will be mapped to iceberg custom parameters, which can be extended in the
+    // future
     private Map<String, String> customProperties = Maps.newHashMap();
     private Map<String, String> convertedCustomProperties = Maps.newHashMap();
     private org.apache.iceberg.Table iceTbl; // actual iceberg table
@@ -684,6 +685,40 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
         if (!isReplay) {
             checkIcebergWhereExpr();
         }
+    }
+
+    @Override
+    Map<String, Object> getDataSourceProperties() {
+        Map<String, Object> properties = Maps.newHashMap();
+        properties.put(IcebergCreateRoutineLoadStmtConfig.ICEBERG_CATALOG_TYPE, icebergCatalogType);
+        if (IcebergCreateRoutineLoadStmtConfig.isHiveCatalogType(icebergCatalogType)) {
+            properties.put(IcebergCreateRoutineLoadStmtConfig.ICEBERG_CATALOG_HIVE_METASTORE_URIS,
+                    icebergCatalogHiveMetastoreUris);
+        } else if (IcebergCreateRoutineLoadStmtConfig.isResourceCatalogType(icebergCatalogType)) {
+            properties.put(IcebergCreateRoutineLoadStmtConfig.ICEBERG_RESOURCE_NAME, icebergResourceName);
+        } else if (IcebergCreateRoutineLoadStmtConfig.isExternalCatalogType(icebergCatalogType)) {
+            properties.put(IcebergCreateRoutineLoadStmtConfig.ICEBERG_CATALOG_NAME, icebergCatalogName);
+        }
+        properties.put(IcebergCreateRoutineLoadStmtConfig.ICEBERG_DATABASE, icebergDatabase);
+        properties.put(IcebergCreateRoutineLoadStmtConfig.ICEBERG_TABLE, icebergTable);
+        if (icebergConsumePosition != null) {
+            properties.put(IcebergCreateRoutineLoadStmtConfig.ICEBERG_CONSUME_POSITION, icebergConsumePosition);
+        }
+
+        if (icebergWhereExpr != null) {
+            properties.put(IcebergCreateRoutineLoadStmtConfig.ICEBERG_WHERE_EXPR, icebergWhereExpr.toSql());
+        }
+
+        if (customProperties != null) {
+            for (Map.Entry<String, String> entry : customProperties.entrySet()) {
+                properties.put("property." + entry.getKey(), entry.getValue());
+            }
+        }
+
+        if (brokerDesc != null) {
+            properties.put("broker", brokerDesc);
+        }
+        return properties;
     }
 
     @Override

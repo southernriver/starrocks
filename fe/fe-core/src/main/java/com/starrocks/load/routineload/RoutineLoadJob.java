@@ -65,6 +65,7 @@ import com.starrocks.sql.ast.ColumnSeparator;
 import com.starrocks.sql.ast.CreateRoutineLoadStmt;
 import com.starrocks.sql.ast.ImportColumnDesc;
 import com.starrocks.sql.ast.ImportColumnsStmt;
+import com.starrocks.sql.ast.ImportWhereStmt;
 import com.starrocks.sql.ast.LoadStmt;
 import com.starrocks.sql.ast.PartitionNames;
 import com.starrocks.sql.ast.RowDelimiter;
@@ -342,7 +343,7 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
         }
     }
 
-    private void setRoutineLoadDesc(RoutineLoadDesc routineLoadDesc) {
+    public void setRoutineLoadDesc(RoutineLoadDesc routineLoadDesc) {
         if (routineLoadDesc == null) {
             return;
         }
@@ -1639,7 +1640,6 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
         try {
             if (routineLoadDesc != null) {
                 setRoutineLoadDesc(routineLoadDesc);
-                mergeLoadDescToOriginStatement(routineLoadDesc);
             }
             if (jobProperties != null) {
                 modifyCommonJobProperties(jobProperties);
@@ -1647,6 +1647,7 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
             if (dataSourceProperties != null) {
                 modifyDataSourceProperties(dataSourceProperties);
             }
+            updateOriginStatement();
             if (!isReplay) {
                 AlterRoutineLoadJobOperationLog log = new AlterRoutineLoadJobOperationLog(id,
                         jobProperties, dataSourceProperties, originStatement);
@@ -1657,7 +1658,7 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
         }
     }
 
-    public void mergeLoadDescToOriginStatement(RoutineLoadDesc routineLoadDesc) {
+    public void updateOriginStatement() {
         if (origStmt == null) {
             return;
         }
@@ -1666,20 +1667,20 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
         if (originLoadDesc == null) {
             originLoadDesc = new RoutineLoadDesc();
         }
-        if (routineLoadDesc.getColumnSeparator() != null) {
-            originLoadDesc.setColumnSeparator(routineLoadDesc.getColumnSeparator());
+        if (columnSeparator != null) {
+            originLoadDesc.setColumnSeparator(columnSeparator);
         }
-        if (routineLoadDesc.getRowDelimiter() != null) {
-            originLoadDesc.setRowDelimiter(routineLoadDesc.getRowDelimiter());
+        if (rowDelimiter != null) {
+            originLoadDesc.setRowDelimiter(rowDelimiter);
         }
-        if (routineLoadDesc.getColumnsInfo() != null) {
-            originLoadDesc.setColumnsInfo(routineLoadDesc.getColumnsInfo());
+        if (columnDescs != null && !columnDescs.isEmpty()) {
+            originLoadDesc.setColumnsInfo(new ImportColumnsStmt(columnDescs));
         }
-        if (routineLoadDesc.getWherePredicate() != null) {
-            originLoadDesc.setWherePredicate(routineLoadDesc.getWherePredicate());
+        if (whereExpr != null) {
+            originLoadDesc.setWherePredicate(new ImportWhereStmt(whereExpr));
         }
-        if (routineLoadDesc.getPartitionNames() != null) {
-            originLoadDesc.setPartitionNames(routineLoadDesc.getPartitionNames());
+        if (partitions != null) {
+            originLoadDesc.setPartitionNames(partitions);
         }
 
         String tableName = null;
@@ -1690,14 +1691,58 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
             tableName = "unknown";
         }
 
-        // we use sql to persist the load properties, so we just put the load properties to sql.
-        String sql = String.format("CREATE ROUTINE LOAD %s ON %s %s" +
-                        " PROPERTIES (\"desired_concurrent_number\"=\"1\")" +
-                        " FROM KAFKA (\"kafka_topic\" = \"my_topic\")",
-                name, tableName, originLoadDesc.toSql());
-        LOG.debug("merge result: {}", sql);
+        Map<String, Object> dataSourceProperties = getDataSourceProperties();
+        String brokerExpr = "";
+        if (dataSourceProperties.containsKey("broker")) {
+            // Iceberg routine load may contain broker expr
+            brokerExpr = dataSourceProperties.remove("broker").toString();
+        }
+        String sql = String.format("CREATE ROUTINE LOAD %s ON %s %s PROPERTIES ( %s )" +
+                        " FROM %s ( %s ) %s;",
+                name, tableName, originLoadDesc.toSql(), mapToString(getRoutineJobProperties()),
+                getDataSourceTypeName(),
+                mapToString(dataSourceProperties), brokerExpr);
+
+        LOG.debug("update result: {}", sql);
         origStmt = new OriginStatement(sql, 0);
     }
+
+    public Map<String, Object> getRoutineJobProperties() {
+        Map<String, Object> map = Maps.newHashMap();
+        map.put(CreateRoutineLoadStmt.DESIRED_CONCURRENT_NUMBER_PROPERTY, desireTaskConcurrentNum);
+        map.put(CreateRoutineLoadStmt.MAX_BATCH_INTERVAL_SEC_PROPERTY, taskSchedIntervalS);
+        map.put(CreateRoutineLoadStmt.MAX_BATCH_ROWS_PROPERTY, maxBatchRows);
+        map.put(CreateRoutineLoadStmt.MAX_ERROR_NUMBER_PROPERTY, maxErrorNum);
+        map.put(LoadStmt.STRICT_MODE, isStrictMode());
+        map.put(LoadStmt.TIMEZONE, getTimezone());
+        if (jobProperties.containsKey(LoadStmt.MERGE_CONDITION)) {
+            map.put(LoadStmt.MERGE_CONDITION, taskSchedIntervalS);
+        }
+        map.put(PROPS_FORMAT, getFormat());
+        map.put(PROPS_STRIP_OUTER_ARRAY, isStripOuterArray());
+        map.put(PROPS_JSONPATHS, getJsonPaths());
+        map.put(PROPS_JSONROOT, getJsonRoot());
+        map.put(LoadStmt.IGNORE_TAIL_COLUMNS, isIgnoreTailColumns());
+        map.put(LoadStmt.SKIP_UTF8_CHECK, isSkipUtf8Check());
+        map.put(CreateRoutineLoadStmt.TIMEOUT_SECOND, getTimeoutSecond());
+        map.put(CreateRoutineLoadStmt.CONSUME_SECOND, getConsumeSecond());
+
+        return map;
+    }
+
+    protected String mapToString(Map<String, Object> map) {
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<String, Object> entry : map.entrySet()) {
+            sb.append("\"").append(entry.getKey()).append("\" = \"").append(entry.getValue()).append("\", ");
+        }
+        String result = sb.toString();
+        if (map.size() > 0) {
+            result = result.substring(0, result.length() - 2);
+        }
+        return result;
+    }
+
+    abstract Map<String, Object> getDataSourceProperties();
 
     protected abstract void modifyDataSourceProperties(RoutineLoadDataSourceProperties dataSourceProperties)
             throws DdlException;

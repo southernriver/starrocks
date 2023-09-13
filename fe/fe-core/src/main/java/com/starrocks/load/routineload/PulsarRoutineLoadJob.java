@@ -645,6 +645,40 @@ public class PulsarRoutineLoadJob extends RoutineLoadJob {
     }
 
     @Override
+    Map<String, Object> getDataSourceProperties() {
+        Map<String, Object> properties = Maps.newHashMap();
+        properties.put(CreateRoutineLoadStmt.PULSAR_SERVICE_URL_PROPERTY, serviceUrl);
+        properties.put(CreateRoutineLoadStmt.PULSAR_TOPIC_PROPERTY, topic);
+        if (subscription != null) {
+            properties.put(CreateRoutineLoadStmt.PULSAR_SUBSCRIPTION_PROPERTY, subscription);
+        }
+
+        if (customPulsarPartitions != null && customPulsarPartitions.size() != 0) {
+            Map<String, MessageId> offsetMap =
+                    ((PulsarProgress) progress).getPartitionToInitialPosition(customPulsarPartitions);
+            List<String> partitionStr = new ArrayList<>();
+            List<String> offsetStr = new ArrayList<>();
+            for (int i = 0; i < customPulsarPartitions.size(); i++) {
+                partitionStr.add(customPulsarPartitions.get(i).toString());
+                if (offsetMap.get(customPulsarPartitions.get(i)).equals(MessageId.earliest)) {
+                    offsetStr.add(POSITION_EARLIEST);
+                } else {
+                    offsetStr.add(POSITION_LATEST);
+                }
+            }
+            properties.put(CreateRoutineLoadStmt.PULSAR_PARTITIONS_PROPERTY, String.join(",", partitionStr));
+            properties.put(CreateRoutineLoadStmt.PULSAR_INITIAL_POSITIONS_PROPERTY, String.join(",", offsetStr));
+        }
+
+        if (customProperties != null) {
+            for (Map.Entry<String, String> entry : customProperties.entrySet()) {
+                properties.put("property." + entry.getKey(), entry.getValue());
+            }
+        }
+        return properties;
+    }
+
+    @Override
     public void modifyDataSourceProperties(RoutineLoadDataSourceProperties dataSourceProperties) throws DdlException {
         String pulsarSubscription = "";
         List<Pair<String, MessageId>> partitionInitialPositions = Lists.newArrayList();

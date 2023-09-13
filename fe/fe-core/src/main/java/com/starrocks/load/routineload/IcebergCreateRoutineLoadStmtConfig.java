@@ -19,14 +19,14 @@ import java.util.regex.Pattern;
 public class IcebergCreateRoutineLoadStmtConfig {
     private static final String DEFAULT_ICEBERG_CATALOG_NAME = "iceberg";
     // iceberg type properties
-    private static final String ICEBERG_CATALOG_TYPE = "iceberg_catalog_type";
-    private static final String ICEBERG_CATALOG_HIVE_METASTORE_URIS = "iceberg_catalog_hive_metastore_uris";
-    private static final String ICEBERG_RESOURCE_NAME = "iceberg_resource_name";
-    private static final String ICEBERG_CATALOG_NAME = "iceberg_catalog_name";
-    private static final String ICEBERG_DATABASE = "iceberg_database";
-    private static final String ICEBERG_TABLE = "iceberg_table";
+    public static final String ICEBERG_CATALOG_TYPE = "iceberg_catalog_type";
+    public static final String ICEBERG_CATALOG_HIVE_METASTORE_URIS = "iceberg_catalog_hive_metastore_uris";
+    public static final String ICEBERG_RESOURCE_NAME = "iceberg_resource_name";
+    public static final String ICEBERG_CATALOG_NAME = "iceberg_catalog_name";
+    public static final String ICEBERG_DATABASE = "iceberg_database";
+    public static final String ICEBERG_TABLE = "iceberg_table";
     // optional
-    private static final String ICEBERG_CONSUME_POSITION = "iceberg_consume_position";
+    public static final String ICEBERG_CONSUME_POSITION = "iceberg_consume_position";
     public static final String ICEBERG_WHERE_EXPR = "iceberg_where_expr";
     private static final String READ_ICEBERG_SNAPSHOTS_AFTER_TIMESTAMP = "read_iceberg_snapshots_after_timestamp";
     private static final String ICEBERG_PLAN_SPLIT_SIZE = "plan_split_size";
