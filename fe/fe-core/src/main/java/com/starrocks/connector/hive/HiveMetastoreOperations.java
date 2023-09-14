@@ -106,4 +106,9 @@ public class HiveMetastoreOperations {
     public void invalidateAll() {
         metastore.invalidateAll();
     }
+
+    public Map<String, List<String>> getPartitionValues(String databaseName, String tableName,
+                                                        String partitionColumn) {
+        return metastore.getPartitionValues(databaseName, tableName, partitionColumn);
+    }
 }

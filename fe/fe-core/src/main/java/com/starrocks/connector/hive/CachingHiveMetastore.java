@@ -539,4 +539,9 @@ public class CachingHiveMetastore implements IHiveMetastore {
             final boolean getAllEvents) throws MetastoreNotificationFetchException {
         return ((HiveMetastore) metastore).getNextEventResponse(lastSyncedEventId, catalogName, getAllEvents);
     }
+
+    public Map<String, List<String>> getPartitionValues(String databaseName, String tableName,
+                                                         String partitionColumn) {
+        return metastore.getPartitionValues(databaseName, tableName, partitionColumn);
+    }
 }

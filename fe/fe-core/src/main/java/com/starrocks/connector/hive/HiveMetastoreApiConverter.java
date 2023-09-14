@@ -103,6 +103,19 @@ public class HiveMetastoreApiConverter {
                 .setFullSchema(toFullSchemasForHiveTable(table))
                 .setTableLocation(toTableLocation(table.getSd(), table.getParameters()))
                 .setCreateTime(table.getCreateTime());
+        if (table.getParameters().containsKey(THiveConstants.TABLE_TYPE)) {
+            Map<String, String> properties = Maps.newHashMap();
+            properties.put(THiveConstants.TABLE_TYPE, table.getParameters().get(THiveConstants.TABLE_TYPE));
+            if (table.getParameters().containsKey(THiveConstants.THIVE_PARTITION_COLUMNS)) {
+                String thivePartitionColumns = table.getParameters().get(THiveConstants.THIVE_PARTITION_COLUMNS);
+                properties.put(THiveConstants.THIVE_PARTITION_COLUMNS, thivePartitionColumns);
+            }
+            if (table.getParameters().containsKey(THiveConstants.THIVE_PARTITION_TYPES)) {
+                properties.put(THiveConstants.THIVE_PARTITION_TYPES,
+                        table.getParameters().get(THiveConstants.THIVE_PARTITION_TYPES));
+            }
+            tableBuilder.setProperties(properties);
+        }
         return tableBuilder.build();
     }
 

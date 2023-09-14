@@ -263,6 +263,21 @@ public class MetadataMgr {
         connectorMetadata.ifPresent(metadata -> metadata.refreshTable(srDbName, table, partitionNames, onlyCachedPartitions));
     }
 
+    public Map<String, List<String>> getPartitionValues(String catalogName, String srDbName, String tableName,
+                                                        String partitionColumn) {
+        Optional<ConnectorMetadata> connectorMetadata = getOptionalMetadata(catalogName);
+        if (connectorMetadata.isPresent()) {
+            try {
+                return connectorMetadata.get().getPartitionValues(srDbName, tableName, partitionColumn);
+            } catch (Exception e) {
+                LOG.error("Failed to getPartitionValues on catalog [{}], {}.{}.{}", catalogName, srDbName, tableName,
+                        partitionColumn, e);
+                throw e;
+            }
+        }
+        return null;
+    }
+
     private class QueryMetadatas {
         private final Map<String, ConnectorMetadata> metadatas = new HashMap<>();
 

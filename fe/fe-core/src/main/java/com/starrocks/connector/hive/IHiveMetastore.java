@@ -7,6 +7,7 @@ import com.google.common.collect.Maps;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.Table;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -63,5 +64,10 @@ public interface IHiveMetastore {
 
     default long getCurrentEventId() {
         return -1;
+    }
+
+    default Map<String, List<String>> getPartitionValues(String databaseName, String tableName,
+                                                         String partitionColumn) {
+        return Collections.emptyMap();
     }
 }

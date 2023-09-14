@@ -19,9 +19,12 @@ import org.apache.hadoop.hive.metastore.api.AlreadyExistsException;
 import org.apache.hadoop.hive.metastore.api.ColumnStatisticsObj;
 import org.apache.hadoop.hive.metastore.api.CurrentNotificationEventId;
 import org.apache.hadoop.hive.metastore.api.Database;
+import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.NotificationEventResponse;
 import org.apache.hadoop.hive.metastore.api.Partition;
+import org.apache.hadoop.hive.metastore.api.PartitionValuesRequest;
+import org.apache.hadoop.hive.metastore.api.PartitionValuesResponse;
 import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.metastore.conf.MetastoreConf;
@@ -427,6 +430,41 @@ public class HiveMetaClient {
                     lastEventId, maxEvents, filter);
         } catch (Exception e) {
             throw new MetastoreNotificationFetchException(e.getMessage());
+        }
+    }
+
+    public PartitionValuesResponse getPartitionValues(String dbName, String tblName, String partitionColumn) {
+        try (PlannerProfile.ScopedTimer ignored = PlannerProfile.getScopedTimer("HMS.listPartitionValues")) {
+            RecyclableClient client = null;
+            StarRocksConnectorException connectionException = null;
+            try {
+                client = getClient();
+
+                List<FieldSchema> list = new LinkedList<>();
+                FieldSchema partitionKey = new FieldSchema(partitionColumn, "string", null);
+                list.add(partitionKey);
+                PartitionValuesRequest request = new PartitionValuesRequest(dbName, tblName, list);
+                request.setApplyDistinct(true);
+
+                // get partition values
+                return client.hiveClient.listPartitionValues(request);
+            } catch (Exception e) {
+                LOG.error("Failed to listPartitionValues on {}.{}.{}", dbName, tblName, partitionColumn, e);
+                connectionException =
+                        new StarRocksConnectorException("Failed to listPartitionValues on [%s.%s.%s] to meta store: %s",
+                                dbName, tblName, partitionColumn, e.getMessage());
+                throw connectionException;
+            } finally {
+                if (client == null && connectionException != null) {
+                    LOG.error("Failed to get hive client. {}", connectionException.getMessage());
+                } else if (connectionException != null) {
+                    LOG.error("An exception occurred when using the current long link " +
+                            "to access metastore. msg： {}", connectionException.getMessage());
+                    client.close();
+                } else if (client != null) {
+                    client.finish();
+                }
+            }
         }
     }
 }

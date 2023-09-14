@@ -36,6 +36,7 @@ import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
 import com.starrocks.sql.optimizer.statistics.Statistics;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -216,5 +217,9 @@ public interface ConnectorMetadata {
     default void alterView(AlterViewStmt stmt) throws DdlException, UserException {
     }
 
+    default Map<String, List<String>> getPartitionValues(String databaseName, String tableName,
+                                                         String partitionColumn) {
+        return Collections.emptyMap();
+    }
 }
 

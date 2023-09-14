@@ -199,6 +199,12 @@ public class HiveMetadata implements ConnectorMetadata {
     }
 
     @Override
+    public Map<String, List<String>> getPartitionValues(String databaseName, String tableName,
+                                                        String partitionColumn) {
+        return hmsOps.getPartitionValues(databaseName, tableName, partitionColumn);
+    }
+
+    @Override
     public void clear() {
         hmsOps.invalidateAll();
         fileOps.invalidateAll();

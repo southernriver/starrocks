@@ -42,6 +42,7 @@ import com.starrocks.common.StarRocksFEMetaVersion;
 import com.starrocks.common.io.Text;
 import com.starrocks.connector.RemoteFileInfo;
 import com.starrocks.connector.exception.StarRocksConnectorException;
+import com.starrocks.connector.hive.THiveConstants;
 import com.starrocks.persist.ModifyTableColumnOperationLog;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.thrift.TColumn;
@@ -178,6 +179,12 @@ public class HiveTable extends Table implements HiveMetaStoreTable {
             hiveProperties.put(HIVE_METASTORE_URIS, hiveResource.getHiveMetastoreURIs());
         }
         return hiveProperties;
+    }
+
+    @Override
+    public boolean isThiveTable() {
+        return hiveProperties.containsKey(THiveConstants.TABLE_TYPE) &&
+                hiveProperties.get(THiveConstants.TABLE_TYPE).equalsIgnoreCase(THiveConstants.THIVE);
     }
 
     public void modifyTableSchema(String dbName, String tableName, HiveTable updatedTable) {

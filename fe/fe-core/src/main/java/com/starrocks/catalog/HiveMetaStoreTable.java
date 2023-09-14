@@ -23,4 +23,8 @@ public interface HiveMetaStoreTable {
     List<Column> getPartitionColumns();
 
     String getTableLocation();
+
+    default boolean isThiveTable() {
+        return false;
+    }
 }

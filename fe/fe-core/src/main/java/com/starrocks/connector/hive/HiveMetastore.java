@@ -13,11 +13,14 @@ import com.starrocks.connector.hive.events.MetastoreNotificationFetchException;
 import org.apache.hadoop.hive.metastore.api.ColumnStatisticsObj;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.NotificationEventResponse;
+import org.apache.hadoop.hive.metastore.api.PartitionValuesRow;
 import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -122,6 +125,25 @@ public class HiveMetastore implements IHiveMetastore {
             return null;
         }
         return HiveMetastoreApiConverter.toPartition(partition.getSd(), partition.getParameters());
+    }
+
+    /**
+     * only use by thive, for example
+     * p_2001        2000,2001
+     * p_2011        2010,2011
+     * p_2021        2020,2021
+     * default
+     */
+    public Map<String, List<String>> getPartitionValues(String dbName, String tblName, String partitionColumn) {
+        org.apache.hadoop.hive.metastore.api.PartitionValuesResponse response =
+                client.getPartitionValues(dbName, tblName, partitionColumn);
+        Map<String, List<String>> partitionNameToPartitionValues = new HashMap<>();
+        for (PartitionValuesRow row : response.getPartitionValues()) {
+            String partName = row.getRow().get(0);
+            String partValue = row.getRow().get(1);
+            partitionNameToPartitionValues.put(partName, Arrays.asList(partValue.split(THiveConstants.SEPARATOR)));
+        }
+        return partitionNameToPartitionValues;
     }
 
     public HivePartitionStats getTableStatistics(String dbName, String tblName) {
