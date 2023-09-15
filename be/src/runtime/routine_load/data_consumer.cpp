@@ -562,8 +562,12 @@ Status PulsarDataConsumer::assign_partition(StreamLoadContext* ctx,
 
     pulsar::Result result;
     pulsar::ReaderConfiguration config;
+    if (!_subscription.empty()) {
+        config.setSubscriptionRolePrefix(_subscription);
+    }
     result = _p_client->createReader(initial_position.first, p_initial_position, config, _p_reader);
     if (result != pulsar::ResultOk) {
+        StarRocksMetrics::instance()->assign_failed_pulsar_consumer_num.increment(1);
         LOG(WARNING) << "PAUSE: failed to create pulsar reader: " << ctx->brief(true) << ", err: " << result;
         return Status::InternalError("PAUSE: failed to create pulsar reader: " +
                                      std::string(pulsar::strResult(result)));
@@ -580,6 +584,9 @@ Status PulsarDataConsumer::tmp_assign_partition(StreamLoadContext* ctx, const st
 
     pulsar::Result result;
     pulsar::ReaderConfiguration config;
+    if (!_subscription.empty()) {
+        config.setSubscriptionRolePrefix(_subscription);
+    }
     result = _p_client->createReader(partition, pulsar::MessageId::latest(), config, _p_reader);
     if (result != pulsar::ResultOk) {
         StarRocksMetrics::instance()->assign_failed_pulsar_consumer_num.increment(1);
