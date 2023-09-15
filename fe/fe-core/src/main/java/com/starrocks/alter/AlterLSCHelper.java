@@ -159,7 +159,7 @@ public class AlterLSCHelper {
         }
         // wait for and get results
         final long start = System.currentTimeMillis();
-        long timeoutMs = ConnectContext.get().getSessionVariable().getQueryTimeoutS();
+        long timeoutMs = ConnectContext.get().getSessionVariable().getQueryTimeoutS() * 1000L;
         final List<PFetchColIdsResponse> resultList = new ArrayList<>();
         try {
             for (Future<PFetchColIdsResponse> future : futureList) {
