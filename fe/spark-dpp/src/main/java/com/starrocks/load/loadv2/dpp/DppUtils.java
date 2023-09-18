@@ -107,8 +107,13 @@ public class DppUtils {
     }
 
     public static DataType getDataTypeFromColumn(EtlJobConfig.EtlColumn column, boolean regardDistinctColumnAsBinary) {
+        return getDataTypeFromColumn(column, column.columnType, regardDistinctColumnAsBinary);
+    }
+
+    private static DataType getDataTypeFromColumn(EtlJobConfig.EtlColumn column, String columnType,
+                                                  boolean regardDistinctColumnAsBinary) {
         DataType dataType = DataTypes.StringType;
-        switch (column.columnType) {
+        switch (columnType) {
             case "BOOLEAN":
                 dataType = DataTypes.StringType;
                 break;
@@ -156,6 +161,22 @@ public class DppUtils {
                 dataType = DecimalType.apply(column.precision, column.scale);
                 break;
             default:
+                if (columnType.startsWith("ARRAY<")) {
+                    String itemType = columnType.substring("ARRAY<".length());
+                    // ARRAY<INT>
+                    int index1 = itemType.indexOf('>');
+                    if (index1 > 0) {
+                        itemType = itemType.substring(0, index1);
+                    }
+                    // ARRAY<VARCHAR(1024)>
+                    int index2 = itemType.indexOf('(');
+                    if (index2 > 0) {
+                        itemType = itemType.substring(0, index2);
+                    }
+                    dataType = DataTypes.createArrayType(
+                            getDataTypeFromColumn(column, itemType, regardDistinctColumnAsBinary), column.isAllowNull);
+                    break;
+                }
                 throw new RuntimeException("Reason: invalid column type:" + column);
         }
         return dataType;

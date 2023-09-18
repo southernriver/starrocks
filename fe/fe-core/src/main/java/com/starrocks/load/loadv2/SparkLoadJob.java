@@ -1077,6 +1077,8 @@ public class SparkLoadJob extends BulkLoadJob {
                     return expr;
                 }
                 return dstType.getPrimitiveType() != srcType.getPrimitiveType() ? expr.castTo(dstType) : expr;
+            } else if (dstType.isArrayType() && dstType.equals(srcType)) {
+                return expr;
             } else {
                 throw new AnalysisException("Spark-Load does not support complex types yet");
             }

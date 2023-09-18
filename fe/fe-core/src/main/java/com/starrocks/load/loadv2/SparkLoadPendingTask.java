@@ -287,6 +287,10 @@ public class SparkLoadPendingTask extends LoadTask {
         // column type
         PrimitiveType type = column.getPrimitiveType();
         String columnType = column.getPrimitiveType().toString();
+        if (column.getType().isArrayType()) {
+            // ARRAY<VARCHAR(1024)>
+            columnType = column.getType().toString();
+        }
         // is allow null
         boolean isAllowNull = column.isAllowNull();
         // is key

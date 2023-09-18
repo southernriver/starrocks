@@ -1213,7 +1213,7 @@ public final class SparkDpp implements java.io.Serializable {
             dppResult.isSuccess = true;
             dppResult.failedReason = "";
         } catch (Exception exception) {
-            LOG.warn("spark dpp failed for exception:" + exception);
+            LOG.warn("spark dpp failed for exception:" + exception, exception);
             dppResult.isSuccess = false;
             dppResult.failedReason = exception.getMessage();
             throw exception;
