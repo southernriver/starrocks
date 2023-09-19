@@ -55,6 +55,7 @@ enum THdfsFileFormat {
   AVRO,
   PARQUET,
   ORC,
+  FORMAT_FILE,
 }
 
 

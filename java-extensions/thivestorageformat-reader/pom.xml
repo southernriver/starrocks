@@ -9,7 +9,7 @@
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>rcfile-reader</artifactId>
+    <artifactId>thivestorageformat-reader</artifactId>
 
     <properties>
         <maven.compiler.source>8</maven.compiler.source>
@@ -604,15 +604,15 @@
         </dependency>
 
         <dependency>
-            <groupId>com.github.luben</groupId>
-            <artifactId>zstd-jni</artifactId>
-            <version>${luben.zstd.jni.version}</version>
-        </dependency>
-
-        <dependency>
             <groupId>org.codehaus.woodstox</groupId>
             <artifactId>stax2-api</artifactId>
             <version>${stax2.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.github.luben</groupId>
+            <artifactId>zstd-jni</artifactId>
+            <version>${luben.zstd.jni.version}</version>
         </dependency>
 
         <dependency>
@@ -642,7 +642,7 @@
     </dependencies>
 
     <build>
-        <finalName>starrocks-rcfile-reader</finalName>
+        <finalName>starrocks-thivestorageformat-reader</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -666,7 +666,7 @@
                             <goal>copy-dependencies</goal>
                         </goals>
                         <configuration>
-                            <outputDirectory>${project.build.directory}/rcfile-reader-lib</outputDirectory>
+                            <outputDirectory>${project.build.directory}/thivestorageformat-reader-lib</outputDirectory>
                             <overWriteIfNewer>true</overWriteIfNewer>
                         </configuration>
                     </execution>

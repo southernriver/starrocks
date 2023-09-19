@@ -311,6 +311,44 @@ HdfsScanner* HiveDataSource::_create_rcfile_jni_scanner(HdfsScannerParams* scann
     return scanner;
 }
 
+HdfsScanner* HiveDataSource::_create_thive_storage_format_jni_scanner(HdfsScannerParams* scanner_params) {
+    const auto& scan_range = _scan_range;
+    std::string required_fields;
+    for (auto slot : _tuple_desc->slots()) {
+        required_fields.append(slot->col_name());
+        required_fields.append(",");
+    }
+    required_fields = required_fields.substr(0, required_fields.size() - 1);
+
+    std::string nested_fields;
+    for (auto slot : _tuple_desc->slots()) {
+        const TypeDescriptor& type = slot->type();
+        if (type.is_complex_type()) {
+            build_nested_fields(type, slot->col_name(), &nested_fields);
+        }
+    }
+    if (!nested_fields.empty()) {
+        nested_fields = nested_fields.substr(0, nested_fields.size() - 1);
+    }
+
+    std::map<std::string, std::string> jni_scanner_params;
+    jni_scanner_params["data_file_path"] = scanner_params->path;
+    jni_scanner_params["hive_column_names"] = _hive_table->get_hive_column_names();
+    jni_scanner_params["hive_column_types"] = _hive_table->get_hive_column_types();
+    jni_scanner_params["required_fields"] = required_fields;
+    jni_scanner_params["nested_fields"] = nested_fields;
+    jni_scanner_params["data_file_length"] = std::to_string(scanner_params->file_size);
+    jni_scanner_params["offset"] = std::to_string(scan_range.offset);
+    jni_scanner_params["length"] = std::to_string(scan_range.length);
+    if (scan_range.file_format == THdfsFileFormat::FORMAT_FILE) {
+        jni_scanner_params["file_format"] = "FORMAT_FILE";
+    }
+
+    std::string scanner_factory_class = "com/starrocks/thivestorageformat/reader/ThiveStorageFormatFileSliceScannerFactory";
+    HdfsScanner* scanner = _pool.add(new JniScanner(scanner_factory_class, jni_scanner_params));
+    return scanner;
+}
+
 Status HiveDataSource::_init_scanner(RuntimeState* state) {
     const auto& scan_range = _scan_range;
     std::string native_file_path = scan_range.full_path;
@@ -423,6 +461,8 @@ Status HiveDataSource::_init_scanner(RuntimeState* state) {
         scanner = _pool.add(new HdfsTextScanner());
     } else if (format == THdfsFileFormat::RC_FILE) {
         scanner = _create_rcfile_jni_scanner(&scanner_params);
+    } else if (format == THdfsFileFormat::FORMAT_FILE) {
+        scanner = _create_thive_storage_format_jni_scanner(&scanner_params);
     } else {
         std::string msg = fmt::format("unsupported hdfs file format: {}", format);
         LOG(WARNING) << msg;
