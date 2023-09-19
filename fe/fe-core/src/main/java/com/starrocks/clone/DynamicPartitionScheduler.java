@@ -271,8 +271,15 @@ public class DynamicPartitionScheduler extends LeaderDaemon {
      * 2. get DropPartitionClause of partitions which range are before this reserved range.
      */
     public static ArrayList<DropPartitionClause> getDropPartitionClause(Database db, OlapTable olapTable,
+            Column partitionColumn, String partitionFormat, int lowerBoundOffset, int upperBoundOffset) {
+        ZonedDateTime now = ZonedDateTime.now(
+                olapTable.getTableProperty().getDynamicPartitionProperty().getTimeZone().toZoneId());
+        return getDropPartitionClause(db, olapTable, now, partitionColumn, partitionFormat, lowerBoundOffset, upperBoundOffset);
+
+    }
+    public static ArrayList<DropPartitionClause> getDropPartitionClause(Database db, OlapTable olapTable, ZonedDateTime datatime,
                                                                   Column partitionColumn, String partitionFormat,
-                                                                  int lowerBoundOffset) {
+                                                                  int lowerBoundOffset, int upperBoundOffset) {
         ArrayList<DropPartitionClause> dropPartitionClauses = new ArrayList<>();
         DynamicPartitionProperty dynamicPartitionProperty = olapTable.getTableProperty().getDynamicPartitionProperty();
         if (lowerBoundOffset == DynamicPartitionProperty.MIN_START_OFFSET) {
@@ -280,11 +287,11 @@ public class DynamicPartitionScheduler extends LeaderDaemon {
             return dropPartitionClauses;
         }
 
-        ZonedDateTime now = ZonedDateTime.now(dynamicPartitionProperty.getTimeZone().toZoneId());
-        String lowerBorder = DynamicPartitionUtil.getPartitionRangeString(dynamicPartitionProperty, now,
+
+        String lowerBorder = DynamicPartitionUtil.getPartitionRangeString(dynamicPartitionProperty, datatime,
                 lowerBoundOffset, partitionFormat);
-        String upperBorder =
-                DynamicPartitionUtil.getPartitionRangeString(dynamicPartitionProperty, now, 0, partitionFormat);
+        String upperBorder =  DynamicPartitionUtil.getPartitionRangeString(dynamicPartitionProperty, datatime,
+                upperBoundOffset, partitionFormat);
         PartitionValue lowerPartitionValue = new PartitionValue(lowerBorder);
         PartitionValue upperPartitionValue = new PartitionValue(upperBorder);
         Range<PartitionKey> reservePartitionKeyRange;
@@ -309,8 +316,8 @@ public class DynamicPartitionScheduler extends LeaderDaemon {
             try {
                 Long checkDropPartitionId = idToRange.getKey();
                 Range<PartitionKey> checkDropPartitionKey = idToRange.getValue();
-                RangeUtils.checkRangeIntersect(reservePartitionKeyRange, checkDropPartitionKey);
-                if (checkDropPartitionKey.upperEndpoint().compareTo(reservePartitionKeyRange.lowerEndpoint()) <= 0) {
+                if (checkDropPartitionKey.upperEndpoint().compareTo(reservePartitionKeyRange.lowerEndpoint()) <= 0
+                        || checkDropPartitionKey.lowerEndpoint().compareTo(reservePartitionKeyRange.upperEndpoint()) > 0) {
                     Partition partition = olapTable.getPartition(checkDropPartitionId);
                     String dropPartitionName = partition.getName();
                     DropPartitionClause dropPartitionClause =
@@ -392,9 +399,10 @@ public class DynamicPartitionScheduler extends LeaderDaemon {
                 }
 
                 int lowerBoundOffset = dynamicPartitionProperty.getStart();
+                int upperBoundOffset = dynamicPartitionProperty.getEnd();
                 try {
-                    dropPartitionClauses =
-                            getDropPartitionClause(db, olapTable, partitionColumn, partitionFormat, lowerBoundOffset);
+                    dropPartitionClauses = getDropPartitionClause(db, olapTable, partitionColumn,
+                            partitionFormat, lowerBoundOffset, upperBoundOffset);
                 } catch (Exception e) {
                     LOG.error("Failed to generate DropPartitionClause " + olapTable.getName() + " due to ", e);
                 }

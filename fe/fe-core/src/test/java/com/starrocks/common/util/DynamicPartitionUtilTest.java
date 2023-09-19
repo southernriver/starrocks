@@ -52,7 +52,7 @@ public class DynamicPartitionUtilTest {
         return prop;
     }
 
-    private static ZonedDateTime getZonedDateTimeFromStr(String dateStr) throws DateTimeException {
+    public static ZonedDateTime getZonedDateTimeFromStr(String dateStr) throws DateTimeException {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern(FORMAT);
         return LocalDate.parse(dateStr, formatter).atStartOfDay(
                 TimeUtils.getOrSystemTimeZone(TimeUtils.DEFAULT_TIME_ZONE).toZoneId());

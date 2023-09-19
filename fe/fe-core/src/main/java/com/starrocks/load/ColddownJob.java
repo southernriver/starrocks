@@ -539,7 +539,7 @@ public class ColddownJob implements Writable {
                 table.getTableProperty().getDynamicPartitionProperty();
         String format = DynamicPartitionUtil.getPartitionFormat(partitionColumn, dynamicPartitionProperty.getTimeUnit());
         int lowerBoundOffset = getColddownPartitionEnd() + 1;
-        return DynamicPartitionScheduler.getDropPartitionClause(db, table, partitionColumn, format, lowerBoundOffset)
+        return DynamicPartitionScheduler.getDropPartitionClause(db, table, partitionColumn, format, lowerBoundOffset, 0)
                 .stream()
                 .map(DropPartitionClause::getPartition)
                 .collect(Collectors.toList());
