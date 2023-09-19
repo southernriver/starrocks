@@ -22,6 +22,7 @@ import com.starrocks.connector.ConnectorTblMetaInfoMgr;
 import com.starrocks.connector.PartitionInfo;
 import com.starrocks.connector.RemoteFileInfo;
 import com.starrocks.connector.exception.StarRocksConnectorException;
+import com.starrocks.connector.jdbc.JDBCMetadata;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.sql.ast.CreateTableStmt;
 import com.starrocks.sql.ast.DropTableStmt;
@@ -164,24 +165,15 @@ public class MetadataMgr {
         }
     }
 
-    public Table getTableWithUser(String catalogName, String dbName, String tblName) throws AnalysisException {
-        if (Config.enable_check_tdw_pri) {
-            if (!CatalogMgr.isInternalCatalog(catalogName)) {
-                TdwUtil.verifyPrivileges(dbName, tblName, Collections.singletonList("select"));
-            }
-        }
-        Optional<ConnectorMetadata> connectorMetadata = getOptionalMetadata(catalogName);
-        return connectorMetadata.map(metadata -> metadata.getTable(dbName, tblName)).orElse(null);
-    }
-
     public Table getTableWithPrivileges(String catalogName, String dbName, String tblName, List<String> privileges)
             throws AnalysisException {
+        Optional<ConnectorMetadata> connectorMetadata = getOptionalMetadata(catalogName);
         if (Config.enable_check_tdw_pri) {
-            if (!CatalogMgr.isInternalCatalog(catalogName)) {
+            if (!(CatalogMgr.isInternalCatalog(catalogName)
+                    || (connectorMetadata.isPresent() && connectorMetadata.get() instanceof JDBCMetadata))) {
                 TdwUtil.verifyPrivileges(dbName, tblName, privileges);
             }
         }
-        Optional<ConnectorMetadata> connectorMetadata = getOptionalMetadata(catalogName);
         Table connectorTable = connectorMetadata.map(metadata -> metadata.getTable(dbName, tblName)).orElse(null);
         if (connectorTable != null) {
             // Load meta information from ConnectorTblMetaInfoMgr for each external table.
