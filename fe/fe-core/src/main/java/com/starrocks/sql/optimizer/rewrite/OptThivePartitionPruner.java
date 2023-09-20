@@ -31,7 +31,6 @@ import com.starrocks.common.AnalysisException;
 import com.starrocks.connector.hive.THiveConstants;
 import com.starrocks.connector.hive.THiveUtils;
 import com.starrocks.planner.PartitionPruner;
-import com.starrocks.planner.RangePartitionPruner;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.common.ErrorType;
 import com.starrocks.sql.common.StarRocksPlannerException;
@@ -281,7 +280,7 @@ public class OptThivePartitionPruner {
             partitionId++;
         }
 
-        PartitionPruner partitionPruner = new RangePartitionPruner(keyRangeById,
+        ThiveRangePartitionPruner partitionPruner = new ThiveRangePartitionPruner(keyRangeById,
                 partitionColumns, operator.getColumnFilters());
 
         ScanOperatorPredicates scanOperatorPredicates = operator.getScanOperatorPredicates();
@@ -662,7 +661,7 @@ public class OptThivePartitionPruner {
 
         List<Column> partitionColumns = new ArrayList<>();
         partitionColumns.add(rangePartitionColumn);
-        PartitionPruner partitionPruner = new RangePartitionPruner(keyRangeById,
+        PartitionPruner partitionPruner = new ThiveRangePartitionPruner(keyRangeById,
                 partitionColumns, operator.getColumnFilters());
 
         Collection<Long> selectedPartitionIds = partitionPruner.prune();
