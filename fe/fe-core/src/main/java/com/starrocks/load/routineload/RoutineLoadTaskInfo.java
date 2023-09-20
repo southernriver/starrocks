@@ -28,7 +28,12 @@ import com.starrocks.common.util.TimeUtils;
 import com.starrocks.metric.MetricRepo;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.service.FrontendOptions;
+import com.starrocks.thrift.TExecPlanFragmentParams;
+import com.starrocks.thrift.TLoadJobType;
+import com.starrocks.thrift.TPlanFragment;
+import com.starrocks.thrift.TQueryOptions;
 import com.starrocks.thrift.TRoutineLoadTask;
+import com.starrocks.thrift.TUniqueId;
 import com.starrocks.transaction.TransactionState;
 import com.starrocks.transaction.TransactionState.TxnCoordinator;
 import com.starrocks.transaction.TransactionState.TxnSourceType;
@@ -206,6 +211,17 @@ public abstract class RoutineLoadTaskInfo {
                 new TxnCoordinator(TxnSourceType.FE, FrontendOptions.getLocalHostAddress()),
                 TransactionState.LoadJobSourceType.ROUTINE_LOAD_TASK, routineLoadJob.getId(),
                 timeoutMs / 1000);
+    }
+
+    protected TExecPlanFragmentParams plan(RoutineLoadJob routineLoadJob) throws UserException {
+        TUniqueId loadId = new TUniqueId(id.getMostSignificantBits(), id.getLeastSignificantBits());
+        // plan for each task, in case table has change(rollup or schema change)
+        TExecPlanFragmentParams tExecPlanFragmentParams = routineLoadJob.plan(loadId, txnId);
+        TQueryOptions tQueryOptions = tExecPlanFragmentParams.getQuery_options();
+        tQueryOptions.setLoad_job_type(TLoadJobType.ROUTINE_LOAD);
+        TPlanFragment tPlanFragment = tExecPlanFragmentParams.getFragment();
+        tPlanFragment.getOutput_sink().getOlap_table_sink().setTxn_id(txnId);
+        return tExecPlanFragmentParams;
     }
 
     public List<String> getTaskShowInfo() {

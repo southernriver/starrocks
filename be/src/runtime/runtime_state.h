@@ -236,6 +236,10 @@ public:
         return num_rows_load_from_sink() - num_rows_load_filtered() - num_rows_load_unselected();
     }
 
+    int64_t num_rows_load_success() const noexcept {
+        return num_rows_load_from_source() - num_rows_load_filtered() - num_rows_load_unselected();
+    }
+
     void update_num_bytes_load_from_source(int64_t bytes_load) { _num_bytes_load_from_source.fetch_add(bytes_load); }
 
     void set_update_num_bytes_load_from_source(int64_t bytes_load) { _num_bytes_load_from_source.store(bytes_load); }

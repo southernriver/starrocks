@@ -29,10 +29,8 @@ import com.starrocks.common.MetaNotFoundException;
 import com.starrocks.common.UserException;
 import com.starrocks.common.util.DebugUtil;
 import com.starrocks.server.GlobalStateMgr;
-import com.starrocks.thrift.TExecPlanFragmentParams;
 import com.starrocks.thrift.TFileFormatType;
 import com.starrocks.thrift.TLoadSourceType;
-import com.starrocks.thrift.TPlanFragment;
 import com.starrocks.thrift.TRoutineLoadTask;
 import com.starrocks.thrift.TTubeLoadInfo;
 import com.starrocks.thrift.TUniqueId;
@@ -139,14 +137,5 @@ public class TubeTaskInfo extends RoutineLoadTaskInfo {
     @Override
     public String toString() {
         return "Task id: " + getId() + ", " + getTaskDataSourceProperties();
-    }
-
-    private TExecPlanFragmentParams plan(RoutineLoadJob routineLoadJob) throws UserException {
-        TUniqueId loadId = new TUniqueId(id.getMostSignificantBits(), id.getLeastSignificantBits());
-        // plan for each task, in case table has change(rollup or schema change)
-        TExecPlanFragmentParams tExecPlanFragmentParams = routineLoadJob.plan(loadId, txnId);
-        TPlanFragment tPlanFragment = tExecPlanFragmentParams.getFragment();
-        tPlanFragment.getOutput_sink().getOlap_table_sink().setTxn_id(txnId);
-        return tExecPlanFragmentParams;
     }
 }

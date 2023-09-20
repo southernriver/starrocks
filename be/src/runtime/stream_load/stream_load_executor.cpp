@@ -65,8 +65,8 @@ Status StreamLoadExecutor::execute_plan_fragment(StreamLoadContext* ctx) {
                 ctx->fail_infos = std::move(executor->runtime_state()->tablet_fail_infos());
                 Status status = executor->status();
                 if (status.ok()) {
-                    ctx->number_total_rows = executor->runtime_state()->num_rows_load_from_sink();
-                    ctx->number_loaded_rows = executor->runtime_state()->num_rows_load_sink_success();
+                    ctx->number_total_rows = executor->runtime_state()->num_rows_load_from_source();
+                    ctx->number_loaded_rows = executor->runtime_state()->num_rows_load_success();
                     ctx->number_filtered_rows = executor->runtime_state()->num_rows_load_filtered();
                     ctx->number_unselected_rows = executor->runtime_state()->num_rows_load_unselected();
                     ctx->loaded_bytes = executor->runtime_state()->num_bytes_load_from_sink();

@@ -106,7 +106,9 @@ Status FileDataSource::get_next(RuntimeState* state, vectorized::ChunkPtr* chunk
         size_t before_rows = (*chunk)->num_rows();
 
         const TQueryOptions& query_options = state->query_options();
-        if (query_options.__isset.load_job_type && query_options.load_job_type == TLoadJobType::BROKER) {
+        if (query_options.__isset.load_job_type && (query_options.load_job_type == TLoadJobType::BROKER ||
+                                                    query_options.load_job_type == TLoadJobType::STREAM_LOAD ||
+                                                    query_options.load_job_type == TLoadJobType::ROUTINE_LOAD)) {
             size_t before_size = (*chunk)->bytes_usage();
             state->update_num_rows_load_from_source(before_rows);
             state->update_num_bytes_load_from_source(before_size);

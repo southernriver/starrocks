@@ -32,11 +32,9 @@ import com.starrocks.common.UserException;
 import com.starrocks.common.util.DebugUtil;
 import com.starrocks.common.util.KafkaUtil;
 import com.starrocks.server.GlobalStateMgr;
-import com.starrocks.thrift.TExecPlanFragmentParams;
 import com.starrocks.thrift.TFileFormatType;
 import com.starrocks.thrift.TKafkaLoadInfo;
 import com.starrocks.thrift.TLoadSourceType;
-import com.starrocks.thrift.TPlanFragment;
 import com.starrocks.thrift.TRoutineLoadTask;
 import com.starrocks.thrift.TUniqueId;
 import org.apache.logging.log4j.LogManager;
@@ -184,14 +182,5 @@ public class KafkaTaskInfo extends RoutineLoadTaskInfo {
     protected String getTaskDataSourceProperties() {
         Gson gson = new Gson();
         return gson.toJson(partitionIdToOffset);
-    }
-
-    private TExecPlanFragmentParams plan(RoutineLoadJob routineLoadJob) throws UserException {
-        TUniqueId loadId = new TUniqueId(id.getMostSignificantBits(), id.getLeastSignificantBits());
-        // plan for each task, in case table has change(rollup or schema change)
-        TExecPlanFragmentParams tExecPlanFragmentParams = routineLoadJob.plan(loadId, txnId);
-        TPlanFragment tPlanFragment = tExecPlanFragmentParams.getFragment();
-        tPlanFragment.getOutput_sink().getOlap_table_sink().setTxn_id(txnId);
-        return tExecPlanFragmentParams;
     }
 }
