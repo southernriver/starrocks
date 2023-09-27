@@ -637,13 +637,17 @@ public class MaterializedViewHandler extends AlterHandler {
 
         for (Table tbl : db.getTables()) {
             if (tbl.getType() == Table.TableType.OLAP) {
-                if (addMVClause.getMVName().equals(tbl.getName())) {
+                if (Optional.ofNullable(addMVClause.getMVName())
+                        .map(name -> name.equals(tbl.getName())).orElse(false)) {
                     throw new DdlException("Table [" + addMVClause.getMVName() + "] already exists, ");
                 }
 
                 Collection<MaterializedIndexMeta> visibleMaterializedViews = ((OlapTable) tbl).getVisibleIndexIdToMeta().values();
                 for (MaterializedIndexMeta mvMeta : visibleMaterializedViews) {
-                    if (((OlapTable) tbl).getIndexNameById(mvMeta.getIndexId()).equals(addMVClause.getMVName())) {
+                    boolean isMvNameDuplicated = Optional.ofNullable(addMVClause.getMVName())
+                            .map(name -> name.equals(((OlapTable) tbl).getIndexNameById(mvMeta.getIndexId())))
+                            .orElse(false);
+                    if (isMvNameDuplicated) {
                         throw new DdlException("Materialized view[" + addMVClause.getMVName() + "] already exists");
                     }
                 }

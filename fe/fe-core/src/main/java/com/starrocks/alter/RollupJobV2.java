@@ -242,6 +242,12 @@ public class RollupJobV2 extends AlterJobV2 implements GsonPostProcessable {
                                 tbl.isInMemory(),
                                 tbl.enablePersistentIndex(),
                                 tabletType, tbl.getCompressionType(), index.getSortKeyIdxes());
+                        if (!isColocateMVIndex) {
+                            createReplicaTask.setBaseTablet(tabletIdMap.get(rollupTabletId), baseSchemaHash);
+                            if (this.storageFormat != null) {
+                                createReplicaTask.setStorageFormat(this.storageFormat);
+                            }
+                        }
                         batchTask.addTask(createReplicaTask);
                     } // end for rollupReplicas
                 } // end for rollupTablets
