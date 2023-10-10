@@ -219,7 +219,7 @@ public class CreateMaterializedViewStmt extends DdlStmt {
 
             List<SlotRef> slots = new ArrayList<>();
             selectListItemExpr.collect(SlotRef.class, slots);
-            List<String> baseColumnNames = slots.stream().map(slot -> slot.getColumnName().toLowerCase()).
+            List<String> baseColumnNames = slots.stream().map(slot -> slot.getColumnName()).
                     collect(Collectors.toList());
 
             // Other operator, like arithmetic operator
@@ -390,7 +390,7 @@ public class CreateMaterializedViewStmt extends DdlStmt {
                 List<SlotRef> slots = new ArrayList<>();
                 selectListItemExpr.collect(SlotRef.class, slots);
                 Type type = selectListItemExpr.getType();
-                List<String> baseColumnNames = slots.stream().map(slot -> slot.getColumnName().toLowerCase()).
+                List<String> baseColumnNames = slots.stream().map(slot -> slot.getColumnName()).
                         collect(Collectors.toList());
                 if ((selectListItemExpr instanceof SlotRef) && !Strings.isNullOrEmpty(alias)) {
                     throw new SemanticException("A column expression(slot-ref) no need have an alias name: %s",
@@ -448,7 +448,7 @@ public class CreateMaterializedViewStmt extends DdlStmt {
         List<SlotRef> slots = new ArrayList<>();
         functionCallExpr.collect(SlotRef.class, slots);
         Expr slotRef = slots.isEmpty() ? functionCallExpr.getChild(0) : slots.get(0);
-        List<String> baseColumnNames = slots.stream().map(slot -> slot.getColumnName().toLowerCase()).
+        List<String> baseColumnNames = slots.stream().map(slot -> slot.getColumnName()).
                 collect(Collectors.toList());
         Expr functionChild0 = functionCallExpr.getChild(0);
         AggregateType mvAggregateType;
