@@ -3,6 +3,7 @@
 package com.starrocks.sql.optimizer.base;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Lists;
 import com.starrocks.catalog.Column;
 import com.starrocks.sql.optimizer.ExpressionContext;
 import com.starrocks.sql.optimizer.operator.Operator;
@@ -24,7 +25,6 @@ import com.starrocks.sql.optimizer.operator.logical.LogicalValuesOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalWindowOperator;
 import com.starrocks.sql.optimizer.operator.logical.MockOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
-import jersey.repackaged.com.google.common.collect.Lists;
 
 import java.util.ArrayList;
 import java.util.Arrays;

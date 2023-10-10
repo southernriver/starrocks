@@ -42,11 +42,11 @@ public class SparkDppTest {
         Assert.assertTrue(decimalParser.getMinValue().toString().equals("-9.99"));
         // normal
         BigDecimal bigDecimal = new BigDecimal("1.21");
-        Assert.assertTrue(sparkDpp.validateData(bigDecimal, etlColumn, decimalParser, RowFactory.create(bigDecimal)));
+        Assert.assertTrue(sparkDpp.validateData(bigDecimal, etlColumn, "DECIMALV2", decimalParser, RowFactory.create(bigDecimal)));
         // failed
         BigDecimal bigDecimalFailed = new BigDecimal("10");
         Assert.assertFalse(
-                sparkDpp.validateData(bigDecimalFailed, etlColumn, decimalParser, RowFactory.create(bigDecimalFailed)));
+                sparkDpp.validateData(bigDecimalFailed, etlColumn, "DECIMALV2", decimalParser, RowFactory.create(bigDecimalFailed)));
 
         // string
         EtlJobConfig.EtlColumn stringColumn = new EtlJobConfig.EtlColumn();
@@ -56,15 +56,15 @@ public class SparkDppTest {
         // normal
         String normalString = "a1";
         Assert.assertTrue(
-                sparkDpp.validateData(normalString, stringColumn, stringParser, RowFactory.create(normalString)));
+                sparkDpp.validateData(normalString, stringColumn, "VARCHAR", stringParser, RowFactory.create(normalString)));
         // cn normal
         String normalStringCN = "中";
         Assert.assertTrue(
-                sparkDpp.validateData(normalStringCN, stringColumn, stringParser, RowFactory.create(normalStringCN)));
+                sparkDpp.validateData(normalStringCN, stringColumn, "VARCHAR", stringParser, RowFactory.create(normalStringCN)));
         // cn failed
         String failedStringCN = "中a";
         Assert.assertFalse(
-                sparkDpp.validateData(failedStringCN, stringColumn, stringParser, RowFactory.create(failedStringCN)));
+                sparkDpp.validateData(failedStringCN, stringColumn, "VARCHAR", stringParser, RowFactory.create(failedStringCN)));
     }
 
 }

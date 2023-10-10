@@ -17,7 +17,7 @@ package com.starrocks.catalog;
 
 import com.clearspring.analytics.util.Lists;
 import com.google.common.base.Joiner;
-import org.spark_project.guava.base.Strings;
+import com.google.common.base.Strings;
 
 import java.util.Arrays;
 import java.util.List;
