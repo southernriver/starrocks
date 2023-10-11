@@ -214,7 +214,7 @@ Status DataStreamSender::Channel::init(RuntimeState* state) {
     _chunk_closure = new RefCountClosure<PTransmitChunkResult>();
     _chunk_closure->ref();
 
-    _brpc_timeout_ms = std::min(3600, state->query_options().query_timeout) * 1000;
+    _brpc_timeout_ms = std::min(config::_brpc_timeout_seconds, state->query_options().query_timeout) * 1000;
     // For bucket shuffle, the dest is unreachable, there is no need to establish a connection
     if (_fragment_instance_id.lo == -1) {
         _is_inited = true;
