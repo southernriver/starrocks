@@ -749,7 +749,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     private boolean enableHiveColumnStats = false;
 
     @VariableMgr.VarAttr(name = HIVE_PARTITION_STATS_SAMPLE_SIZE)
-    private int hivePartitionStatsSampleSize = 3000;
+    private int hivePartitionStatsSampleSize = 1000;
 
     @VariableMgr.VarAttr(name = ENABLE_ADAPTIVE_SINK_DOP)
     private boolean enableAdaptiveSinkDop = false;
