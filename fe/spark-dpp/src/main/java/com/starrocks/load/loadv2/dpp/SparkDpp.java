@@ -222,6 +222,8 @@ public final class SparkDpp implements java.io.Serializable {
                                                        long tableId,
                                                        EtlJobConfig.EtlIndex indexMeta,
                                                        SparkRDDAggregator[] sparkRDDAggregators) {
+        // Cannot enable speculation in write stage, otherwise it may throw file already exist exception.
+        spark.sparkContext().conf().set("spark.speculation", "false");
         JavaRDD<Row> rowRdd = resultRDD.map(new Function<Tuple2<List<Object>, Object[]>, Row>() {
             @Override
             public Row call(Tuple2<List<Object>, Object[]> v1) throws Exception {
@@ -537,6 +539,7 @@ public final class SparkDpp implements java.io.Serializable {
                 dataframe.toJavaRDD().flatMapToPair(new PairFlatMapFunction<Row, List<Object>, Object[]>() {
                     @Override
                     public Iterator<Tuple2<List<Object>, Object[]>> call(Row row) throws Exception {
+                        scannedRowsAcc.add(1);
                         List<Tuple2<List<Object>, Object[]>> result = new ArrayList<>();
                         List<Object> keyColumns = new ArrayList<>();
                         List<Object> valueColumns = new ArrayList<>(valueColumnNames.size());
@@ -547,6 +550,9 @@ public final class SparkDpp implements java.io.Serializable {
                             if (!validateData(columnObject, baseIndex.getColumn(columnName),
                                     columnTypes.get(columnName), parsers.get(i), row)) {
                                 abnormalRowAcc.add(1);
+                                if (abnormalRowAcc.value() < 5) {
+                                    invalidRows.add(row.toString());
+                                }
                                 return result.iterator();
                             }
                             keyColumns.add(columnObject);
@@ -559,6 +565,9 @@ public final class SparkDpp implements java.io.Serializable {
                             if (!validateData(columnObject, baseIndex.getColumn(columnName),
                                     columnTypes.get(columnName), parsers.get(i + keyColumnNames.size()), row)) {
                                 abnormalRowAcc.add(1);
+                                if (abnormalRowAcc.value() < 5) {
+                                    invalidRows.add(row.toString());
+                                }
                                 return result.iterator();
                             }
                             valueColumns.add(columnObject);
