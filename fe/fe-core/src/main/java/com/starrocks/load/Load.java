@@ -273,7 +273,7 @@ public class Load {
                 SlotRef ref = ((SlotRef) importColumnDesc.getExpr());
                 if (importColumnDesc.getColumnName().equals(ref.getColumnName())) {
                     if (importColumnNames.contains(columnName)) {
-                        throw new DdlException("Duplicate column: " + columnName);
+                        continue;
                     }
                     copiedColumnExprs.add(new ImportColumnDesc(columnName));
                     importColumnNames.add(columnName);
