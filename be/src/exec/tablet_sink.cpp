@@ -407,7 +407,11 @@ Status OlapTableSink::send_chunk(RuntimeState* state, vectorized::Chunk* chunk) 
                 }
             }
 
-            _number_filtered_rows += (num_rows - _validate_select_idx.size());
+            int64_t num_rows_load_filtered = num_rows - _validate_select_idx.size();
+            if (num_rows_load_filtered > 0) {
+                _number_filtered_rows += num_rows_load_filtered;
+                state->update_num_rows_load_filtered(num_rows_load_filtered);
+            }
             _number_output_rows += _validate_select_idx.size();
         }
     }
