@@ -110,7 +110,9 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
@@ -124,7 +126,9 @@ import java.util.function.Function;
 // <prefix>_<query-id>_<task-number>_<instance-number>_<file-number>.csv
 public class ExportJob implements Writable {
     private static final Logger LOG = LogManager.getLogger(ExportJob.class);
-    private static final ExecutorService EXECUTOR_SERVICE = Executors.newCachedThreadPool(
+    private static final ExecutorService EXECUTOR_SERVICE = new ThreadPoolExecutor(1, 1000,
+            60L, TimeUnit.SECONDS,
+            new LinkedBlockingQueue<>(),
             new ThreadFactoryBuilder().setDaemon(true).setNameFormat("export-io").build());
     // descriptor used to register all column and table need
     private final DescriptorTable desc;
