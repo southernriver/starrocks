@@ -276,6 +276,8 @@ public final class SparkDpp implements java.io.Serializable {
         sortColumns.add(GEN_BUCKET_COL_NAME);
         sortColumns.addAll(keyColumns);
 
+        // Cannot enable speculation in write stage, otherwise it may throw file already exist exception.
+        spark.sparkContext().conf().set("spark.speculation", "false");
         df.repartition(bucketKeyMap.size(), df.col(GEN_BUCKET_COL_NAME))
                 .sortWithinPartitions(GEN_PARTITION_COL_NAME, sortColumns.toArray(new String[0]))
                 .selectExpr(fullColumns.toArray(new String[0]))
@@ -285,6 +287,14 @@ public final class SparkDpp implements java.io.Serializable {
                         // write the data to dst file
                         Configuration conf = new Configuration(serializableHadoopConf.value());
                         conf.set("dfs.client.block.write.locateFollowingBlock.retries", "6");
+                        conf.setBoolean("spark.sql.parquet.writeLegacyFormat", false);
+                        conf.setBoolean("spark.sql.parquet.int64AsTimestampMillis", false);
+                        conf.setBoolean("spark.sql.parquet.int96AsTimestamp", true);
+                        conf.setBoolean("spark.sql.parquet.binaryAsString", false);
+                        conf.set("spark.sql.parquet.outputTimestampType", "INT96");
+                        conf.setBoolean("spark.sql.parquet.fieldId.write.enabled", true);
+                        conf.setBoolean("spark.sql.parquet.writeLegacyFormat", false);
+                        conf.setBoolean("spark.sql.caseSensitive", false);
                         FileSystem fs = FileSystem.get(URI.create(etlJobConfig.outputPath), conf);
                         int lastBucketId = -1;
                         long lastPartitionId = -1;
@@ -294,13 +304,6 @@ public final class SparkDpp implements java.io.Serializable {
                         String dstPath = "";
                         String tmpPath = "";
 
-                        conf.setBoolean("spark.sql.parquet.writeLegacyFormat", false);
-                        conf.setBoolean("spark.sql.parquet.int64AsTimestampMillis", false);
-                        conf.setBoolean("spark.sql.parquet.int96AsTimestamp", true);
-                        conf.setBoolean("spark.sql.parquet.binaryAsString", false);
-                        conf.set("spark.sql.parquet.outputTimestampType", "INT96");
-                        conf.setBoolean("spark.sql.parquet.fieldId.write.enabled", true);
-                        conf.setBoolean("spark.sql.parquet.writeLegacyFormat", false);
                         ParquetWriteSupport.setSchema(dstSchema, conf);
                         ParquetWriteSupport parquetWriteSupport = new ParquetWriteSupport();
 
