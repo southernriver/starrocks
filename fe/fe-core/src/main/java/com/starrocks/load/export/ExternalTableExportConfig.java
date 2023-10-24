@@ -450,6 +450,7 @@ public class ExternalTableExportConfig {
                 futures.add(ExportJob.getIoExec().submit(() -> {
                     for (int i = 0; i < ExportExportingTask.RETRY_NUM; ++i) {
                         try {
+                            LOG.debug("{} build metrics from path: {}", fileSystem.getUserName(), inputFile);
                             Metrics metrics = null;
                             if ("orc".equalsIgnoreCase(job.getFileFormat())) {
                                 metrics = OrcMetrics.fromInputFile(inputFile, MetricsConfig.getDefault(), nameMapping);
