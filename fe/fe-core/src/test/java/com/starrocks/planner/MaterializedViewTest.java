@@ -551,6 +551,60 @@ public class MaterializedViewTest extends MaterializedViewTestBase {
     }
 
     @Test
+    public void testAggregate16() throws Exception {
+        String mv = "CREATE MATERIALIZED VIEW IF NOT EXISTS test_mv1\n" +
+                "DISTRIBUTED BY HASH(col1) BUCKETS 3\n" +
+                "PROPERTIES (\n" +
+                "    \"replication_num\" = \"1\"\n" +
+                ")" +
+                "as select " +
+                " col1,col2, col3,\n" +
+                "      sum(col4) as sum_amt\n" +
+                "    from\n" +
+                "      test_agg_with_having_tbl p1\n" +
+                "    group by\n" +
+                "      1, 2, 3";
+        starRocksAssert.withMaterializedView(mv);
+        {
+            sql("select col1 from test_agg_with_having_tbl p1\n" +
+                    "    where p1.col2 = '02' and p1.col3 = \"2023-03-31\"\n" +
+                    "    group by 1\n" +
+                    "    having sum(p1.col4) >= 500000\n")
+                    .notContain("AGGREGATE")
+                    .contains("PREDICATES: 10: sum_amt >= 500000, 8: col2 = '02', 9: col3 = '2023-03-31'\n" +
+                            "     partitions=1/1\n" +
+                            "     rollup: test_mv1");
+        }
+        {
+            sql("select col1, col2 from test_agg_with_having_tbl p1\n" +
+                    "    where p1.col3 = \"2023-03-31\"\n" +
+                    "    group by 1, 2\n" +
+                    "    having sum(p1.col4) >= 500000\n")
+                    .notContain("AGGREGATE")
+                    .contains("PREDICATES: 10: sum_amt >= 500000, 9: col3 = '2023-03-31'\n" +
+                            "     partitions=1/1\n" +
+                            "     rollup: test_mv1");
+
+        }
+        {
+            sql("select col1, col2 from test_agg_with_having_tbl p1\n" +
+                    "    group by 1, 2\n" +
+                    "    having sum(p1.col4) >= 500000\n")
+                    .contains(":AGGREGATE (update finalize)\n" +
+                            "  |  output: sum(10: sum_amt)\n" +
+                            "  |  group by: 7: col1, 8: col2\n" +
+                            "  |  having: 11: sum >= 500000\n" +
+                            "  |  \n" +
+                            "  0:OlapScanNode\n" +
+                            "     TABLE: test_mv1\n" +
+                            "     PREAGGREGATION: ON\n" +
+                            "     partitions=1/1\n" +
+                            "     rollup: test_mv1");
+
+        }
+    }
+
+    @Test
     public void testAggregateWithAggExpr() {
         // support agg expr: empid -> abs(empid)
         testRewriteOK("select empid, deptno," +
