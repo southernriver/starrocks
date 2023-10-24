@@ -18,6 +18,7 @@ package com.starrocks.sql.optimizer;
 import com.starrocks.catalog.Table;
 import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
 import com.starrocks.sql.optimizer.rewrite.ReplaceColumnRefRewriter;
+import com.starrocks.sql.optimizer.rule.Rule;
 import com.starrocks.sql.optimizer.rule.transformation.materialization.PredicateSplit;
 
 import java.util.List;
@@ -36,18 +37,21 @@ public class MvRewriteContext {
     // mv's partition and distribution related conjunct predicate,
     // used to prune partitions and buckets of scan mv operator after rewrite
     private ScalarOperator mvPruneConjunct;
+    private final Rule rule;
 
     public MvRewriteContext(
             MaterializationContext materializationContext,
             List<Table> queryTables,
             OptExpression queryExpression,
             ReplaceColumnRefRewriter queryColumnRefRewriter,
-            PredicateSplit queryPredicateSplit) {
+            PredicateSplit queryPredicateSplit,
+            Rule rule) {
         this.materializationContext = materializationContext;
         this.queryTables = queryTables;
         this.queryExpression = queryExpression;
         this.queryColumnRefRewriter = queryColumnRefRewriter;
         this.queryPredicateSplit = queryPredicateSplit;
+        this.rule = rule;
     }
 
     public MaterializationContext getMaterializationContext() {
@@ -76,5 +80,9 @@ public class MvRewriteContext {
 
     public void setMvPruneConjunct(ScalarOperator mvPruneConjunct) {
         this.mvPruneConjunct = mvPruneConjunct;
+    }
+
+    public Rule getRule() {
+        return rule;
     }
 }

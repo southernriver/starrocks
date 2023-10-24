@@ -370,6 +370,10 @@ public class StmtExecutor {
                     }
                     context.setSessionVariable(sessionVariable);
                 }
+
+                if (parsedStmt.isExplain()) {
+                    context.setExplainLevel(parsedStmt.getExplainLevel());
+                }
             }
 
             // execPlan is the output of new planner

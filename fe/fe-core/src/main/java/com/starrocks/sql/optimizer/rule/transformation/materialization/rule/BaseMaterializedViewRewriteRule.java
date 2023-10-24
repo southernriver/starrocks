@@ -83,8 +83,8 @@ public abstract class BaseMaterializedViewRewriteRule extends TransformationRule
         final PredicateSplit queryPredicateSplit = PredicateSplit.splitPredicate(queryPredicate);
         List<Table> queryTables = MvUtils.getAllTables(queryExpression);
         for (MaterializationContext mvContext : mvCandidateContexts) {
-            MvRewriteContext mvRewriteContext =
-                    new MvRewriteContext(mvContext, queryTables, queryExpression, queryColumnRefRewriter, queryPredicateSplit);
+            MvRewriteContext mvRewriteContext = new MvRewriteContext(mvContext, queryTables, queryExpression,
+                    queryColumnRefRewriter, queryPredicateSplit, this);
             MaterializedViewRewriter mvRewriter = getMaterializedViewRewrite(mvRewriteContext);
             OptExpression candidate = mvRewriter.rewrite();
             if (candidate != null) {

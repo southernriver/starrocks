@@ -3215,7 +3215,7 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
         }
 
         if (context.optimizerTrace() != null) {
-            queryStatement.setIsExplain(true, StatementBase.ExplainLevel.OPTIMIZER);
+            queryStatement.setIsExplain(true, getTraceType(context.optimizerTrace()));
         }
 
         return queryStatement;
@@ -5139,6 +5139,14 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
             explainLevel = StatementBase.ExplainLevel.COST;
         }
         return explainLevel;
+    }
+
+    private static StatementBase.ExplainLevel getTraceType(StarRocksParser.OptimizerTraceContext context) {
+        if (context.REWRITE() != null) {
+            return StatementBase.ExplainLevel.REWRITE;
+        } else {
+            return StatementBase.ExplainLevel.OPTIMIZER;
+        }
     }
 
     public static SetType getVariableType(StarRocksParser.VarTypeContext context) {
