@@ -105,7 +105,7 @@ public class IcebergUtil {
         HdfsFs fileSystem = HdfsUtil.getFileSystem(tableLocation, brokerDesc);
         Util.doAsWithUGI(fileSystem.getUgi(), () -> {
             ((IcebergMetadata) connectorMetadata).createTable(dbName, tableName.getTbl(),
-                    table.getColumns(), table.getPartitionColumnNames(), properties);
+                    table.getFullSchema(), table.getPartitionColumnNames(), properties);
             return null;
         });
     }
