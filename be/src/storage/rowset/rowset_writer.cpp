@@ -174,7 +174,9 @@ StatusOr<RowsetSharedPtr> RowsetWriter::build() {
     } else {
         _rowset_meta_pb->set_rowset_state(VISIBLE);
     }
-    _context.tablet_schema->to_schema_pb(_rowset_meta_pb->mutable_tablet_schema());
+    if (_context.tablet_schema->keys_type() != KeysType::PRIMARY_KEYS) {
+        _context.tablet_schema->to_schema_pb(_rowset_meta_pb->mutable_tablet_schema());
+    }
     auto rowset_meta = std::make_shared<RowsetMeta>(_rowset_meta_pb);
     RowsetSharedPtr rowset;
     RETURN_IF_ERROR(

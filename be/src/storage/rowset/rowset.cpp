@@ -23,6 +23,7 @@
 
 #include <memory>
 #include <set>
+#include <utility>
 
 #include "fmt/format.h"
 #include "fs/fs_util.h"
@@ -47,10 +48,8 @@
 namespace starrocks {
 
 Rowset::Rowset(const TabletSchemaCSPtr& schema, std::string rowset_path, RowsetMetaSharedPtr rowset_meta)
-        : _rowset_path(std::move(rowset_path)),
-          _rowset_meta(std::move(rowset_meta)),
-          _refs_by_reader(0) {
-    MEM_TRACKER_SAFE_CONSUME(ExecEnv::GetInstance()->rowset_metadata_mem_tracker(), _mem_usage());
+        : _rowset_path(std::move(rowset_path)), _rowset_meta(std::move(rowset_meta)), _refs_by_reader(0) {
+    MEM_TRACKER_SAFE_CONSUME(ExecEnv::GetInstance()->rowset_metadata_mem_tracker(), _mem_usage())
     _schema = _rowset_meta->tablet_schema() ? _rowset_meta->tablet_schema() : schema;
     DCHECK(_schema);
 }
@@ -437,9 +436,9 @@ Status Rowset::get_segment_iterators(const vectorized::Schema& schema, const Row
     return Status::OK();
 }
 
-StatusOr<std::vector<vectorized::ChunkIteratorPtr>> Rowset::get_segment_iterators2(const vectorized::Schema& schema,
-                                                                                   KVStore* meta, int64_t version,
-                                                                                   OlapReaderStatistics* stats) {
+StatusOr<std::vector<vectorized::ChunkIteratorPtr>> Rowset::get_segment_iterators2(
+        const vectorized::Schema& schema, KVStore* meta, int64_t version, OlapReaderStatistics* stats,
+        TabletSchemaCSPtr tablet_schema) {
     RETURN_IF_ERROR(load());
 
     vectorized::SegmentReadOptions seg_options;
@@ -450,6 +449,7 @@ StatusOr<std::vector<vectorized::ChunkIteratorPtr>> Rowset::get_segment_iterator
     seg_options.rowset_id = rowset_meta()->get_rowset_seg_id();
     seg_options.version = version;
     seg_options.meta = meta;
+    seg_options.tablet_schema = std::move(tablet_schema);
 
     std::vector<vectorized::ChunkIteratorPtr> seg_iterators(num_segments());
     TabletSegmentId tsid;

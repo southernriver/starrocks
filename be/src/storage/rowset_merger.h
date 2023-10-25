@@ -13,13 +13,15 @@ namespace vectorized {
 struct MergeConfig {
     size_t chunk_size;
     CompactionAlgorithm algorithm = HORIZONTAL_COMPACTION;
+    TabletSchemaCSPtr tablet_schema = nullptr;
+
 };
 
 // heap based rowset merger used for updatable tablet's compaction
 
 Status compaction_merge_rowsets(Tablet& tablet, int64_t version, const vector<RowsetSharedPtr>& rowsets,
                                 RowsetWriter* writer, const MergeConfig& cfg,
-                                const starrocks::TabletSchemaCSPtr& cur_tablet_schema = nullptr);
+                                const starrocks::TabletSchemaCSPtr& final_tablet_schema = nullptr);
 
 } // namespace vectorized
 

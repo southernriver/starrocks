@@ -1271,8 +1271,9 @@ Status TabletUpdates::_do_compaction(std::unique_ptr<CompactionInfo>* pinfo) {
     vectorized::MergeConfig cfg;
     cfg.chunk_size = config::vector_chunk_size;
     cfg.algorithm = algorithm;
+    cfg.tablet_schema = context.tablet_schema == nullptr ? _tablet.tablet_schema() : context.tablet_schema;
     RETURN_IF_ERROR(vectorized::compaction_merge_rowsets(_tablet, info->start_version.major(), input_rowsets,
-                                                         rowset_writer.get(), cfg, context.tablet_schema));
+                                                         rowset_writer.get(), cfg, cfg.tablet_schema));
     auto output_rowset = rowset_writer->build();
     if (!output_rowset.ok()) return output_rowset.status();
     // 4. commit compaction
@@ -1472,7 +1473,7 @@ void TabletUpdates::_apply_compaction_commit(const EditVersionInfo& version_info
     uint32_t max_src_rssid = max_rowset_id + rowset->num_segments() - 1;
 
     for (size_t i = 0; i < _compaction_state->pk_cols.size(); i++) {
-        if (st = _compaction_state->load_segments(output_rowset, i); !st.ok()) {
+        if (st = _compaction_state->load_segments(output_rowset, i, _tablet.tablet_schema()); !st.ok()) {
             manager->index_cache().release(index_entry);
             _compaction_state.reset();
             std::string msg = Substitute("_apply_compaction_commit error: load compaction state failed: $0 $1",
@@ -2671,7 +2672,7 @@ Status TabletUpdates::convert_from(const std::shared_ptr<Tablet>& base_tablet, i
 
         RowsetReleaseGuard guard(src_rowset->shared_from_this());
         auto res = src_rowset->get_segment_iterators2(base_schema, base_tablet->data_dir()->get_meta(), version.major(),
-                                                      &stats);
+                                                      &stats, _tablet.tablet_schema());
         if (!res.ok()) {
             return res.status();
         }
@@ -2898,7 +2899,7 @@ Status TabletUpdates::reorder_from(const std::shared_ptr<Tablet>& base_tablet, i
 
         RowsetReleaseGuard guard(src_rowset->shared_from_this());
         auto res = src_rowset->get_segment_iterators2(base_schema, base_tablet->data_dir()->get_meta(), version.major(),
-                                                      &stats);
+                                                      &stats, _tablet.tablet_schema());
         if (!res.ok()) {
             return res.status();
         }

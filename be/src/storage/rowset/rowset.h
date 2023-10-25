@@ -172,9 +172,9 @@ public:
     // return iterator list, an iterator for each segment,
     // if the segment is empty, put an empty pointer in list
     // caller is also responsible to call rowset's acquire/release
-    StatusOr<std::vector<vectorized::ChunkIteratorPtr>> get_segment_iterators2(const vectorized::Schema& schema,
-                                                                               KVStore* meta, int64_t version,
-                                                                               OlapReaderStatistics* stats);
+    StatusOr<std::vector<vectorized::ChunkIteratorPtr>> get_segment_iterators2(
+            const vectorized::Schema& schema, KVStore* meta, int64_t version, OlapReaderStatistics* stats,
+            TabletSchemaCSPtr tablet_schema = nullptr);
 
     // publish rowset to make it visible to read
     void make_visible(Version version);
@@ -375,6 +375,5 @@ private:
     std::shared_ptr<Rowset> _rowset;
 };
 using TabletSchemaSPtr = std::shared_ptr<TabletSchema>;
-
 
 } // namespace starrocks

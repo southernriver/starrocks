@@ -8,6 +8,7 @@
 #include "column/vectorized_fwd.h"
 #include "common/status.h"
 #include "storage/olap_common.h"
+#include "storage/tablet_schema.h"
 
 namespace starrocks {
 
@@ -25,7 +26,7 @@ public:
 
     Status load(Rowset* rowset);
 
-    Status load_segments(Rowset* rowset, uint32_t segment_id);
+    Status load_segments(Rowset* rowset, uint32_t segment_id, const TabletSchemaCSPtr& tablet_schema);
     void release_segments(Rowset* rowset, uint32_t segment_id);
 
     size_t memory_usage() const { return _memory_usage; }
@@ -33,7 +34,7 @@ public:
     std::vector<ColumnPtr> pk_cols;
 
 private:
-    Status _load_segments(Rowset* rowset, uint32_t segment_id);
+    Status _load_segments(Rowset* rowset, uint32_t segment_id, const TabletSchemaCSPtr& tablet_schema = nullptr);
     Status _do_load(Rowset* rowset);
 
     std::once_flag _load_once_flag;

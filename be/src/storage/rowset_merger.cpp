@@ -276,7 +276,8 @@ private:
             _entries.emplace_back(new MergeEntry<T>());
             MergeEntry<T>& entry = *_entries.back();
             entry.rowset_release_guard = std::make_unique<RowsetReleaseGuard>(rowset);
-            auto res = rowset->get_segment_iterators2(schema, tablet.data_dir()->get_meta(), version, stats);
+            auto res = rowset->get_segment_iterators2(schema, tablet.data_dir()->get_meta(), version, stats,
+                                                      cfg.tablet_schema);
             if (!res.ok()) {
                 return res.status();
             }
@@ -414,7 +415,7 @@ private:
             rowsets_mask_buffer.emplace_back(std::move(rowset_mask_buffer));
         }
         {
-            auto tablet_schema_ptr = tablet.tablet_schema();
+            auto tablet_schema_ptr = cfg.tablet_schema;
             Schema schema = tablet_schema_ptr->sort_key_idxes().empty()
                                     ? ChunkHelper::convert_schema_to_format_v2(tablet_schema_ptr, column_groups[0])
                                     : ChunkHelper::get_sort_key_schema_with_format_v2(tablet.tablet_schema());
@@ -425,7 +426,7 @@ private:
 
         // merge non key columns
         auto source_masks = std::make_unique<vector<RowSourceMask>>();
-        auto tablet_schema_ptr = tablet.tablet_schema();
+        auto tablet_schema_ptr = cfg.tablet_schema;
         for (size_t i = 1; i < column_groups.size(); ++i) {
             // read mask buffer from the beginning
             mask_buffer->flip_to_read();
@@ -442,8 +443,8 @@ private:
                 _entries.emplace_back(new MergeEntry<T>());
                 MergeEntry<T>& entry = *_entries.back();
                 entry.rowset_release_guard = std::make_unique<RowsetReleaseGuard>(rowset);
-                auto res =
-                        rowset->get_segment_iterators2(schema, tablet.data_dir()->get_meta(), version, &non_key_stats);
+                auto res = rowset->get_segment_iterators2(schema, tablet.data_dir()->get_meta(), version,
+                                                          &non_key_stats, tablet_schema_ptr);
                 if (!res.ok()) {
                     return res.status();
                 }
@@ -523,10 +524,8 @@ private:
 
 Status compaction_merge_rowsets(Tablet& tablet, int64_t version, const vector<RowsetSharedPtr>& rowsets,
                                 RowsetWriter* writer, const MergeConfig& cfg,
-                                const starrocks::TabletSchemaCSPtr& cur_tablet_schema) {
-    Schema schema = [&cur_tablet_schema, &tablet]() {
-        const starrocks::TabletSchemaCSPtr final_tablet_schema =
-                cur_tablet_schema == nullptr ? tablet.tablet_schema() : cur_tablet_schema;
+                                const starrocks::TabletSchemaCSPtr& final_tablet_schema) {
+    auto schema = [&final_tablet_schema]() {
         if (final_tablet_schema->sort_key_idxes().empty()) {
             return ChunkHelper::get_sort_key_schema_by_primary_key_format_v2(final_tablet_schema);
         } else {
