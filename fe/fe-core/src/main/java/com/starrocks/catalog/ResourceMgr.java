@@ -305,7 +305,7 @@ public class ResourceMgr implements Writable {
                 // may be dropped during `show resources`.So that we should do a null pointer
                 // check here. If resource is not null then we should check resource privs.
                 if (resource == null || !GlobalStateMgr.getCurrentState().getAuth().checkResourcePriv(
-                        ConnectContext.get(), resource.getName(), PrivPredicate.SHOW)) {
+                        ConnectContext.get(), resource.getName(), PrivPredicate.OPERATOR)) {
                     continue;
                 }
                 resource.getProcNodeData(result);

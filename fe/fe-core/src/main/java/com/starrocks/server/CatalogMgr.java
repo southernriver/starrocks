@@ -24,8 +24,10 @@ import com.starrocks.common.proc.ProcResult;
 import com.starrocks.connector.ConnectorContext;
 import com.starrocks.connector.ConnectorMgr;
 import com.starrocks.connector.hive.HiveMetastoreApiConverter;
+import com.starrocks.mysql.privilege.PrivPredicate;
 import com.starrocks.persist.DropCatalogLog;
 import com.starrocks.persist.gson.GsonUtils;
+import com.starrocks.qe.ConnectContext;
 import com.starrocks.sql.ast.CreateCatalogStmt;
 import com.starrocks.sql.ast.DropCatalogStmt;
 import org.apache.logging.log4j.LogManager;
@@ -317,7 +319,9 @@ public class CatalogMgr {
             try {
                 for (Map.Entry<String, Catalog> entry : catalogs.entrySet()) {
                     Catalog catalog = entry.getValue();
-                    if (catalog == null || isResourceMappingCatalog(catalog.getName())) {
+                    if (catalog == null || isResourceMappingCatalog(catalog.getName())
+                            || !GlobalStateMgr.getCurrentState().getAuth().checkGlobalPriv(
+                                ConnectContext.get(), PrivPredicate.OPERATOR)) {
                         continue;
                     }
                     catalog.getProcNodeData(result);
