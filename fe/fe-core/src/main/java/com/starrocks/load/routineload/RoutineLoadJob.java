@@ -89,6 +89,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
@@ -109,6 +110,7 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
     public static final boolean DEFAULT_IGNORE_TAIL_COLUMNS = false; // default is false
     public static final boolean DEFAULT_SKIP_UTF8_CHECK = false; // default is false
     public static final boolean DEFAULT_TASK_NUM_EXCEED_BE_NUM = false; // default is false
+    private static final long GET_DB_LOCK_TIMEOUT_MS = 1000; // 1s
 
     protected static final String STAR_STRING = "*";
     private Map<String, Long> consumeLags = Maps.newHashMap();
@@ -424,6 +426,27 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
             throw new MetaNotFoundException("Database " + dbId + "has been deleted");
         }
         database.readLock();
+        try {
+            Table table = database.getTable(tableId);
+            if (table == null) {
+                throw new MetaNotFoundException("Failed to find table " + tableId + " in db " + dbId);
+            }
+            return table.getName();
+        } finally {
+            database.readUnlock();
+        }
+    }
+
+    // This method should be used by caller with other locks, like modifyJob()
+    public String getTableNameWithTimeout() throws MetaNotFoundException {
+        Database database = GlobalStateMgr.getCurrentState().getDb(dbId);
+        if (database == null) {
+            throw new MetaNotFoundException("Database " + dbId + "has been deleted");
+        }
+        if (!database.tryReadLock(GET_DB_LOCK_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+            throw new UserException("get database read lock timeout, database="
+                    + database.getFullName() + ", timeoutMillis=" + GET_DB_LOCK_TIMEOUT_MS);
+        }
         try {
             Table table = database.getTable(tableId);
             if (table == null) {
@@ -1685,7 +1708,7 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
 
         String tableName = null;
         try {
-            tableName = getTableName();
+            tableName = getTableNameWithTimeout();
         } catch (Exception e) {
             LOG.warn("get table name failed", e);
             tableName = "unknown";
