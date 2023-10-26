@@ -14,6 +14,7 @@
 
 package com.starrocks.planner;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.MaterializedView;
@@ -167,10 +168,20 @@ public class MaterializedViewTestBase extends PlanTestBase {
             return this;
         }
 
+        // there may be an exception
+        public MVRewriteChecker failed() {
+            return nonMatch("TABLE: mv0");
+        }
+
+        // check plan result without any exception
         public MVRewriteChecker nonMatch() {
-            if (mv != null && !mv.isEmpty()) {
-                Assert.assertTrue(!this.rewritePlan.contains("TABLE: mv0"));
-            }
+            Preconditions.checkState(exception == null);
+            return nonMatch("TABLE: mv0");
+        }
+
+        public MVRewriteChecker nonMatch(String targetMV) {
+            Assert.assertTrue(this.rewritePlan != null);
+            Assert.assertFalse(this.rewritePlan.contains(targetMV));
             return this;
         }
 
@@ -236,6 +247,11 @@ public class MaterializedViewTestBase extends PlanTestBase {
     }
 
     protected MVRewriteChecker testRewriteFail(String mv, String query) {
+        MVRewriteChecker fixture = new MVRewriteChecker(mv, query);
+        return fixture.rewrite().failed();
+    }
+
+    protected MVRewriteChecker testRewriteNonmatch(String mv, String query) {
         MVRewriteChecker fixture = new MVRewriteChecker(mv, query);
         return fixture.rewrite().nonMatch();
     }

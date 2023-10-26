@@ -2294,4 +2294,17 @@ public class MaterializedViewTest extends MaterializedViewTestBase {
         testRewriteOK(mv, "select user_id, percentile_approx(tag_id, 1) x from user_tags group by user_id;");
         testRewriteOK(mv, "select user_id, round(percentile_approx(tag_id, 0)) x from user_tags group by user_id;");
     }
+
+    @Test
+    public void testCountRewrite() throws Exception {
+        starRocksAssert.withTable("CREATE TABLE count_tbl_1 (\n" +
+                "k1 int,\n" +
+                "k2 int\n" +
+                ")\n" +
+                "DISTRIBUTED BY HASH(k1)" +
+                "PROPERTIES (" +
+                "\"replication_num\" = \"1\")\n");
+        testRewriteNonmatch("SELECT count(distinct k1) as col1 FROM count_tbl_1", "select count(*) from count_tbl_1");
+        starRocksAssert.dropTable("count_tbl_1");
+    }
 }
