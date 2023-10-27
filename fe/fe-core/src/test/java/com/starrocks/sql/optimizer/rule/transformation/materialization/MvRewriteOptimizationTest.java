@@ -2356,4 +2356,42 @@ public class MvRewriteOptimizationTest {
             }
         }
     }
+
+    @Test
+    public void testSingleTableGroupbyWrongRewrite() throws Exception {
+        starRocksAssert.withTable("CREATE TABLE `event_log_di` (\n" +
+                "  `imp_date` bigint(20) NOT NULL COMMENT \"date of event\",\n" +
+                "  `user_code` bigint(20) NOT NULL COMMENT \"user_code\",\n" +
+                "  `country` varchar(255) NOT NULL COMMENT \"country\"," +
+                "  `province` varchar(255) NOT NULL COMMENT \"province\", " +
+                "  `platform` varchar(255) NOT NULL COMMENT \"platform\"," +
+                "  `operator` varchar(255) NOT NULL COMMENT \"operator\"," +
+                "  `uin` varchar(255) NOT NULL COMMENT \"qimei\" " +
+                ") ENGINE=OLAP\n" +
+                "DUPLICATE KEY(`imp_date`)\n" +
+                "COMMENT \"OLAP\"\n" +
+                "PARTITION BY RANGE(`imp_date`)\n" +
+                "(PARTITION p20231015 VALUES [(\"20231015\"), (\"20231016\")),\n" +
+                "PARTITION p20231016 VALUES [(\"20231016\"), (\"20231017\")),\n" +
+                "PARTITION p20231017 VALUES [(\"20231017\"), (\"20231018\")),\n" +
+                "PARTITION p20231018 VALUES [(\"20231018\"), (\"20231019\")))\n" +
+                "DISTRIBUTED BY HASH(`user_code`) BUCKETS 2\n" +
+                "PROPERTIES (\n" +
+                "\"replication_num\" = \"1\"\n" +
+                ");");
+
+        starRocksAssert.getCtx().getSessionVariable().setEnableMaterializedViewRewrite(true);
+        starRocksAssert.getCtx().getSessionVariable().setEnableOptimizerTraceLog(true);
+        createAndRefreshMv("test", "o_event_log_di_mv_for_uv",
+                "CREATE MATERIALIZED VIEW o_event_log_di_mv_for_uv \n" +
+                        "DISTRIBUTED BY RANDOM BUCKETS 0 \n" +
+                        "REFRESH ASYNC AS\n" +
+                        "SELECT imp_date, bitmap_union(to_bitmap(user_code)) AS uv\n" +
+                        "FROM event_log_di\n" +
+                        "GROUP BY imp_date;");
+        String query = "SELECT imp_date, count(1) FROM event_log_di GROUP BY imp_date;";
+        String plan = getFragmentPlan(query);
+        Assert.assertTrue(plan.contains("TABLE: event_log_di"));
+        Assert.assertTrue(plan.contains("rollup: event_log_di"));
+    }
 }
