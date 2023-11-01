@@ -140,7 +140,7 @@ public class CatalogMgr {
     }
 
     public static boolean isInternalCatalog(String name) {
-        return name.equalsIgnoreCase(InternalCatalog.DEFAULT_INTERNAL_CATALOG_NAME);
+        return name == null || name.equalsIgnoreCase(InternalCatalog.DEFAULT_INTERNAL_CATALOG_NAME);
     }
 
     public static boolean isExternalCatalog(String name) {
