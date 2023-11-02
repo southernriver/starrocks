@@ -137,6 +137,8 @@ CONF_mInt32(report_tablet_interval_seconds, "60");
 CONF_mInt32(report_workgroup_interval_seconds, "5");
 // The interval time (millisecond) for agent report resource usage to FE.
 CONF_mInt32(report_resource_usage_interval_ms, "1000");
+// Check if tablet path exists during tablet report.
+CONF_mBool(check_tablet_path_when_report_tablet, "false");
 // The max download speed(KB/s).
 CONF_mInt32(max_download_speed_kbps, "50000");
 // The download low speed limit(KB/s).

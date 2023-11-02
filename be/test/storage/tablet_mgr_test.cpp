@@ -56,6 +56,7 @@ class TabletMgrTest : public testing::Test {
 public:
     void SetUp() override {
         config::enable_event_based_compaction_framework = false;
+        config::check_tablet_path_when_report_tablet = true;
         config::tablet_map_shard_size = 1;
         config::txn_map_shard_size = 1;
         config::txn_shard_size = 1;
@@ -78,6 +79,8 @@ public:
         _tablet_id = 15007;
         _schema_hash = 368169781;
         _tablet_mgr = std::make_unique<TabletManager>(1);
+
+        starrocks::TabletSchemaCache::create_global_schema_cache();
     }
 
     void TearDown() override {
@@ -186,6 +189,41 @@ TEST_F(TabletMgrTest, DropTablet) {
     ASSERT_TRUE(tablet == nullptr);
     dir_exist = fs::path_exist(tablet_path);
     ASSERT_TRUE(!dir_exist);
+}
+
+TEST_F(TabletMgrTest, TabletPathDeleteCheck) {
+    TCreateTabletReq create_tablet_req = get_create_tablet_request(111, 3333);
+    std::vector<DataDir*> data_dirs;
+    data_dirs.push_back(_data_dirs[0]);
+    Status create_st = _tablet_mgr->create_tablet(create_tablet_req, data_dirs);
+    ASSERT_TRUE(create_st.ok());
+    TabletSharedPtr tablet = _tablet_mgr->get_tablet(111);
+    ASSERT_TRUE(tablet != nullptr);
+
+    // drop exist tablet will be success
+    auto drop_st = _tablet_mgr->drop_tablet(111, kMoveFilesToTrash);
+    ASSERT_TRUE(drop_st.ok());
+    tablet = _tablet_mgr->get_tablet(111);
+    ASSERT_TRUE(tablet == nullptr);
+    tablet = _tablet_mgr->get_tablet(111, true);
+    ASSERT_TRUE(tablet != nullptr);
+
+    // check dir exist
+    std::string tablet_path = tablet->schema_hash_path();
+    bool dir_exist = fs::path_exist(tablet_path);
+    ASSERT_TRUE(dir_exist);
+    // delete dir
+    Status remove_st = fs::remove_all(tablet_path);
+    ASSERT_TRUE(remove_st.ok());
+    // check dir not exist
+    dir_exist = fs::path_exist(tablet_path);
+    ASSERT_FALSE(dir_exist);
+
+    // build right tablet report
+    TTabletInfo tablet_info;
+    tablet->build_tablet_report_info(&tablet_info);
+    ASSERT_TRUE(tablet_info.__isset.used);
+    ASSERT_FALSE(tablet_info.used);
 }
 
 TEST_F(TabletMgrTest, LoadExistTabletFromMeta) {
