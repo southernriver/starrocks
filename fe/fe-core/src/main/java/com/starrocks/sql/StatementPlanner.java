@@ -5,7 +5,6 @@ import com.starrocks.analysis.ExecuteStmt;
 import com.starrocks.analysis.PrepareStatement;
 import com.starrocks.catalog.Database;
 import com.starrocks.common.AnalysisException;
-import com.starrocks.common.Config;
 import com.starrocks.common.UserException;
 import com.starrocks.mysql.MysqlCommand;
 import com.starrocks.planner.PlanFragment;
@@ -88,10 +87,6 @@ public class StatementPlanner {
             if (!skipAnalysis) {
                 // prepared statement
                 if (session.getCommand() == MysqlCommand.COM_STMT_PREPARE) {
-                    if (!Config.support_server_side_prepared_statement) {
-                        UnsupportedException.unsupportedException(
-                                "Do not support server-side prepared statement, Please contact with OE");
-                    }
                     PrepareStmtContext psc = new PrepareStmtContext(session, session.getStmtId());
                     session.addPreparedStmt(session.getStmtId(), psc);
 

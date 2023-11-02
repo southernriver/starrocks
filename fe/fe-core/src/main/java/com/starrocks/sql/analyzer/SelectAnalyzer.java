@@ -18,7 +18,6 @@ import com.starrocks.analysis.SlotRef;
 import com.starrocks.catalog.FunctionSet;
 import com.starrocks.catalog.PrimitiveType;
 import com.starrocks.catalog.Type;
-import com.starrocks.common.Config;
 import com.starrocks.common.TreeNode;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.sql.ast.AstVisitor;
@@ -273,12 +272,7 @@ public class SelectAnalyzer {
             }
 
             if (selectList.isDistinct()) {
-                if (!Config.support_distinct_with_groupby) {
-                    if (groupByClause != null) {
-                        throw new SemanticException(
-                                "cannot combine SELECT DISTINCT with aggregate functions or GROUP BY");
-                    }
-                } else if (groupByClause != null) {
+                if (groupByClause != null) {
                     if (groupByClause.getGroupingExprs().size() != selectList.getItems().size()) {
                         throw new SemanticException("SELECT DISTINCT fields should be as the same size with GROUP BY list");
                     }
