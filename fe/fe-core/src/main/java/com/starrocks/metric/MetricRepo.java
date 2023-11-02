@@ -958,18 +958,28 @@ public final class MetricRepo {
 
         for (RoutineLoadJob job : jobs) {
             try {
-                CounterMetric<Long> metric =
+                CounterMetric<Long> committedMetric =
+                        new LongCounterMetric("routine_load_committed_tasks", MetricUnit.NOUNIT,
+                                "routine load committed tasks");
+                buildTaskMetricForRoutineLoad(visitor, job, committedMetric, job.getcommittedTaskNum());
+
+                CounterMetric<Long> abortedMetric =
                         new LongCounterMetric("routine_load_aborted_tasks", MetricUnit.NOUNIT,
                                 "routine load aborted tasks");
-                metric.addLabel(new MetricLabel("job_name", job.getName()));
-                metric.addLabel(new MetricLabel("db_name", job.getDbFullName()));
-                metric.addLabel(new MetricLabel("tbl_name", job.getTableName()));
-                metric.addLabel(new MetricLabel("tbl_id", String.valueOf(job.getId())));
-                metric.increase(job.getAbortedTaskNum());
-                visitor.visit(metric);
+                buildTaskMetricForRoutineLoad(visitor, job, abortedMetric, job.getAbortedTaskNum());
             } catch (MetaNotFoundException ignored) {
             }
         }
+    }
+
+    private static void buildTaskMetricForRoutineLoad(MetricVisitor visitor, RoutineLoadJob job,
+                                                      CounterMetric<Long> committedMetric, long taskNum) {
+        committedMetric.addLabel(new MetricLabel("job_name", job.getName()));
+        committedMetric.addLabel(new MetricLabel("db_name", job.getDbFullName()));
+        committedMetric.addLabel(new MetricLabel("tbl_name", job.getTableName()));
+        committedMetric.addLabel(new MetricLabel("tbl_id", String.valueOf(job.getId())));
+        committedMetric.increase(taskNum);
+        visitor.visit(committedMetric);
     }
 
     private static void collectIcebergRoutineLoadProcessMetrics(MetricVisitor visitor) {

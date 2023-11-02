@@ -607,6 +607,10 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
         return consumeLagsRowNum;
     }
 
+    public long getcommittedTaskNum() {
+        return committedTaskNum;
+    }
+
     public long getAbortedTaskNum() {
         return abortedTaskNum;
     }
