@@ -64,6 +64,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.LongSummaryStatistics;
 import java.util.Map;
 import java.util.SortedMap;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -127,6 +128,11 @@ public final class MetricRepo {
     public static Histogram HISTO_QUERY_LATENCY_EXTERNAL;
     public static Histogram HISTO_QUERY_LATENCY_AUTO_HYBRID;
     public static Histogram HISTO_QUERY_LATENCY_MANUAL_HYBRID;
+
+    public static Histogram HISTO_SCHEMA_CHANGE_LATENCY_MEAN;
+    public static Histogram HISTO_SCHEMA_CHANGE_LATENCY_MAX;
+    public static Histogram HISTO_LIGHT_SCHEMA_CHANGE_LATENCY_MAX;
+    public static Histogram HISTO_LIGHT_SCHEMA_CHANGE_LATENCY_MEAN;
 
     public static Histogram HISTO_INSERT_LATENCY;
     public static Histogram HISTO_EDIT_LOG_WRITE_LATENCY;
@@ -523,6 +529,15 @@ public final class MetricRepo {
         HISTO_JOURNAL_WRITE_BYTES =
                 METRIC_REGISTER.histogram(MetricRegistry.name("journal", "write", "bytes"));
 
+        HISTO_SCHEMA_CHANGE_LATENCY_MEAN =
+                METRIC_REGISTER.histogram(MetricRegistry.name("schema_change", "normal", "latency", "mean", "ms"));
+        HISTO_SCHEMA_CHANGE_LATENCY_MAX =
+                METRIC_REGISTER.histogram(MetricRegistry.name("schema_change", "normal", "latency", "max", "ms"));
+        HISTO_LIGHT_SCHEMA_CHANGE_LATENCY_MEAN =
+                METRIC_REGISTER.histogram(MetricRegistry.name("schema_change", "light", "latency", "mean", "ms"));
+        HISTO_LIGHT_SCHEMA_CHANGE_LATENCY_MAX =
+                METRIC_REGISTER.histogram(MetricRegistry.name("schema_change", "light", "latency", "max", "ms"));
+
         // init system metrics
         initSystemMetrics();
 
@@ -655,25 +670,32 @@ public final class MetricRepo {
 
         // for light schema change
         List<SchemaChangeJobV2> lscSchemaChangeJobs = schemaMapper.getOrDefault(true, Collections.emptyList());
-        buildJobMetrics(schemaChangeMetricEntry, lscSchemaChangeJobs);
+        buildJobMetrics(schemaChangeMetricEntry, lscSchemaChangeJobs, true);
 
         // for normal schema change
         List<SchemaChangeJobV2> schemaChangeJobs = schemaMapper.getOrDefault(false, Collections.emptyList());
-        buildJobMetrics(schemaChangeMetricEntry, schemaChangeJobs);
+        buildJobMetrics(schemaChangeMetricEntry, schemaChangeJobs, false);
 
         return schemaChangeMetricEntry;
     }
 
     private static void buildJobMetrics(SchemaChangeMetricEntry schemaChangeMetricEntry,
-            List<SchemaChangeJobV2> schemaChangeJobs) {
+            List<SchemaChangeJobV2> schemaChangeJobs, boolean light) {
         if (CollectionUtils.isNotEmpty(schemaChangeJobs)) {
-            double scMean = schemaChangeJobs.stream()
-                    .mapToLong(job -> job.getFinishedTimeMs() - job.getCreateTimeMs()).summaryStatistics()
-                    .getAverage();
-            double scMax = schemaChangeJobs.stream()
-                    .mapToLong(job -> job.getFinishedTimeMs() - job.getCreateTimeMs()).summaryStatistics()
-                    .getMax();
-            schemaChangeMetricEntry.setLscMean(scMean).setLscMax(scMax);
+            LongSummaryStatistics summary = schemaChangeJobs.stream()
+                    .mapToLong(job -> job.getFinishedTimeMs() - job.getCreateTimeMs())
+                    .summaryStatistics();
+            double mean = summary.getAverage();
+            double max = summary.getMax();
+            if (light) {
+                HISTO_LIGHT_SCHEMA_CHANGE_LATENCY_MEAN.update((long) mean);
+                HISTO_LIGHT_SCHEMA_CHANGE_LATENCY_MAX.update((long) max);
+                schemaChangeMetricEntry.setLscMean(mean).setLscMax(max);
+            } else {
+                HISTO_SCHEMA_CHANGE_LATENCY_MEAN.update((long) mean);
+                HISTO_SCHEMA_CHANGE_LATENCY_MAX.update((long) max);
+                schemaChangeMetricEntry.setScMean(mean).setScMax(max);
+            }
         }
     }
 
