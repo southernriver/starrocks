@@ -65,6 +65,8 @@ public class RCFileSliceScanner extends ConnectorScanner {
     private ObjectInspector[] fieldInspectors;
     private StructField[] structFields;
     private Deserializer deserializer;
+    private LongWritable keyHolder;
+    private BytesRefArrayWritable valueHolder;
     private final long offset;
     private final long length;
     private final int fetchSize;
@@ -175,6 +177,8 @@ public class RCFileSliceScanner extends ConnectorScanner {
             structFields[i] = field;
             fieldInspectors[i] = field.getFieldObjectInspector();
         }
+        keyHolder = reader.createKey();
+        valueHolder = reader.createValue();
     }
 
     @Override
@@ -207,14 +211,12 @@ public class RCFileSliceScanner extends ConnectorScanner {
     @Override
     public int getNext() throws IOException {
         try (ThreadContextClassLoader ignored = new ThreadContextClassLoader(classLoader)) {
-            LongWritable key = reader.createKey();
-            BytesRefArrayWritable value = reader.createValue();
             int numRows = 0;
             for (; numRows < getTableSize(); numRows++) {
-                if (!reader.next(key, value)) {
+                if (!reader.next(keyHolder, valueHolder)) {
                     break;
                 }
-                Object rowData = deserializer.deserialize(value);
+                Object rowData = deserializer.deserialize(valueHolder);
                 for (int i = 0; i < requiredFields.length; i++) {
                     Object fieldData = rowInspector.getStructFieldData(rowData, structFields[i]);
                     if (fieldData == null) {
@@ -228,7 +230,8 @@ public class RCFileSliceScanner extends ConnectorScanner {
             return numRows;
         } catch (Exception e) {
             close();
-            LOG.error("Failed to get the next off-heap table chunk of rcfile.", e);
+            LOG.error("Failed to get the next off-heap table chunk of rcfile, " + dataFilePath
+                    + ", offset = " + offset + ", length = " + length, e);
             throw new IOException("Failed to get the next off-heap table chunk of rcfile.", e);
         }
     }
