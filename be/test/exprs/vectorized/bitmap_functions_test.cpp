@@ -2301,7 +2301,7 @@ TEST_F(VecBitmapFunctionsTest, sub_bitmap_special_cases) {
         columns.emplace_back(offset);
         columns.emplace_back(len);
 
-        auto column = BitmapFunctions::sub_bitmap(ctx, columns).value();
+        auto column = BitmapFunctions::sub_bitmap(ctx, columns);
         ASSERT_TRUE(column->is_null(0));
     }
     // single bitmap
@@ -2320,7 +2320,7 @@ TEST_F(VecBitmapFunctionsTest, sub_bitmap_special_cases) {
         columns.emplace_back(offset);
         columns.emplace_back(len);
 
-        auto column = BitmapFunctions::sub_bitmap(ctx, columns).value();
+        auto column = BitmapFunctions::sub_bitmap(ctx, columns);
         auto res = ColumnHelper::cast_to<TYPE_OBJECT>(column);
         ASSERT_EQ("1", res->get_object(0)->to_string());
     }
@@ -2340,7 +2340,7 @@ TEST_F(VecBitmapFunctionsTest, sub_bitmap_special_cases) {
         columns.emplace_back(offset);
         columns.emplace_back(len);
 
-        auto column = BitmapFunctions::sub_bitmap(ctx, columns).value();
+        auto column = BitmapFunctions::sub_bitmap(ctx, columns);
         ASSERT_TRUE(column->is_null(0));
     }
     // single bitmap
@@ -2359,7 +2359,7 @@ TEST_F(VecBitmapFunctionsTest, sub_bitmap_special_cases) {
         columns.emplace_back(offset);
         columns.emplace_back(len);
 
-        auto column = BitmapFunctions::sub_bitmap(ctx, columns).value();
+        auto column = BitmapFunctions::sub_bitmap(ctx, columns);
         auto res = ColumnHelper::cast_to<TYPE_OBJECT>(column);
         ASSERT_EQ("1", res->get_object(0)->to_string());
     }
@@ -2384,7 +2384,7 @@ TEST_F(VecBitmapFunctionsTest, sub_bitmap_special_cases) {
         columns.emplace_back(offset);
         columns.emplace_back(len);
 
-        auto column = BitmapFunctions::sub_bitmap(ctx, columns).value();
+        auto column = BitmapFunctions::sub_bitmap(ctx, columns);
         auto res = ColumnHelper::cast_to<TYPE_OBJECT>(column);
         ASSERT_EQ("3,4", res->get_object(0)->to_string());
     }
@@ -2409,7 +2409,7 @@ TEST_F(VecBitmapFunctionsTest, sub_bitmap_special_cases) {
         columns.emplace_back(offset);
         columns.emplace_back(len);
 
-        auto column = BitmapFunctions::sub_bitmap(ctx, columns).value();
+        auto column = BitmapFunctions::sub_bitmap(ctx, columns);
         auto res = ColumnHelper::cast_to<TYPE_OBJECT>(column);
         ASSERT_EQ("2,3,4", res->get_object(0)->to_string());
     }
@@ -2430,7 +2430,7 @@ TEST_F(VecBitmapFunctionsTest, sub_bitmap_special_cases) {
         columns.emplace_back(offset);
         columns.emplace_back(len);
 
-        auto column = BitmapFunctions::sub_bitmap(ctx, columns).value();
+        auto column = BitmapFunctions::sub_bitmap(ctx, columns);
         auto res = ColumnHelper::cast_to<TYPE_OBJECT>(column);
         ASSERT_EQ("1", res->get_object(0)->to_string());
     }
@@ -2451,7 +2451,7 @@ TEST_F(VecBitmapFunctionsTest, sub_bitmap_special_cases) {
         columns.emplace_back(offset);
         columns.emplace_back(len);
 
-        auto column = BitmapFunctions::sub_bitmap(ctx, columns).value();
+        auto column = BitmapFunctions::sub_bitmap(ctx, columns);
         auto res = ColumnHelper::cast_to<TYPE_OBJECT>(column);
         ASSERT_EQ("1", res->get_object(0)->to_string());
     }
@@ -2472,7 +2472,7 @@ TEST_F(VecBitmapFunctionsTest, sub_bitmap_special_cases) {
         columns.emplace_back(offset);
         columns.emplace_back(len);
 
-        auto column = BitmapFunctions::sub_bitmap(ctx, columns).value();
+        auto column = BitmapFunctions::sub_bitmap(ctx, columns);
         auto res = ColumnHelper::cast_to<TYPE_OBJECT>(column);
         ASSERT_EQ("2,3,4", res->get_object(0)->to_string());
     }
@@ -2493,7 +2493,7 @@ TEST_F(VecBitmapFunctionsTest, sub_bitmap_special_cases) {
         columns.emplace_back(offset);
         columns.emplace_back(len);
 
-        auto column = BitmapFunctions::sub_bitmap(ctx, columns).value();
+        auto column = BitmapFunctions::sub_bitmap(ctx, columns);
         auto res = ColumnHelper::cast_to<TYPE_OBJECT>(column);
         ASSERT_EQ("3,4", res->get_object(0)->to_string());
     }
@@ -2514,7 +2514,7 @@ TEST_F(VecBitmapFunctionsTest, sub_bitmap_special_cases) {
         columns.emplace_back(offset);
         columns.emplace_back(len);
 
-        auto column = BitmapFunctions::sub_bitmap(ctx, columns).value();
+        auto column = BitmapFunctions::sub_bitmap(ctx, columns);
         auto res = ColumnHelper::cast_to<TYPE_OBJECT>(column);
         ASSERT_EQ("600123456783,600123456784", res->get_object(0)->to_string());
     }
