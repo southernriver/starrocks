@@ -221,6 +221,23 @@ public class SimpleScheduler {
         return null;
     }
 
+    public static TNetworkAddress getPreferComputeNodeHost(ImmutableMap<Long, ComputeNode> computenodes,
+                                                           long preferCnId, Reference<Long> computeNodeIdRef) {
+        if (computenodes == null) {
+            return null;
+        }
+        int computeNodedSize = computenodes.size();
+        if (computeNodedSize == 0) {
+            return null;
+        }
+        if (computenodes.containsKey(preferCnId) && !blacklistBackends.containsKey(preferCnId)) {
+            ComputeNode preferNode = computenodes.get(preferCnId);
+            computeNodeIdRef.setRef(preferCnId);
+            return new TNetworkAddress(preferNode.getHost(), preferNode.getBePort());
+        }
+        return getComputeNodeHost(computenodes, computeNodeIdRef);
+    }
+
     public static void addToBlacklist(Long backendID) {
         if (backendID == null) {
             return;

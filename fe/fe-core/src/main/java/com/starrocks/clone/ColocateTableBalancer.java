@@ -22,6 +22,7 @@
 package com.starrocks.clone;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -47,6 +48,7 @@ import com.starrocks.system.SystemInfoService;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -139,7 +141,8 @@ public class ColocateTableBalancer extends LeaderDaemon {
     /**
      * ColocateRelocationInfo per group.
      */
-    private Map<GroupId, ColocateRelocationInfo> group2ColocateRelocationInfo = Maps.newConcurrentMap();
+    private com.google.common.collect.Table<GroupId, String, ColocateRelocationInfo> group2ColocateRelocationInfo
+            = HashBasedTable.create();
 
     @Override
     /*
@@ -209,6 +212,7 @@ public class ColocateTableBalancer extends LeaderDaemon {
         Set<GroupId> groupIds = colocateIndex.getAllGroupIds();
         TabletScheduler tabletScheduler = globalStateMgr.getTabletScheduler();
         TabletSchedulerStat stat = tabletScheduler.getStat();
+        // TODO(ganggewang): should we consider resource group here?
         Map<GroupId, Long> group2InScheduleTabletNum = tabletScheduler.getTabletsNumInScheduleForEachCG();
         Set<GroupId> toIgnoreGroupIds = new HashSet<>();
         for (GroupId groupId : groupIds) {
@@ -216,62 +220,71 @@ public class ColocateTableBalancer extends LeaderDaemon {
             if (db == null) {
                 continue;
             }
-            ClusterLoadStatistic statistic = globalStateMgr.getTabletScheduler().getLoadStatistic();
-            if (statistic == null) {
+            Map<String, ClusterLoadStatistic> resourceGroup2Statistics = globalStateMgr.getTabletScheduler().getLoadStatistic();
+            if (resourceGroup2Statistics == null) {
                 continue;
             }
-            List<List<Long>> backendsPerBucketSeq = colocateIndex.getBackendsPerBucketSeq(groupId);
-            if (backendsPerBucketSeq.isEmpty()) {
-                continue;
-            }
-
-            if (toIgnoreGroupIds.contains(groupId)) {
-                continue;
-            }
-
-            Set<Long> unavailableBeIdsInGroup = getUnavailableBeIdsInGroup(infoService, colocateIndex, groupId);
-            // Won't make new relocation decision if there is still colocate relocation tasks in schedule.
-            // We want the previous relocation decision is handled completely before new decision is made, so
-            // this won't trigger concurrent relocation decision and may mess up the scheduling.
-            Long inScheduleTabletNum = group2InScheduleTabletNum.get(groupId);
-            if (inScheduleTabletNum != null && inScheduleTabletNum >= 1L && unavailableBeIdsInGroup.isEmpty()) {
-                LOG.info("colocate group {} still has {} tablets in schedule, won't make new relocation decision",
-                        groupId, inScheduleTabletNum);
-                ColocateRelocationInfo info = group2ColocateRelocationInfo.get(groupId);
-                if (info != null) {
-                    LOG.info("number of finished scheduling tablets per bucket: {} for colocate group {}",
-                            info.getScheduledTabletNumPerBucket(), groupId);
+            for (Map.Entry<String, ClusterLoadStatistic> loadStatistic : resourceGroup2Statistics.entrySet()) {
+                String resourceGroup = loadStatistic.getKey();
+                ClusterLoadStatistic statistic = loadStatistic.getValue();
+                List<List<Long>> backendsPerBucketSeq =
+                        colocateIndex.getBackendsPerBucketSeqInResourceGroup(groupId, resourceGroup);
+                if (backendsPerBucketSeq.isEmpty()) {
+                    continue;
                 }
-                continue;
-            }
 
-            stat.counterColocateBalanceRound.incrementAndGet();
-            List<Long> availableBeIds = getAvailableBeIds(infoService);
-            List<List<Long>> balancedBackendsPerBucketSeq = Lists.newArrayList();
-            if (relocateAndBalance(groupId, unavailableBeIdsInGroup, availableBeIds, colocateIndex, infoService,
-                    statistic, balancedBackendsPerBucketSeq)) {
-                List<GroupId> colocateWithGroupsInOtherDb =
-                        colocateIndex.getColocateWithGroupsInOtherDb(groupId, db.getId());
-                // For groups which have the same GroupId.grpId with current group, the bucket seq should be the same,
-                // so here we will update the bucket seq for them directly and ignore the following traverse.
-                toIgnoreGroupIds.addAll(colocateWithGroupsInOtherDb);
-                // Add myself into the list so that we can persist the bucket seq info with other groups altogether.
-                colocateWithGroupsInOtherDb.add(groupId);
-                for (GroupId gid : colocateWithGroupsInOtherDb) {
-                    group2ColocateRelocationInfo.put(gid,
-                            new ColocateRelocationInfo(!unavailableBeIdsInGroup.isEmpty(),
-                                    colocateIndex.getBackendsPerBucketSeq(gid), Maps.newHashMap()));
-                    colocateIndex.addBackendsPerBucketSeq(gid, balancedBackendsPerBucketSeq);
-                    ColocatePersistInfo info =
-                            ColocatePersistInfo.createForBackendsPerBucketSeq(gid, balancedBackendsPerBucketSeq);
-                    globalStateMgr.getEditLog().logColocateBackendsPerBucketSeq(info);
-                    LOG.info("balance colocate group {}. now backends per bucket sequence is: {}, " +
-                                    "bucket sequence before balance: {}", gid, balancedBackendsPerBucketSeq,
-                            group2ColocateRelocationInfo.get(gid).getLastBackendsPerBucketSeq());
+                if (toIgnoreGroupIds.contains(groupId)) {
+                    continue;
                 }
-            } else {
-                // clean historical relocation info if nothing changed after trying to do `relocateAndBalance()`
-                group2ColocateRelocationInfo.remove(groupId);
+
+                Set<Long> unavailableBeIdsInGroup =
+                        getUnavailableBeIdsInGroup(infoService, colocateIndex, groupId, resourceGroup);
+                // Won't make new relocation decision if there is still colocate relocation tasks in schedule.
+                // We want the previous relocation decision is handled completely before new decision is made, so
+                // this won't trigger concurrent relocation decision and may mess up the scheduling.
+                Long inScheduleTabletNum = group2InScheduleTabletNum.get(groupId);
+                if (inScheduleTabletNum != null && inScheduleTabletNum >= 1L && unavailableBeIdsInGroup.isEmpty()) {
+                    LOG.info("colocate group {} still has {} tablets in schedule, won't make new relocation decision",
+                            groupId, inScheduleTabletNum);
+                    ColocateRelocationInfo info = group2ColocateRelocationInfo.get(groupId, resourceGroup);
+                    if (info != null) {
+                        LOG.info("number of finished scheduling tablets per bucket: {} for colocate group {}",
+                                info.getScheduledTabletNumPerBucket(), groupId);
+                    }
+                    continue;
+                }
+
+                stat.counterColocateBalanceRound.incrementAndGet();
+                List<Long> availableBeIds = getAvailableBeIds(infoService);
+                List<List<Long>> balancedBackendsPerBucketSeq = Lists.newArrayList();
+                if (relocateAndBalance(groupId, resourceGroup, unavailableBeIdsInGroup, availableBeIds, colocateIndex,
+                        infoService, statistic, balancedBackendsPerBucketSeq)) {
+                    List<GroupId> colocateWithGroupsInOtherDb =
+                            colocateIndex.getColocateWithGroupsInOtherDb(groupId, db.getId());
+                    // For groups which have the same GroupId.grpId with current group, the bucket seq should be the same,
+                    // so here we will update the bucket seq for them directly and ignore the following traverse.
+                    toIgnoreGroupIds.addAll(colocateWithGroupsInOtherDb);
+                    // Add myself into the list so that we can persist the bucket seq info with other groups altogether.
+                    colocateWithGroupsInOtherDb.add(groupId);
+                    for (GroupId gid : colocateWithGroupsInOtherDb) {
+                        group2ColocateRelocationInfo.put(gid, resourceGroup,
+                                new ColocateRelocationInfo(!unavailableBeIdsInGroup.isEmpty(),
+                                        colocateIndex.getBackendsPerBucketSeqInResourceGroup(gid, resourceGroup),
+                                        Maps.newHashMap()));
+                        colocateIndex.addBackendsPerBucketSeqByResourceGroup(gid, resourceGroup, balancedBackendsPerBucketSeq);
+                        Map<String, List<List<Long>>> balancedBackendsPerBucketSeqMap = new HashMap<>();
+                        balancedBackendsPerBucketSeqMap.put(resourceGroup, backendsPerBucketSeq);
+                        ColocatePersistInfo info =
+                                ColocatePersistInfo.createForBackendsPerBucketSeq(gid, balancedBackendsPerBucketSeqMap);
+                        globalStateMgr.getEditLog().logColocateBackendsPerBucketSeq(info);
+                        LOG.info("balance colocate group {}. now backends per bucket sequence is: {}, " +
+                                        "bucket sequence before balance: {}", gid, balancedBackendsPerBucketSeq,
+                                group2ColocateRelocationInfo.get(gid, resourceGroup).getLastBackendsPerBucketSeq());
+                    }
+                } else {
+                    // clean historical relocation info if nothing changed after trying to do `relocateAndBalance()`
+                    group2ColocateRelocationInfo.remove(groupId, resourceGroup);
+                }
             }
         }
         cleanRelocationInfoMap(groupIds);
@@ -399,9 +412,14 @@ public class ColocateTableBalancer extends LeaderDaemon {
                                             tabletCtx.setTabletOrderIdx(idx);
                                             tabletCtx.setColocateGroupId(groupId);
                                             tabletCtx.setTablet(tablet);
-                                            ColocateRelocationInfo info = group2ColocateRelocationInfo.get(groupId);
-                                            tabletCtx.setRelocationForRepair(info != null
-                                                    && info.getRelocationForRepair()
+                                            tabletCtx.setReplicaAssignment(olapTable.getReplicaAssignment());
+                                            Map<String, ColocateRelocationInfo> infos = group2ColocateRelocationInfo.row(groupId);
+                                            boolean relocationforRepair = false;
+                                            if (infos != null) {
+                                                relocationforRepair = infos.values().stream()
+                                                        .anyMatch(ColocateRelocationInfo::getRelocationForRepair);
+                                            }
+                                            tabletCtx.setRelocationForRepair(relocationforRepair
                                                     && st == TabletStatus.COLOCATE_MISMATCH);
 
                                             // For bad replica, we ignore the size limit of scheduler queue
@@ -414,12 +432,10 @@ public class ColocateTableBalancer extends LeaderDaemon {
                                                 break TABLE;
                                             }
                                             if (res == AddResult.ADDED && tabletCtx.getRelocationForRepair()) {
+                                                Set<Long> lastBackends = getBackendSetForBucket(groupId, idx);
                                                 LOG.info("add tablet relocation task to scheduler, tablet id: {}, " +
                                                                 "bucket sequence before: {}, bucket sequence now: {}",
-                                                        tableId,
-                                                        info != null ? info.getLastBackendsPerBucketSeq().get(idx) :
-                                                                Lists.newArrayList(),
-                                                        bucketsSeq);
+                                                        tableId, lastBackends, bucketsSeq);
                                             }
                                         }
                                     } else {
@@ -501,12 +517,14 @@ public class ColocateTableBalancer extends LeaderDaemon {
      *  Return true if backends per bucket sequence change and new sequence is saved in balancedBackendsPerBucketSeq.
      *  Return false if nothing changed.
      */
-    private boolean relocateAndBalance(GroupId groupId, Set<Long> unavailableBeIds, List<Long> availableBeIds,
-                                       ColocateTableIndex colocateIndex, SystemInfoService infoService,
-                                       ClusterLoadStatistic statistic, List<List<Long>> balancedBackendsPerBucketSeq) {
+    private boolean relocateAndBalance(GroupId groupId, String resourceGroup, Set<Long> unavailableBeIds,
+                                       List<Long> availableBeIds, ColocateTableIndex colocateIndex,
+                                       SystemInfoService infoService, ClusterLoadStatistic statistic,
+                                       List<List<Long>> balancedBackendsPerBucketSeq) {
         ColocateGroupSchema groupSchema = colocateIndex.getGroupSchema(groupId);
-        int replicationNum = groupSchema.getReplicationNum();
-        List<List<Long>> backendsPerBucketSeq = Lists.newArrayList(colocateIndex.getBackendsPerBucketSeq(groupId));
+        int replicationNum = groupSchema.getReplicaAssignment().getTotalReplicaNum();
+        List<List<Long>> backendsPerBucketSeq =
+                Lists.newArrayList(colocateIndex.getBackendsPerBucketSeq(groupId).get(resourceGroup));
         // [[A,B,C],[B,C,D]] -> [A,B,C,B,C,D]
         List<Long> flatBackendsPerBucketSeq =
                 backendsPerBucketSeq.stream().flatMap(List::stream).collect(Collectors.toList());
@@ -544,7 +562,8 @@ public class ColocateTableBalancer extends LeaderDaemon {
             List<Map.Entry<Long, Long>> backendWithReplicaNum =
                     getSortedBackendReplicaNumPairs(availableBeIds, unavailableBeIds, statistic,
                             flatBackendsPerBucketSeq);
-            Set<Long> decommissionedBackends = getDecommissionedBackendsInGroup(infoService, colocateIndex, groupId);
+            Set<Long> decommissionedBackends = getDecommissionedBackendsInGroup(infoService,
+                    colocateIndex, groupId, resourceGroup);
             if (backendWithReplicaNum.isEmpty() ||
                     (backendWithReplicaNum.size() == 1 && decommissionedBackends.isEmpty())) {
                 // There is not enough replicas for us to do relocation or balance, because in this case we
@@ -713,8 +732,8 @@ public class ColocateTableBalancer extends LeaderDaemon {
     }
 
     private Set<Long> getUnavailableBeIdsInGroup(SystemInfoService infoService, ColocateTableIndex colocateIndex,
-                                                 GroupId groupId) {
-        Set<Long> backends = colocateIndex.getBackendsByGroup(groupId);
+                                                 GroupId groupId, String resourceGroup) {
+        Set<Long> backends = colocateIndex.getBackendsByGroup(groupId, resourceGroup);
         Set<Long> unavailableBeIds = Sets.newHashSet();
         for (Long backendId : backends) {
             if (!checkBackendAvailable(backendId, infoService)) {
@@ -725,8 +744,8 @@ public class ColocateTableBalancer extends LeaderDaemon {
     }
 
     private Set<Long> getDecommissionedBackendsInGroup(SystemInfoService infoService, ColocateTableIndex colocateIndex,
-                                                       GroupId groupId) {
-        Set<Long> backends = colocateIndex.getBackendsByGroup(groupId);
+                                                       GroupId groupId, String resourceGroup) {
+        Set<Long> backends = colocateIndex.getBackendsByGroup(groupId, resourceGroup);
         Set<Long> decommissionedBackends = Sets.newHashSet();
         for (Long backendId : backends) {
             Backend be = infoService.getBackend(backendId);
@@ -772,38 +791,58 @@ public class ColocateTableBalancer extends LeaderDaemon {
     }
 
     private void cleanRelocationInfoMap(Set<GroupId> allGroupIds) {
-        group2ColocateRelocationInfo.entrySet().removeIf(e -> !allGroupIds.contains(e.getKey()));
+        for (GroupId groupId : allGroupIds) {
+            if (group2ColocateRelocationInfo.containsRow(groupId)) {
+                for (String resourceGroup : group2ColocateRelocationInfo.row(groupId).keySet()) {
+                    group2ColocateRelocationInfo.remove(groupId, resourceGroup);
+                }
+            }
+        }
     }
 
     public void increaseScheduledTabletNumForBucket(TabletSchedCtx ctx) {
         if (ctx.getRelocationForRepair()) {
-            ColocateRelocationInfo info = group2ColocateRelocationInfo.get(ctx.getColocateGroupId());
-            if (info != null) {
-                info.increaseScheduledTabletNumForBucket(ctx.getTabletOrderIdx());
+            Map<String, ColocateRelocationInfo> infoMap = group2ColocateRelocationInfo.row(ctx.getColocateGroupId());
+            if (infoMap != null) {
+                infoMap.values().forEach(c -> c.increaseScheduledTabletNumForBucket(ctx.getTabletOrderIdx()));
             }
         }
     }
 
     public int getScheduledTabletNumForBucket(TabletSchedCtx ctx) {
-        ColocateRelocationInfo info = group2ColocateRelocationInfo.get(ctx.getColocateGroupId());
-        if (info != null) {
-            Integer num = info.getScheduledTabletNumForBucket(ctx.getTabletOrderIdx());
-            if (num == null) {
-                return 0;
-            } else {
-                return num;
+        Map<String, ColocateRelocationInfo> infoMap = group2ColocateRelocationInfo.row(ctx.getColocateGroupId());
+        if (infoMap != null) {
+            Integer num = 0;
+            for (ColocateRelocationInfo info : infoMap.values()) {
+                Integer curNum = info.getScheduledTabletNumForBucket(ctx.getTabletOrderIdx());
+                if (curNum != null) {
+                    num += curNum;
+                }
             }
+            return num;
         } else {
             return Integer.MAX_VALUE;
         }
     }
 
-    public Set<Long> getLastBackendSeqForBucket(TabletSchedCtx ctx) {
-        ColocateRelocationInfo info = group2ColocateRelocationInfo.get(ctx.getColocateGroupId());
-        if (info != null) {
-            return Sets.newHashSet(info.getLastBackendsPerBucketSeq().get(ctx.getTabletOrderIdx()));
-        } else {
-            return Sets.newHashSet();
+    public Map<String, Set<Long>> getLastBackendSeqForBucket(TabletSchedCtx ctx) {
+        Map<String, Set<Long>> result = Maps.newHashMap();
+        GroupId groupId = ctx.getColocateGroupId();
+        int bucketId = ctx.getTabletOrderIdx();
+        for (Map.Entry<String, ColocateRelocationInfo> entry : group2ColocateRelocationInfo.row(groupId).entrySet()) {
+            result.put(entry.getKey(), new HashSet<>(entry.getValue().getLastBackendsPerBucketSeq().get(bucketId)));
         }
+        return result;
+    }
+
+    private Set<Long> getBackendSetForBucket(GroupId groupId, int index) {
+        Set<Long> set = Sets.newHashSet();
+        Map<String, ColocateRelocationInfo> infoMap = group2ColocateRelocationInfo.row(groupId);
+        if (infoMap != null) {
+            for (ColocateRelocationInfo info : infoMap.values()) {
+                set.addAll(info.getLastBackendsPerBucketSeq().get(index));
+            }
+        }
+        return set;
     }
 }

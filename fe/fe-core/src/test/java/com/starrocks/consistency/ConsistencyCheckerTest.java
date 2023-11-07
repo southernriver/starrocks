@@ -14,6 +14,7 @@ import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.Partition;
 import com.starrocks.catalog.PartitionInfo;
 import com.starrocks.catalog.Replica;
+import com.starrocks.catalog.ReplicaAssignment;
 import com.starrocks.catalog.TabletMeta;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.thrift.TStorageMedium;
@@ -44,7 +45,7 @@ public class ConsistencyCheckerTest {
         materializedIndex.addTablet(tablet, tabletMeta, false);
         PartitionInfo partitionInfo = new PartitionInfo();
         DataProperty dataProperty = new DataProperty(medium);
-        partitionInfo.addPartition(partitionId, dataProperty, (short) 3, false);
+        partitionInfo.addPartition(partitionId, dataProperty, new ReplicaAssignment((short) 3), false);
         DistributionInfo distributionInfo = new HashDistributionInfo(1, Lists.newArrayList());
         Partition partition = new Partition(partitionId, "partition", materializedIndex, distributionInfo);
         partition.setVisibleVersion(2L, System.currentTimeMillis());

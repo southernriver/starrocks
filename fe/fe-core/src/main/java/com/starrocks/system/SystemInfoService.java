@@ -75,6 +75,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
@@ -434,6 +435,11 @@ public class SystemInfoService {
         return idToComputeNodeRef.get(computeNodeId);
     }
 
+    public ComputeNode getBackendOrComputeNode(long id) {
+        ComputeNode node = idToComputeNodeRef.get(id);
+        return node == null ? idToBackendRef.get(id) : node;
+    }
+
     public boolean checkBackendAvailable(long backendId) {
         Backend backend = idToBackendRef.get(backendId);
         return backend != null && backend.isAvailable();
@@ -604,29 +610,72 @@ public class SystemInfoService {
         return backendIds;
     }
 
+    public List<Backend> getAliveBackends(String resourceGroup) {
+        return getIdToBackendInResourceGroup(resourceGroup).values()
+                .stream()
+                .filter(backend -> backend != null && backend.isAlive())
+                .collect(Collectors.toList());
+    }
+
+    public List<ComputeNode> getAliveComputeNodes(String resourceGroup) {
+        return getIdToComputeNodeInResourceGroup(resourceGroup).values()
+                .stream()
+                .filter(cn -> cn != null && cn.isAlive())
+                .collect(Collectors.toList());
+    }
+
+    // TODO(ganggewang): should here return only backends in default resource group?
     public List<Backend> getBackends() {
         return idToBackendRef.values().asList();
     }
 
     public List<Long> seqChooseBackendIdsByStorageMedium(int backendNum, boolean needAvailable, boolean isCreate,
-                                                         TStorageMedium storageMedium) {
-        final List<Backend> backends =
-                getBackends().stream().filter(v -> !v.diskExceedLimitByStorageMedium(storageMedium))
+                                                         TStorageMedium storageMedium, String resourceGroup) {
+        final List<ComputeNode> backends =
+                getAliveBackends(resourceGroup).stream().filter(v -> !v.diskExceedLimitByStorageMedium(storageMedium))
                         .collect(Collectors.toList());
-        return seqChooseBackendIds(backendNum, needAvailable, isCreate, backends);
+        List<Long> chosenNodes = seqChooseBackendIds(backendNum, needAvailable, isCreate, backends);
+        if (chosenNodes.size() < backendNum) {
+            LOG.warn("Failed to choose " + backendNum + " backend in resource group " +
+                            resourceGroup, " start to choose randomly!");
+            final List<ComputeNode> alternativeBackends = getBackends().stream()
+                    .filter(v -> !v.diskExceedLimitByStorageMedium(storageMedium))
+                    .collect(Collectors.toList());
+            chosenNodes = seqChooseBackendIds(backendNum, needAvailable, isCreate, alternativeBackends);
+        }
+        return chosenNodes;
+    }
+
+    public List<Long> seqChooseBackendIds(int backendNum, boolean needAvailable, boolean isCreate, String resourceGroup) {
+        final List<ComputeNode> backends =
+                getAliveBackends(resourceGroup).stream().filter(v -> !v.diskExceedLimit()).collect(Collectors.toList());
+        List<Long> chosenNodes = seqChooseBackendIds(backendNum, needAvailable, isCreate, backends);
+        if (chosenNodes.size() < backendNum) {
+            LOG.warn("Failed to choose " + backendNum + " backend in resource group " + resourceGroup,
+                    " start to choose randomly!");
+            final List<ComputeNode> alternativeBackends =
+                    getBackends().stream().filter(v -> !v.diskExceedLimit()).collect(Collectors.toList());
+            chosenNodes = seqChooseBackendIds(backendNum, needAvailable, isCreate, alternativeBackends);
+        }
+        return chosenNodes;
     }
 
     public List<Long> seqChooseBackendIds(int backendNum, boolean needAvailable, boolean isCreate) {
-        final List<Backend> backends =
+        final List<ComputeNode> backends =
                 getBackends().stream().filter(v -> !v.diskExceedLimit()).collect(Collectors.toList());
         return seqChooseBackendIds(backendNum, needAvailable, isCreate, backends);
+    }
+
+
+    public List<Long> seqChooseCnIds(int cnNum, boolean needAvailable, boolean isCreate) {
+        return seqChooseBackendIds(cnNum, needAvailable, isCreate, getComputeNodes(true).asList());
     }
 
     // choose backends by round-robin
     // return null if not enough backend
     // use synchronized to run serially
     public synchronized List<Long> seqChooseBackendIds(int backendNum, boolean needAvailable, boolean isCreate,
-                                                       final List<Backend> srcBackends) {
+                                                       final List<ComputeNode> srcBackends) {
         long lastBackendId;
 
         if (isCreate) {
@@ -636,8 +685,8 @@ public class SystemInfoService {
         }
 
         // host -> BE list
-        Map<String, List<Backend>> backendMaps = Maps.newHashMap();
-        for (Backend backend : srcBackends) {
+        Map<String, List<ComputeNode>> backendMaps = Maps.newHashMap();
+        for (ComputeNode backend : srcBackends) {
             // If needAvailable is true, unavailable backend won't go into the pick list
             if (needAvailable && !backend.isAvailable()) {
                 continue;
@@ -646,15 +695,15 @@ public class SystemInfoService {
             if (backendMaps.containsKey(backend.getHost())) {
                 backendMaps.get(backend.getHost()).add(backend);
             } else {
-                List<Backend> list = Lists.newArrayList();
+                List<ComputeNode> list = Lists.newArrayList();
                 list.add(backend);
                 backendMaps.put(backend.getHost(), list);
             }
         }
 
         // if more than one backend exists in same host, select a backend at random
-        List<Backend> backends = Lists.newArrayList();
-        for (List<Backend> list : backendMaps.values()) {
+        List<ComputeNode> backends = Lists.newArrayList();
+        for (List<ComputeNode> list : backendMaps.values()) {
             Collections.shuffle(list);
             backends.add(list.get(0));
         }
@@ -663,20 +712,20 @@ public class SystemInfoService {
         // get last backend index
         int lastBackendIndex = -1;
         int index = -1;
-        for (Backend backend : backends) {
+        for (ComputeNode backend : backends) {
             index++;
             if (backend.getId() == lastBackendId) {
                 lastBackendIndex = index;
                 break;
             }
         }
-        Iterator<Backend> iterator = Iterators.cycle(backends);
+        Iterator<ComputeNode> iterator = Iterators.cycle(backends);
         index = -1;
         boolean failed = false;
         // 2 cycle at most
         int maxIndex = 2 * backends.size();
         while (iterator.hasNext() && backendIds.size() < backendNum) {
-            Backend backend = iterator.next();
+            ComputeNode backend = iterator.next();
             index++;
             if (index <= lastBackendIndex) {
                 continue;
@@ -711,7 +760,7 @@ public class SystemInfoService {
         }
 
         // debug
-        for (Backend backend : backends) {
+        for (ComputeNode backend : backends) {
             LOG.debug("random select: {}", backend);
         }
 
@@ -720,6 +769,20 @@ public class SystemInfoService {
 
     public ImmutableMap<Long, Backend> getIdToBackend() {
         return idToBackendRef;
+    }
+
+    public ImmutableMap<Long, Backend> getIdToBackendInResourceGroup(String resourceGroup) {
+        List<Long> beIds = GlobalStateMgr.getCurrentState().getResourceGroupMgr()
+                .getResourceGroup(resourceGroup).getBeList();
+        return ImmutableMap.copyOf(idToBackendRef.entrySet().stream()
+                .filter(entry -> beIds.contains(entry.getValue().getId())).collect(Collectors.toList()));
+    }
+
+    public ImmutableMap<Long, ComputeNode> getIdToComputeNodeInResourceGroup(String resourceGroup) {
+        List<Long> cnIds = GlobalStateMgr.getCurrentState().getResourceGroupMgr()
+                .getResourceGroup(resourceGroup).getCnList();
+        return ImmutableMap.copyOf(idToComputeNodeRef.entrySet().stream()
+                .filter(entry -> cnIds.contains(entry.getValue().getId())).collect(Collectors.toList()));
     }
 
     public ImmutableMap<Long, ComputeNode> getIdComputeNode() {
@@ -1089,6 +1152,12 @@ public class SystemInfoService {
         ImmutableMap<Long, DiskInfo> newPathInfos = ImmutableMap.copyOf(copiedPathInfos);
         pathHashToDishInfoRef = newPathInfos;
         LOG.debug("update path infos: {}", newPathInfos);
+    }
+
+    public void checkBEAvailability(Set<Long> ids) {
+        for (Long id : ids) {
+        }
+
     }
 }
 

@@ -67,10 +67,10 @@ public class CreateResourceGroupStmt extends DdlStmt {
         if (resourceGroup.getResourceGroupType() == null) {
             resourceGroup.setResourceGroupType(TWorkGroupType.WG_NORMAL);
         }
-        if (resourceGroup.getCpuCoreLimit() == null) {
+        if (resourceGroup.getResourceGroupType() == TWorkGroupType.WG_NORMAL && resourceGroup.getCpuCoreLimit() == null) {
             throw new SemanticException("property 'cpu_core_limit' is absent");
         }
-        if (resourceGroup.getMemLimit() == null) {
+        if (resourceGroup.getResourceGroupType() == TWorkGroupType.WG_NORMAL && resourceGroup.getMemLimit() == null) {
             throw new SemanticException("property 'mem_limit' is absent");
         }
     }

@@ -120,6 +120,8 @@ public class TabletSchedulerStat {
     public AtomicLong counterReplicaColocateRedundant = new AtomicLong(0L);
     @StatField("num of colocate balancer running round")
     public AtomicLong counterColocateBalanceRound = new AtomicLong(0L);
+    @StatField("num of replica missing in resource group error")
+    public AtomicLong counterReplicaMissingInResourceGroupErr = new AtomicLong(0L);
 
     private TabletSchedulerStat lastSnapshot = null;
 

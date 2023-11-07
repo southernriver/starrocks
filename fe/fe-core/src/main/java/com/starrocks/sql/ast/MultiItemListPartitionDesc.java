@@ -8,6 +8,7 @@ import com.starrocks.analysis.ColumnDef;
 import com.starrocks.analysis.LiteralExpr;
 import com.starrocks.catalog.DataProperty;
 import com.starrocks.catalog.PartitionType;
+import com.starrocks.catalog.ReplicaAssignment;
 import com.starrocks.catalog.Type;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.FeConstants;
@@ -31,7 +32,7 @@ public class MultiItemListPartitionDesc extends PartitionDesc {
     private final List<List<String>> multiValues;
     private final Map<String, String> partitionProperties;
     private DataProperty partitionDataProperty;
-    private Short replicationNum;
+    private ReplicaAssignment replicaAssignment;
     private Boolean isInMemory;
     private TTabletType tabletType;
     private Long versionInfo;
@@ -51,10 +52,6 @@ public class MultiItemListPartitionDesc extends PartitionDesc {
         return this.partitionProperties;
     }
 
-    @Override
-    public short getReplicationNum() {
-        return this.replicationNum;
-    }
 
     @Override
     public DataProperty getPartitionDataProperty() {
@@ -93,6 +90,11 @@ public class MultiItemListPartitionDesc extends PartitionDesc {
     @Override
     public StorageCacheInfo getStorageCacheInfo() {
         return null;
+    }
+
+    @Override
+    public ReplicaAssignment getReplicaAssignment() {
+        return replicaAssignment;
     }
 
     public List<List<LiteralExpr>> getMultiLiteralExprValues() throws AnalysisException {
@@ -145,8 +147,10 @@ public class MultiItemListPartitionDesc extends PartitionDesc {
                 DataProperty.getInferredDefaultDataProperty());
 
         // analyze replication num
-        this.replicationNum =
+        short replicationNum =
                 PropertyAnalyzer.analyzeReplicationNum(allProperties, FeConstants.default_replication_num);
+
+        this.replicaAssignment = PropertyAnalyzer.analyzeReplicaAssignment(allProperties, replicationNum);
 
         // analyze version info
         this.versionInfo = PropertyAnalyzer.analyzeVersionInfo(allProperties);

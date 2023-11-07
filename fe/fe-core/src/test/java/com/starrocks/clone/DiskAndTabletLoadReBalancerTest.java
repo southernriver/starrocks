@@ -21,6 +21,7 @@ import com.starrocks.catalog.Partition;
 import com.starrocks.catalog.PartitionInfo;
 import com.starrocks.catalog.Replica;
 import com.starrocks.catalog.Replica.ReplicaState;
+import com.starrocks.catalog.ReplicaAssignment;
 import com.starrocks.catalog.TabletInvertedIndex;
 import com.starrocks.catalog.TabletMeta;
 import com.starrocks.clone.DiskAndTabletLoadReBalancer.BackendBalanceState;
@@ -108,7 +109,7 @@ public class DiskAndTabletLoadReBalancerTest {
 
         PartitionInfo partitionInfo = new PartitionInfo();
         DataProperty dataProperty = new DataProperty(medium);
-        partitionInfo.addPartition(partitionId, dataProperty, (short) 1, false);
+        partitionInfo.addPartition(partitionId, dataProperty, new ReplicaAssignment((short) 1), false);
         DistributionInfo distributionInfo = new HashDistributionInfo(6, Lists.newArrayList());
         Partition partition = new Partition(partitionId, "partition", materializedIndex, distributionInfo);
         OlapTable table = new OlapTable(tableId, "table", Lists.newArrayList(), KeysType.AGG_KEYS, partitionInfo,
@@ -158,7 +159,9 @@ public class DiskAndTabletLoadReBalancerTest {
         };
 
         Rebalancer rebalancer = new DiskAndTabletLoadReBalancer(infoService, invertedIndex);
-        rebalancer.updateLoadStatistic(clusterLoadStatistic);
+        Map<String, ClusterLoadStatistic> map = Maps.newHashMap();
+        map.put(clusterLoadStatistic.getResourceGroup(), clusterLoadStatistic);
+        rebalancer.updateLoadStatistic(map);
 
         List<TabletSchedCtx> tablets = rebalancer.selectAlternativeTablets();
         Assert.assertEquals(2, tablets.size());
@@ -260,7 +263,7 @@ public class DiskAndTabletLoadReBalancerTest {
 
         PartitionInfo partitionInfo = new PartitionInfo();
         DataProperty dataProperty = new DataProperty(medium);
-        partitionInfo.addPartition(partitionId, dataProperty, (short) 3, false);
+        partitionInfo.addPartition(partitionId, dataProperty, new ReplicaAssignment((short) 3), false);
         DistributionInfo distributionInfo = new HashDistributionInfo(3, Lists.newArrayList());
         Partition partition = new Partition(partitionId, "partition", materializedIndex, distributionInfo);
         OlapTable table = new OlapTable(tableId, "table", Lists.newArrayList(), KeysType.AGG_KEYS, partitionInfo,
@@ -310,7 +313,9 @@ public class DiskAndTabletLoadReBalancerTest {
         };
 
         Rebalancer rebalancer = new DiskAndTabletLoadReBalancer(infoService, invertedIndex);
-        rebalancer.updateLoadStatistic(clusterLoadStatistic);
+        Map<String, ClusterLoadStatistic> map = Maps.newHashMap();
+        map.put(clusterLoadStatistic.getResourceGroup(), clusterLoadStatistic);
+        rebalancer.updateLoadStatistic(map);
 
         List<TabletSchedCtx> tablets = rebalancer.selectAlternativeTablets();
         Assert.assertEquals(0, tablets.size());
@@ -428,9 +433,9 @@ public class DiskAndTabletLoadReBalancerTest {
 
         PartitionInfo partitionInfo = new PartitionInfo();
         DataProperty dataProperty1 = new DataProperty(TStorageMedium.HDD);
-        partitionInfo.addPartition(partitionId1, dataProperty1, (short) 1, false);
+        partitionInfo.addPartition(partitionId1, dataProperty1, new ReplicaAssignment((short) 1), false);
         DataProperty dataProperty2 = new DataProperty(TStorageMedium.SSD);
-        partitionInfo.addPartition(partitionId2, dataProperty2, (short) 1, false);
+        partitionInfo.addPartition(partitionId2, dataProperty2, new ReplicaAssignment((short) 1), false);
         DistributionInfo distributionInfo = new HashDistributionInfo(6, Lists.newArrayList());
         Partition partition1 = new Partition(partitionId1, "partition1", materializedIndex, distributionInfo);
         Partition partition2 = new Partition(partitionId2, "partition2", materializedIndex, distributionInfo);
@@ -490,7 +495,9 @@ public class DiskAndTabletLoadReBalancerTest {
         };
 
         Rebalancer rebalancer = new DiskAndTabletLoadReBalancer(infoService, invertedIndex);
-        rebalancer.updateLoadStatistic(clusterLoadStatistic);
+        Map<String, ClusterLoadStatistic> map = Maps.newHashMap();
+        map.put(clusterLoadStatistic.getResourceGroup(), clusterLoadStatistic);
+        rebalancer.updateLoadStatistic(map);
 
         // set Config.balance_load_disk_safe_threshold to 0.4 to trigger backend disk balance
         Config.tablet_sched_balance_load_disk_safe_threshold = 0.4;
@@ -613,7 +620,7 @@ public class DiskAndTabletLoadReBalancerTest {
 
         PartitionInfo partitionInfo = new PartitionInfo();
         DataProperty dataProperty = new DataProperty(medium);
-        partitionInfo.addPartition(partitionId, dataProperty, (short) 1, false);
+        partitionInfo.addPartition(partitionId, dataProperty, new ReplicaAssignment((short) 1), false);
         DistributionInfo distributionInfo = new HashDistributionInfo(6, Lists.newArrayList());
         Partition partition = new Partition(partitionId, "partition", materializedIndex, distributionInfo);
         OlapTable table = new OlapTable(tableId, "table", Lists.newArrayList(), KeysType.AGG_KEYS, partitionInfo,
@@ -663,7 +670,9 @@ public class DiskAndTabletLoadReBalancerTest {
         };
 
         Rebalancer rebalancer = new DiskAndTabletLoadReBalancer(infoService, invertedIndex);
-        rebalancer.updateLoadStatistic(clusterLoadStatistic);
+        Map<String, ClusterLoadStatistic> map = Maps.newHashMap();
+        map.put(clusterLoadStatistic.getResourceGroup(), clusterLoadStatistic);
+        rebalancer.updateLoadStatistic(map);
 
         List<TabletSchedCtx> tablets = rebalancer.selectAlternativeTablets();
         int be1SourceCnt = 0;

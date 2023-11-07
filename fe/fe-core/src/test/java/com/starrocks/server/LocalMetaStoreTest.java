@@ -10,6 +10,7 @@ import com.starrocks.catalog.Database;
 import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.Partition;
 import com.starrocks.catalog.PartitionInfo;
+import com.starrocks.catalog.ReplicaAssignment;
 import com.starrocks.catalog.Table;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.FeConstants;
@@ -76,7 +77,7 @@ public class LocalMetaStoreTest {
 
         PartitionInfo partitionInfo = olapTable.getPartitionInfo();
         partitionInfo.addPartition(newPartition.getId(), partitionInfo.getDataProperty(sourcePartition.getId()),
-                partitionInfo.getReplicationNum(sourcePartition.getId()),
+                new ReplicaAssignment(partitionInfo.getReplicationNum(sourcePartition.getId())),
                 partitionInfo.getIsInMemory(sourcePartition.getId()));
         olapTable.replacePartition("t1", "t1_100");
 

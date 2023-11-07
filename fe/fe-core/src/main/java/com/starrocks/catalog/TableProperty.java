@@ -41,6 +41,7 @@ import com.starrocks.sql.analyzer.AnalyzerUtils;
 import com.starrocks.thrift.TCompressionType;
 import com.starrocks.thrift.TStorageFormat;
 import com.starrocks.thrift.TWriteQuorumType;
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang3.EnumUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -52,6 +53,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -253,6 +255,23 @@ public class TableProperty implements Writable, GsonPostProcessable {
                 Integer.parseInt(properties.getOrDefault(PropertyAnalyzer.PROPERTIES_PARTITION_REFRESH_NUMBER,
                         String.valueOf(INVALID)));
         return this;
+    }
+
+    public ReplicaAssignment buildReplicaAssignment() {
+        ReplicaAssignment replicaAssignment = new ReplicaAssignment();
+        String assignmentProperty = properties.get(PropertyAnalyzer.PROPERTIES_RESOURCE_GROUP_ASSIGNMENT);
+        if (StringUtils.isNotEmpty(assignmentProperty)) {
+            String[] assignments = assignmentProperty.split(",");
+            for (String assignment : assignments) {
+                String[] kv = assignment.split(":");
+                String resourceGroup = kv[0].toLowerCase(Locale.ROOT).trim();
+                short replica = Short.parseShort(kv[1].trim());
+                replicaAssignment.put(resourceGroup, replica);
+            }
+        } else {
+            replicaAssignment.put(ResourceGroup.DEFAULT_RESOURCE_GROUP_NAME, replicationNum);
+        }
+        return replicaAssignment;
     }
 
     public TableProperty buildExcludedTriggerTables() {
@@ -502,6 +521,10 @@ public class TableProperty implements Writable, GsonPostProcessable {
                 PropertyAnalyzer.DEFAULT_COLD_TABLE_PARTITION_FORMAT);
     }
 
+    public String getReplicaAssignment() {
+        return properties.get(PropertyAnalyzer.PROPERTIES_RESOURCE_GROUP_ASSIGNMENT);
+    }
+
     public void setStorageInfo(StorageInfo storageInfo) {
         this.storageInfo = storageInfo;
     }
@@ -524,6 +547,10 @@ public class TableProperty implements Writable, GsonPostProcessable {
 
     public void setForeignKeyConstraints(List<ForeignKeyConstraint> foreignKeyConstraints) {
         this.foreignKeyConstraints = foreignKeyConstraints;
+    }
+
+    public void setReplicaAssignment(String assignment) {
+        properties.put(PropertyAnalyzer.PROPERTIES_RESOURCE_GROUP_ASSIGNMENT, assignment);
     }
 
     public TableProperty buildUseLightSchemaChange() {

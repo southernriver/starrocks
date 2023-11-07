@@ -28,6 +28,7 @@ import com.starrocks.common.AnalysisException;
 import com.starrocks.server.GlobalStateMgr;
 
 import java.util.List;
+import java.util.Map;
 
 /*
  * show proc "/colocation_group";
@@ -60,7 +61,7 @@ public class ColocationGroupProcDir implements ProcDirInterface {
 
         GroupId groupId = new GroupId(dbId, grpId);
         ColocateTableIndex index = GlobalStateMgr.getCurrentColocateIndex();
-        List<List<Long>> beSeqs = index.getBackendsPerBucketSeq(groupId);
+        Map<String, List<List<Long>>> beSeqs = index.getBackendsPerBucketSeq(groupId);
         return new ColocationGroupBackendSeqsProcNode(beSeqs);
     }
 

@@ -100,14 +100,14 @@ public class RangePartitionInfo extends PartitionInfo {
     }
 
     public void addPartition(long partitionId, boolean isTemp, Range<PartitionKey> range, DataProperty dataProperty,
-                             short replicationNum, boolean isInMemory, StorageCacheInfo storageCacheInfo) {
-        addPartition(partitionId, dataProperty, replicationNum, isInMemory, storageCacheInfo);
+                             ReplicaAssignment assignment, boolean isInMemory, StorageCacheInfo storageCacheInfo) {
+        addPartition(partitionId, dataProperty, assignment, isInMemory, storageCacheInfo);
         setRangeInternal(partitionId, isTemp, range);
     }
 
     public void addPartition(long partitionId, boolean isTemp, Range<PartitionKey> range, DataProperty dataProperty,
-                             short replicationNum, boolean isInMemory) {
-        this.addPartition(partitionId, isTemp, range, dataProperty, replicationNum, isInMemory, null);
+                             ReplicaAssignment assignment, boolean isInMemory) {
+        this.addPartition(partitionId, isTemp, range, dataProperty, assignment, isInMemory, null);
     }
 
     public Range<PartitionKey> checkAndCreateRange(SingleRangePartitionDesc desc, boolean isTemp) throws DdlException {
@@ -201,7 +201,7 @@ public class RangePartitionInfo extends PartitionInfo {
             throw new DdlException("Invalid key range: " + e.getMessage());
         }
         idToDataProperty.put(partitionId, desc.getPartitionDataProperty());
-        idToReplicationNum.put(partitionId, desc.getReplicationNum());
+        idToReplicaAssignment.put(partitionId, desc.getReplicaAssignment());
         idToInMemory.put(partitionId, desc.isInMemory());
         idToStorageCacheInfo.put(partitionId, desc.getStorageCacheInfo());
         return range;
@@ -225,7 +225,7 @@ public class RangePartitionInfo extends PartitionInfo {
                     throw new DdlException("Invalid key range: " + e.getMessage());
                 }
                 idToDataProperty.put(partitionId, desc.getPartitionDataProperty());
-                idToReplicationNum.put(partitionId, desc.getReplicationNum());
+                idToReplicaAssignment.put(partitionId, desc.getReplicaAssignment());
                 idToInMemory.put(partitionId, desc.isInMemory());
                 idToStorageCacheInfo.put(partitionId, desc.getStorageCacheInfo());
             }
@@ -233,11 +233,11 @@ public class RangePartitionInfo extends PartitionInfo {
     }
 
     public void unprotectHandleNewSinglePartitionDesc(long partitionId, boolean isTemp, Range<PartitionKey> range,
-                                                      DataProperty dataProperty, short replicationNum,
+                                                      DataProperty dataProperty, ReplicaAssignment assignment,
                                                       boolean isInMemory) {
         setRangeInternal(partitionId, isTemp, range);
         idToDataProperty.put(partitionId, dataProperty);
-        idToReplicationNum.put(partitionId, replicationNum);
+        idToReplicaAssignment.put(partitionId, assignment);
         idToInMemory.put(partitionId, isInMemory);
     }
 
@@ -250,7 +250,7 @@ public class RangePartitionInfo extends PartitionInfo {
         long partitionId = partition.getId();
         setRangeInternal(partitionId, info.isTempPartition(), info.getRange());
         idToDataProperty.put(partitionId, info.getDataProperty());
-        idToReplicationNum.put(partitionId, info.getReplicationNum());
+        idToReplicaAssignment.put(partitionId, info.getReplicaAssignment());
         idToInMemory.put(partitionId, info.isInMemory());
         idToStorageCacheInfo.put(partitionId, info.getStorageCacheInfo());
     }

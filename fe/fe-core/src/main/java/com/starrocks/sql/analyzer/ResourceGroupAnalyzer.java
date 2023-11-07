@@ -188,16 +188,66 @@ public class ResourceGroupAnalyzer {
                 try {
                     resourceGroup.setResourceGroupType(TWorkGroupType.valueOf("WG_" + value.toUpperCase()));
                     if (resourceGroup.getResourceGroupType() != TWorkGroupType.WG_NORMAL &&
-                            resourceGroup.getResourceGroupType() != TWorkGroupType.WG_SHORT_QUERY) {
-                        throw new SemanticException("Only support 'normal' and 'short_query' type");
+                            resourceGroup.getResourceGroupType() != TWorkGroupType.WG_SHORT_QUERY &&
+                            resourceGroup.getResourceGroupType() != TWorkGroupType.WG_NODE_LEVEL) {
+                        throw new SemanticException("Only support 'normal' and 'short_query' and 'node_level' type");
                     }
                 } catch (Exception ignored) {
-                    throw new SemanticException("Only support 'normal' and 'short_query' type");
+                    throw new SemanticException("Only support 'normal' and 'short_query' and 'node_level' type");
                 }
+                continue;
+            }
+            if (key.equalsIgnoreCase(ResourceGroup.CN_NUMBER)) {
+                int cnNumber = Integer.parseInt(value);
+                if (cnNumber < 0) {
+                    throw new SemanticException("cn.number should be greater than 0");
+                }
+                resourceGroup.setCnNumber(cnNumber);
+                continue;
+            }
+
+            if (key.equalsIgnoreCase(ResourceGroup.MAX_CN_NUMBER)) {
+                int maxCnNumber = Integer.parseInt(value);
+                if (maxCnNumber < 0) {
+                    throw new SemanticException("cn.number should be greater than 0");
+                }
+                resourceGroup.setMaxCnNumber(maxCnNumber);
+                continue;
+            }
+            if (key.equalsIgnoreCase(ResourceGroup.BE_NUMBER)) {
+                int beNumber = Integer.parseInt(value);
+                if (beNumber < 0) {
+                    throw new SemanticException("cn.number should be greater than 0");
+                }
+                resourceGroup.setBeNumber(beNumber);
+                continue;
+            }
+            if (key.equalsIgnoreCase(ResourceGroup.MAX_BE_NUMBER)) {
+                int maxBeNumber = Integer.parseInt(value);
+                if (maxBeNumber < 0) {
+                    throw new SemanticException("cn.number should be greater than 0");
+                }
+                resourceGroup.setMaxBeNumber(maxBeNumber);
                 continue;
             }
 
             throw new SemanticException("Unknown property: " + key);
+        }
+
+        if (resourceGroup.getCnNumber() != null) {
+            if (resourceGroup.getMaxCnNumber() != null && resourceGroup.getMaxCnNumber() < resourceGroup.getCnNumber()) {
+                throw new SemanticException("cn.number.max must be larger than cn.number");
+            } else if (resourceGroup.getMaxCnNumber() == null) {
+                resourceGroup.setMaxCnNumber(resourceGroup.getCnNumber());
+            }
+        }
+
+        if (resourceGroup.getBeNumber() != null) {
+            if (resourceGroup.getMaxBeNumber() != null && resourceGroup.getMaxBeNumber() < resourceGroup.getBeNumber()) {
+                throw new SemanticException("be.number.max must be larger than be.number");
+            } else if (resourceGroup.getMaxBeNumber() == null) {
+                resourceGroup.setMaxBeNumber(resourceGroup.getBeNumber());
+            }
         }
     }
 }

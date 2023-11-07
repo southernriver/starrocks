@@ -46,7 +46,7 @@ import java.util.Map;
 public abstract class Rebalancer {
     // When Rebalancer init, the loadStatistic is usually empty. So it's no need to be an arg.
     // Only use updateLoadStatistic() to load stats.
-    protected ClusterLoadStatistic loadStatistic;
+    protected Map<String, ClusterLoadStatistic> resourceGroupLoadStatistic;
     protected TabletInvertedIndex invertedIndex;
     protected SystemInfoService infoService;
 
@@ -57,10 +57,12 @@ public abstract class Rebalancer {
 
     public List<TabletSchedCtx> selectAlternativeTablets() {
         List<TabletSchedCtx> alternativeTablets = Lists.newArrayList();
-        ClusterLoadStatistic localLoadStat = loadStatistic;
-        if (localLoadStat != null) {
-            for (TStorageMedium medium : TStorageMedium.values()) {
-                alternativeTablets.addAll(selectAlternativeTabletsForCluster(localLoadStat, medium));
+        Map<String, ClusterLoadStatistic> loadStats = resourceGroupLoadStatistic;
+        if (loadStats != null) {
+            for (ClusterLoadStatistic loadStatistic : loadStats.values()) {
+                for (TStorageMedium medium : TStorageMedium.values()) {
+                    alternativeTablets.addAll(selectAlternativeTabletsForCluster(loadStatistic, medium));
+                }
             }
         }
         return alternativeTablets;
@@ -90,7 +92,7 @@ public abstract class Rebalancer {
         return -1L;
     }
 
-    public void updateLoadStatistic(ClusterLoadStatistic loadStatistic) {
-        this.loadStatistic = loadStatistic;
+    public void updateLoadStatistic(Map<String, ClusterLoadStatistic> resourceGroupLoadStatistic) {
+        this.resourceGroupLoadStatistic = resourceGroupLoadStatistic;
     }
 }

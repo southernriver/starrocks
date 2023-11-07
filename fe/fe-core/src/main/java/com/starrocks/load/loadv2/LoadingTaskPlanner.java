@@ -61,6 +61,7 @@ import com.starrocks.thrift.TBrokerFileStatus;
 import com.starrocks.thrift.TPartitionType;
 import com.starrocks.thrift.TResultSinkType;
 import com.starrocks.thrift.TUniqueId;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -187,6 +188,10 @@ public class LoadingTaskPlanner {
         scanNode.setUseVectorizedLoad(true);
         scanNode.init(analyzer);
         scanNode.finalizeStats(analyzer);
+        if (context.getSessionVariable().isEnableResourceGroup()
+                && StringUtils.isNotEmpty(context.getSessionVariable().getResourceGroup())) {
+            scanNode.setResourceGroup(context.getSessionVariable().getResourceGroup());
+        }
         scanNodes.add(scanNode);
         descTable.computeMemLayout();
 
@@ -237,6 +242,10 @@ public class LoadingTaskPlanner {
                 fileStatusesList, filesAdded);
         scanNode.setLoadInfo(loadJobId, txnId, table, brokerDesc, fileGroups, strictMode, parallelInstanceNum);
         scanNode.setUseVectorizedLoad(true);
+        if (context.getSessionVariable().isEnableResourceGroup()
+                && StringUtils.isNotEmpty(context.getSessionVariable().getResourceGroup())) {
+            scanNode.setResourceGroup(context.getSessionVariable().getResourceGroup());
+        }
         scanNode.init(analyzer);
         scanNode.finalizeStats(analyzer);
         scanNodes.add(scanNode);

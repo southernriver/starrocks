@@ -44,6 +44,7 @@ import com.starrocks.catalog.Partition;
 import com.starrocks.catalog.PartitionInfo;
 import com.starrocks.catalog.PartitionType;
 import com.starrocks.catalog.RangePartitionInfo;
+import com.starrocks.catalog.ReplicaAssignment;
 import com.starrocks.catalog.Type;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.ErrorCode;
@@ -95,7 +96,7 @@ public class PartitionsProcDir implements ProcDirInterface {
             builder.add("Range");
         }
 
-        builder.add("DistributionKey").add("Buckets").add("ReplicationNum");
+        builder.add("DistributionKey").add("Buckets").add("ReplicationAssignment");
         if (olapTable.isLakeTable()) {
             builder.add("EnableStorageCache").add("StorageCacheTtlSecond").add("AllowAsyncWriteBack")
                     .add("DataSize").add("RowCount");
@@ -287,8 +288,8 @@ public class PartitionsProcDir implements ProcDirInterface {
 
                 partitionInfo.add(distributionInfo.getBucketNum());
 
-                short replicationNum = tblPartitionInfo.getReplicationNum(partitionId);
-                partitionInfo.add(String.valueOf(replicationNum));
+                ReplicaAssignment assignment = tblPartitionInfo.getReplicaAssignment(partitionId);
+                partitionInfo.add(assignment.toString());
 
                 long dataSize = partition.getDataSize();
                 ByteSizeValue byteSizeValue = new ByteSizeValue(dataSize);

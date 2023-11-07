@@ -19,13 +19,14 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 public class ComputeNodeProcDir implements ProcDirInterface {
 
     private static final Logger LOG = LogManager.getLogger(ComputeNodeProcDir.class);
 
     public static final ImmutableList<String> TITLE_NAMES = new ImmutableList.Builder<String>()
-            .add("ComputeNodeId").add("IP").add("HeartbeatPort")
+            .add("ComputeNodeId").add("IP").add("ResourceGroup").add("HeartbeatPort")
             .add("BePort").add("HttpPort").add("BrpcPort").add("LastStartTime").add("LastHeartbeat").add("Alive")
             .add("SystemDecommissioned").add("ClusterDecommissioned").add("ErrMsg")
             .add("Version").build();
@@ -77,7 +78,9 @@ public class ComputeNodeProcDir implements ProcDirInterface {
             List<Comparable> computeNodeInfo = Lists.newArrayList();
             computeNodeInfo.add(String.valueOf(computeNodeId));
             computeNodeInfo.add(computeNode.getHost());
-
+            String resourceGroup = GlobalStateMgr.getCurrentState().getResourceGroupMgr()
+                    .getResourceGroupByCnId(computeNodeId).stream().sorted().collect(Collectors.joining(","));
+            computeNodeInfo.add(resourceGroup == null ? "" : resourceGroup);
             computeNodeInfo.add(String.valueOf(computeNode.getHeartbeatPort()));
             computeNodeInfo.add(String.valueOf(computeNode.getBePort()));
             computeNodeInfo.add(String.valueOf(computeNode.getHttpPort()));

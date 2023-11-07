@@ -288,7 +288,7 @@ public class ListPartitionInfo extends PartitionInfo {
                     long partitionId = partition.getId();
                     PartitionDesc partitionDesc = partitionDescs.get(i);
                     this.idToDataProperty.put(partitionId, partitionDesc.getPartitionDataProperty());
-                    this.idToReplicationNum.put(partitionId, partitionDesc.getReplicationNum());
+                    this.idToReplicaAssignment.put(partitionId, partitionDesc.getReplicaAssignment());
                     this.idToInMemory.put(partitionId, partitionDesc.isInMemory());
                     if (partitionDesc instanceof MultiItemListPartitionDesc) {
                         MultiItemListPartitionDesc multiItemListPartitionDesc =
@@ -317,7 +317,7 @@ public class ListPartitionInfo extends PartitionInfo {
         Partition partition = partitionPersistInfo.getPartition();
         long partitionId = partition.getId();
         this.idToDataProperty.put(partitionId, partitionPersistInfo.getDataProperty());
-        this.idToReplicationNum.put(partitionId, partitionPersistInfo.getReplicationNum());
+        this.idToReplicaAssignment.put(partitionId, partitionPersistInfo.getReplicaAssignment());
         this.idToInMemory.put(partitionId, partitionPersistInfo.isInMemory());
         this.idToIsTempPartition.put(partitionId, partitionPersistInfo.isTempPartition());
 

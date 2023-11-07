@@ -2450,6 +2450,12 @@ public class GlobalStateMgr {
             } else {
                 sb.append(olapTable.getCompressionType()).append("\"");
             }
+            // resource group.
+            if (properties.containsKey(PropertyAnalyzer.PROPERTIES_RESOURCE_GROUP_ASSIGNMENT)) {
+                sb.append(StatsConstants.TABLE_PROPERTY_SEPARATOR).append(PropertyAnalyzer.PROPERTIES_RESOURCE_GROUP_ASSIGNMENT)
+                        .append("\" = \"");
+                sb.append(properties.get(PropertyAnalyzer.PROPERTIES_RESOURCE_GROUP_ASSIGNMENT)).append("\"");
+            }
 
             // show lightSchemaChange only when it is set true
             if (olapTable.getUseLightSchemaChange()) {

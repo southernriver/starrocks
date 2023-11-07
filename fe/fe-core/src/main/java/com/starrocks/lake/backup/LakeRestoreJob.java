@@ -24,6 +24,7 @@ import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.Partition;
 import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.RangePartitionInfo;
+import com.starrocks.catalog.ReplicaAssignment;
 import com.starrocks.catalog.Tablet;
 import com.starrocks.catalog.TabletMeta;
 import com.starrocks.common.DdlException;
@@ -277,7 +278,7 @@ public class LakeRestoreJob extends RestoreJob {
             Range<PartitionKey> remoteRange = remotePartitionInfo.getRange(remotePartId);
             DataProperty remoteDataProperty = remotePartitionInfo.getDataProperty(remotePartId);
             localPartitionInfo.addPartition(restorePart.getId(), false, remoteRange,
-                    remoteDataProperty, (short) restoreReplicationNum,
+                    remoteDataProperty, new ReplicaAssignment((short) restoreReplicationNum),
                     remotePartitionInfo.getIsInMemory(remotePartId),
                     remotePartitionInfo.getStorageCacheInfo(remotePartId));
             localTbl.addPartition(restorePart);

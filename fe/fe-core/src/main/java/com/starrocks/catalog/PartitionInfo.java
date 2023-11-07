@@ -21,8 +21,11 @@
 
 package com.starrocks.catalog;
 
+import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.gson.annotations.SerializedName;
+import com.starrocks.common.DdlException;
+import com.starrocks.common.FeConstants;
 import com.starrocks.common.FeMetaVersion;
 import com.starrocks.common.NotImplementedException;
 import com.starrocks.common.io.Text;
@@ -75,22 +78,25 @@ public class PartitionInfo implements Writable, GsonPreProcessable, GsonPostProc
     @SerializedName(value = "idToStorageCacheInfo")
     protected Map<Long, StorageCacheInfo> idToStorageCacheInfo;
 
+    // partition id -> replication allocation
+    @SerializedName(value = "idToReplicaAssignment")
+    protected Map<Long, ReplicaAssignment> idToReplicaAssignment;
 
     public PartitionInfo() {
         this.idToDataProperty = new HashMap<>();
-        this.idToReplicationNum = new HashMap<>();
         this.idToInMemory = new HashMap<>();
         this.idToTabletType = new HashMap<>();
         this.idToStorageCacheInfo = new HashMap<>();
+        this.idToReplicaAssignment = new HashMap<>();
     }
 
     public PartitionInfo(PartitionType type) {
         this.type = type;
         this.idToDataProperty = new HashMap<>();
-        this.idToReplicationNum = new HashMap<>();
         this.idToInMemory = new HashMap<>();
         this.idToTabletType = new HashMap<>();
         this.idToStorageCacheInfo = new HashMap<>();
+        this.idToReplicaAssignment = new HashMap<>();
     }
 
     public PartitionType getType() {
@@ -124,15 +130,29 @@ public class PartitionInfo implements Writable, GsonPreProcessable, GsonPostProc
     }
 
     public short getReplicationNum(long partitionId) {
-        if (!idToReplicationNum.containsKey(partitionId)) {
+        if (!idToReplicaAssignment.containsKey(partitionId)) {
             LOG.debug("failed to get replica num for partition: {}", partitionId);
             return (short) -1;
         }
-        return idToReplicationNum.get(partitionId);
+        return idToReplicaAssignment.get(partitionId).getTotalReplicaNum();
     }
 
     public void setReplicationNum(long partitionId, short replicationNum) {
-        idToReplicationNum.put(partitionId, replicationNum);
+        idToReplicaAssignment.put(partitionId, new ReplicaAssignment(replicationNum));
+        // If the table has been allocated to different resource group, we have no idea how to do reallocation,
+        // hence throw exception here.
+        if (idToReplicaAssignment.containsKey(partitionId)) {
+            // If the table has been allocated to different resource group, we have no idea how to do reallocation,
+            // hence throw exception here.
+            ReplicaAssignment replicaAssignment = idToReplicaAssignment.get(partitionId);
+            if (replicaAssignment.getAssignMap().size() > 1) {
+                throw new DdlException("Partition has been allocated to multiple resource group," +
+                        " do not support alter replication_num yet!");
+            } else {
+                String rg = replicaAssignment.getAssignMap().keySet().iterator().next();
+                replicaAssignment.put(rg, replicationNum);
+            }
+        }
     }
 
     public boolean getIsInMemory(long partitionId) {
@@ -167,23 +187,23 @@ public class PartitionInfo implements Writable, GsonPreProcessable, GsonPostProc
 
     public void dropPartition(long partitionId) {
         idToDataProperty.remove(partitionId);
-        idToReplicationNum.remove(partitionId);
         idToInMemory.remove(partitionId);
+        idToReplicaAssignment.remove(partitionId);
     }
 
     public void addPartition(long partitionId, DataProperty dataProperty,
-                             short replicationNum,
+                             ReplicaAssignment replicaAssignment,
                              boolean isInMemory) {
         idToDataProperty.put(partitionId, dataProperty);
-        idToReplicationNum.put(partitionId, replicationNum);
         idToInMemory.put(partitionId, isInMemory);
+        idToReplicaAssignment.put(partitionId, replicaAssignment);
     }
 
     public void addPartition(long partitionId, DataProperty dataProperty,
-                             short replicationNum,
+                             ReplicaAssignment assignment,
                              boolean isInMemory,
                              StorageCacheInfo storageCacheInfo) {
-        this.addPartition(partitionId, dataProperty, replicationNum, isInMemory);
+        this.addPartition(partitionId, dataProperty, assignment, isInMemory);
         if (storageCacheInfo != null) {
             idToStorageCacheInfo.put(partitionId, storageCacheInfo);
         }
@@ -207,12 +227,24 @@ public class PartitionInfo implements Writable, GsonPreProcessable, GsonPostProc
         throw new NotImplementedException("method not implemented yet");
     }
 
+    public ReplicaAssignment getReplicaAssignment(Long partitionId) {
+        if (!idToReplicaAssignment.containsKey(partitionId)) {
+            return new ReplicaAssignment(idToReplicationNum.getOrDefault(partitionId,
+                    FeConstants.default_replication_num));
+        }
+        return idToReplicaAssignment.get(partitionId);
+    }
+
+    public void setReplicaAssignment(Long partitionId, ReplicaAssignment assignment) {
+        idToReplicaAssignment.put(partitionId, assignment);
+    }
+
     @Override
     public void write(DataOutput out) throws IOException {
         Text.writeString(out, type.name());
 
-        Preconditions.checkState(idToDataProperty.size() == idToReplicationNum.size());
-        Preconditions.checkState(idToInMemory.keySet().equals(idToReplicationNum.keySet()));
+        Preconditions.checkState(idToDataProperty.size() == idToReplicaAssignment.size());
+        Preconditions.checkState(idToInMemory.keySet().equals(idToReplicaAssignment.keySet()));
         out.writeInt(idToDataProperty.size());
         for (Map.Entry<Long, DataProperty> entry : idToDataProperty.entrySet()) {
             out.writeLong(entry.getKey());
@@ -223,7 +255,7 @@ public class PartitionInfo implements Writable, GsonPreProcessable, GsonPostProc
                 entry.getValue().write(out);
             }
 
-            out.writeShort(idToReplicationNum.get(entry.getKey()));
+            idToReplicaAssignment.get(entry.getKey()).write(out);
             out.writeBoolean(idToInMemory.get(entry.getKey()));
         }
     }
@@ -241,8 +273,14 @@ public class PartitionInfo implements Writable, GsonPreProcessable, GsonPostProc
                 idToDataProperty.put(partitionId, DataProperty.read(in));
             }
 
-            short replicationNum = in.readShort();
-            idToReplicationNum.put(partitionId, replicationNum);
+            if (GlobalStateMgr.getCurrentStateJournalVersion() < FeMetaVersion.VERSION_97) {
+                short replicationNum = in.readShort();
+                ReplicaAssignment replicaAlloc = new ReplicaAssignment(replicationNum);
+                idToReplicaAssignment.put(partitionId, replicaAlloc);
+            } else {
+                ReplicaAssignment replicaAlloc = ReplicaAssignment.read(in);
+                idToReplicaAssignment.put(partitionId, replicaAlloc);
+            }
             if (GlobalStateMgr.getCurrentStateJournalVersion() >= FeMetaVersion.VERSION_72) {
                 idToInMemory.put(partitionId, in.readBoolean());
             } else {
@@ -273,7 +311,8 @@ public class PartitionInfo implements Writable, GsonPreProcessable, GsonPostProc
                 buff.append(false);
             }
             buff.append("data_property: ").append(entry.getValue().toString());
-            buff.append("replica number: ").append(idToReplicationNum.get(entry.getKey()));
+            buff.append("replica number: ").append(Joiner.on(",").withKeyValueSeparator("=")
+                    .join(idToReplicaAssignment));
             buff.append("in memory: ").append(idToInMemory.get(entry.getKey()));
         }
 

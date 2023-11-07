@@ -11,9 +11,13 @@ import com.starrocks.catalog.Column;
 import com.starrocks.catalog.PartitionInfo;
 import com.starrocks.catalog.PartitionType;
 import com.starrocks.catalog.RangePartitionInfo;
+import com.starrocks.catalog.ReplicaAssignment;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.DdlException;
+import com.starrocks.common.FeConstants;
+import com.starrocks.common.util.PropertyAnalyzer;
 import com.starrocks.sql.ast.PartitionKeyDesc.PartitionRangeType;
+import org.apache.commons.lang.NotImplementedException;
 
 import java.util.List;
 import java.util.Map;
@@ -86,6 +90,11 @@ public class RangePartitionDesc extends PartitionDesc {
             }
         }
 
+        // analyze replication num
+        short replicationNum =
+                PropertyAnalyzer.analyzeReplicationNum(otherProperties, FeConstants.default_replication_num);
+        ReplicaAssignment assignment = PropertyAnalyzer.analyzeReplicaAssignment(otherProperties, replicationNum);
+
         // use buildSinglePartitionDesc to build singleRangePartitionDescs
         if (multiRangePartitionDescs.size() != 0) {
 
@@ -118,7 +127,9 @@ public class RangePartitionDesc extends PartitionDesc {
                 throw new AnalysisException("You can only use one of these methods to create partitions");
             }
             desc.analyze(columnDefs.size(), givenProperties);
+            desc.setReplicaAssignment(assignment);
         }
+
     }
 
     @Override
@@ -200,5 +211,14 @@ public class RangePartitionDesc extends PartitionDesc {
         }
         sb.append("\n)");
         return sb.toString();
+    }
+
+    @Override
+    public ReplicaAssignment getReplicaAssignment() throws NotImplementedException {
+        if (!singleRangePartitionDescs.isEmpty()) {
+            return singleRangePartitionDescs.get(0).getReplicaAssignment();
+        } else {
+            return ReplicaAssignment.DEFAULT_ALLOCATION;
+        }
     }
 }

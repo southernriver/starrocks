@@ -413,7 +413,6 @@ public class Coordinator {
 
         this.needReport = true;
         this.preferComputeNode = context.getSessionVariable().isPreferComputeNode();
-        ;
         this.useComputeNodeNumber = context.getSessionVariable().getUseComputeNodes();
         this.nextInstanceId = new TUniqueId();
         nextInstanceId.setHi(queryId.hi);
@@ -534,7 +533,8 @@ public class Coordinator {
             queryProfile.addChild(fragmentProfiles.get(i));
         }
 
-        this.idToBackend = GlobalStateMgr.getCurrentSystemInfo().getIdToBackend();
+        this.idToBackend = GlobalStateMgr.getCurrentSystemInfo()
+                .getIdToBackendInResourceGroup(resourceGroup == null ? null : resourceGroup.name);
         this.idToComputeNode = getIdToComputeNode();
 
         //if it has compute node and contains hdfsScanNode,will use compute node,even though preferComputeNode is false
@@ -556,8 +556,10 @@ public class Coordinator {
     }
 
     private ImmutableMap<Long, ComputeNode> getIdToComputeNode() {
-        ImmutableMap<Long, ComputeNode> idToComputeNode
-                = ImmutableMap.copyOf(GlobalStateMgr.getCurrentSystemInfo().getIdComputeNode());
+        ImmutableMap<Long, ComputeNode> idToComputeNode = GlobalStateMgr.getCurrentSystemInfo()
+                .getIdToComputeNodeInResourceGroup(resourceGroup == null ? null : resourceGroup.name);
+        // ImmutableMap<Long, ComputeNode> idToComputeNode
+        //         = ImmutableMap.copyOf(GlobalStateMgr.getCurrentSystemInfo().getIdComputeNode());
         if (useComputeNodeNumber < 0 || useComputeNodeNumber >= idToComputeNode.size()) {
             return idToComputeNode;
         } else {
@@ -621,13 +623,13 @@ public class Coordinator {
 
         resetFragmentState();
 
-        // prepare information
-        prepare();
-
         // prepare workgroup
         this.resourceGroup = prepareResourceGroup(connectContext,
                 queryOptions.getQuery_type() == TQueryType.LOAD ? ResourceGroupClassifier.QueryType.INSERT
                         : ResourceGroupClassifier.QueryType.SELECT);
+
+        // prepare information
+        prepare();
 
         // compute Fragment Instance
         computeScanRangeAssignment();
@@ -3530,6 +3532,10 @@ public class Coordinator {
                 TNetworkAddress execHostPort = SimpleScheduler.getHost(minLocation.backend_id,
                         scanRangeLocations.getLocations(),
                         idToBackend, backendIdRef);
+                if (execHostPort == null) {
+                    execHostPort = SimpleScheduler.getPreferComputeNodeHost(
+                            idToComputeNode, minLocation.backend_id, backendIdRef);
+                }
                 if (execHostPort == null) {
                     throw new UserException("Backend not found. Check if any backend is down or not. "
                             + backendInfosString(false));

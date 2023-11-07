@@ -115,7 +115,8 @@ public class ColocateTableTest {
         Assert.assertEquals(dbId, index.getGroup(tableId).dbId);
 
         GroupId groupId = index.getGroup(tableId);
-        List<Long> backendIds = index.getBackendsPerBucketSeq(groupId).get(0);
+        List<Long> backendIds = index.getBackendsPerBucketSeq(groupId).values().iterator().next().get(9);
+
         System.out.println(backendIds);
         Assert.assertEquals(Collections.singletonList(10001L), backendIds);
 
@@ -125,7 +126,7 @@ public class ColocateTableTest {
         Assert.assertNotNull(groupSchema);
         Assert.assertEquals(dbId, groupSchema.getGroupId().dbId);
         Assert.assertEquals(1, groupSchema.getBucketsNum());
-        Assert.assertEquals(1, groupSchema.getReplicationNum());
+        Assert.assertEquals(1, groupSchema.getReplicaAssignment().getTotalReplicaNum());
     }
 
     @Test

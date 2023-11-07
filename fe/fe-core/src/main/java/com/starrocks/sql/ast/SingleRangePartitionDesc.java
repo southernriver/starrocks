@@ -7,6 +7,7 @@ import com.google.common.base.Joiner.MapJoiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.starrocks.catalog.DataProperty;
+import com.starrocks.catalog.ReplicaAssignment;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Config;
 import com.starrocks.common.FeConstants;
@@ -28,7 +29,7 @@ public class SingleRangePartitionDesc extends PartitionDesc {
     private Map<String, String> properties;
 
     private DataProperty partitionDataProperty;
-    private Short replicationNum;
+    private ReplicaAssignment replicaAssignment;
     private boolean isInMemory = false;
     private TTabletType tabletType = TTabletType.TABLET_TYPE_DISK;
     private Long versionInfo;
@@ -45,7 +46,7 @@ public class SingleRangePartitionDesc extends PartitionDesc {
         this.properties = properties;
 
         this.partitionDataProperty = DataProperty.getInferredDefaultDataProperty();
-        this.replicationNum = FeConstants.default_replication_num;
+        this.replicaAssignment = new ReplicaAssignment();
     }
 
     public boolean isSetIfNotExists() {
@@ -64,8 +65,12 @@ public class SingleRangePartitionDesc extends PartitionDesc {
         return partitionDataProperty;
     }
 
-    public short getReplicationNum() {
-        return replicationNum;
+    public ReplicaAssignment getReplicaAssignment() {
+        return replicaAssignment;
+    }
+
+    public void setReplicaAssignment(ReplicaAssignment replicaAssignment) {
+        this.replicaAssignment = replicaAssignment;
     }
 
     public boolean isInMemory() {
@@ -120,10 +125,11 @@ public class SingleRangePartitionDesc extends PartitionDesc {
         Preconditions.checkNotNull(partitionDataProperty);
 
         // analyze replication num
-        replicationNum = PropertyAnalyzer.analyzeReplicationNum(properties, FeConstants.default_replication_num);
+        Short replicationNum = PropertyAnalyzer.analyzeReplicationNum(properties, FeConstants.default_replication_num);
         if (replicationNum == null) {
             throw new AnalysisException("Invalid replication number: " + replicationNum);
         }
+        replicaAssignment = PropertyAnalyzer.analyzeReplicaAssignment(properties, replicationNum);
 
         // analyze version info
         versionInfo = PropertyAnalyzer.analyzeVersionInfo(properties);

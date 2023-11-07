@@ -8,6 +8,7 @@ import com.starrocks.analysis.ColumnDef;
 import com.starrocks.analysis.LiteralExpr;
 import com.starrocks.catalog.DataProperty;
 import com.starrocks.catalog.PartitionType;
+import com.starrocks.catalog.ReplicaAssignment;
 import com.starrocks.catalog.Type;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.FeConstants;
@@ -31,7 +32,7 @@ public class SingleItemListPartitionDesc extends PartitionDesc {
     private final List<String> values;
     private final Map<String, String> partitionProperties;
     private DataProperty partitionDataProperty;
-    private Short replicationNum;
+    private ReplicaAssignment replicaAssignment;
     private Boolean isInMemory;
     private TTabletType tabletType;
     private Long versionInfo;
@@ -52,8 +53,8 @@ public class SingleItemListPartitionDesc extends PartitionDesc {
     }
 
     @Override
-    public short getReplicationNum() {
-        return this.replicationNum;
+    public ReplicaAssignment getReplicaAssignment() {
+        return this.replicaAssignment;
     }
 
     @Override
@@ -134,8 +135,11 @@ public class SingleItemListPartitionDesc extends PartitionDesc {
                 DataProperty.getInferredDefaultDataProperty());
 
         // analyze replication num
-        this.replicationNum =
+        short replicationNum =
                 PropertyAnalyzer.analyzeReplicationNum(allProperties, FeConstants.default_replication_num);
+
+        this.replicaAssignment =
+                PropertyAnalyzer.analyzeReplicaAssignment(allProperties, replicationNum);
 
         // analyze version info
         this.versionInfo = PropertyAnalyzer.analyzeVersionInfo(allProperties);

@@ -28,10 +28,12 @@ import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.system.Backend;
 import com.starrocks.thrift.TStorageMedium;
 
+import java.util.Map;
+
 // show proc "/cluster_balance/cluster_load_stat";
 public class ClusterLoadStatisticProcDir implements ProcDirInterface {
     public static final ImmutableList<String> TITLE_NAMES = new ImmutableList.Builder<String>()
-            .add("BeId").add("Cluster").add("Available").add("UsedCapacity").add("Capacity")
+            .add("ResourceGroup").add("BeId").add("Cluster").add("Available").add("UsedCapacity").add("Capacity")
             .add("UsedPercent").add("ReplicaNum").add("CapCoeff").add("ReplCoeff").add("Score")
             .add("Class")
             .build();
@@ -47,8 +49,11 @@ public class ClusterLoadStatisticProcDir implements ProcDirInterface {
         BaseProcResult result = new BaseProcResult();
         result.setNames(TITLE_NAMES);
 
-        ClusterLoadStatistic statistic = GlobalStateMgr.getCurrentState().getTabletScheduler().getLoadStatistic();
-        statistic.getClusterStatistic(medium).forEach(result::addRow);
+        Map<String, ClusterLoadStatistic> statistics =
+                GlobalStateMgr.getCurrentState().getTabletScheduler().getLoadStatistic();
+        for (Map.Entry<String, ClusterLoadStatistic> statistic : statistics.entrySet()) {
+            statistic.getValue().getClusterStatistic(medium).forEach(result::addRow);
+        }
 
         return result;
     }

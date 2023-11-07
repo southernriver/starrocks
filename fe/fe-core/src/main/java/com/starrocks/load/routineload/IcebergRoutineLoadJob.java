@@ -490,6 +490,7 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
         icebergRoutineLoadJob.checkCustomProperties();
         icebergRoutineLoadJob.checkSchema(icebergRoutineLoadJob.columnDescs);
         icebergRoutineLoadJob.checkIcebergWhereExpr();
+        icebergRoutineLoadJob.setResourceGroup(stmt.getResourceGroup());
 
         return icebergRoutineLoadJob;
     }

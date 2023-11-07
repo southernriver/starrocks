@@ -11,8 +11,10 @@ import com.starrocks.catalog.Column;
 import com.starrocks.catalog.ListPartitionInfo;
 import com.starrocks.catalog.PartitionInfo;
 import com.starrocks.catalog.PartitionType;
+import com.starrocks.catalog.ReplicaAssignment;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.DdlException;
+import org.apache.commons.lang.NotImplementedException;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -192,7 +194,7 @@ public class ListPartitionDesc extends PartitionDesc {
                 listPartitionInfo.setDataProperty(partitionId, desc.getPartitionDataProperty());
                 listPartitionInfo.setIsInMemory(partitionId, desc.isInMemory());
                 listPartitionInfo.setTabletType(partitionId, desc.getTabletType());
-                listPartitionInfo.setReplicationNum(partitionId, desc.getReplicationNum());
+                listPartitionInfo.setReplicaAssignment(partitionId, desc.getReplicaAssignment());
                 listPartitionInfo.setValues(partitionId, desc.getValues());
                 listPartitionInfo.setLiteralExprValues(partitionId, desc.getValues());
             }
@@ -201,7 +203,7 @@ public class ListPartitionDesc extends PartitionDesc {
                 listPartitionInfo.setDataProperty(partitionId, desc.getPartitionDataProperty());
                 listPartitionInfo.setIsInMemory(partitionId, desc.isInMemory());
                 listPartitionInfo.setTabletType(partitionId, desc.getTabletType());
-                listPartitionInfo.setReplicationNum(partitionId, desc.getReplicationNum());
+                listPartitionInfo.setReplicaAssignment(partitionId, desc.getReplicaAssignment());
                 listPartitionInfo.setMultiValues(partitionId, desc.getMultiValues());
                 listPartitionInfo.setMultiLiteralExprValues(partitionId, desc.getMultiValues());
             }
@@ -246,5 +248,13 @@ public class ListPartitionDesc extends PartitionDesc {
         }
         sb.append("\n)");
         return sb.toString();
+    }
+
+    public ReplicaAssignment getReplicaAssignment() throws NotImplementedException {
+        if (!singleListPartitionDescs.isEmpty()) {
+            return singleListPartitionDescs.get(0).getReplicaAssignment();
+        } else {
+            return ReplicaAssignment.DEFAULT_ALLOCATION;
+        }
     }
 }

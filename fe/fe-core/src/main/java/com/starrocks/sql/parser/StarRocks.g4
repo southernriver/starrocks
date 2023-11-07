@@ -932,7 +932,7 @@ killAnalyzeStatement
 
 createResourceGroupStatement
     : CREATE RESOURCE GROUP (IF NOT EXISTS)? (OR REPLACE)? identifier
-        TO classifier (',' classifier)*  WITH '(' property (',' property)* ')'
+        (TO classifier (',' classifier)*)?  WITH '(' property (',' property)* ')'
     ;
 
 dropResourceGroupStatement
@@ -944,6 +944,10 @@ alterResourceGroupStatement
     | ALTER RESOURCE GROUP identifier DROP '(' INTEGER_VALUE (',' INTEGER_VALUE)* ')'
     | ALTER RESOURCE GROUP identifier DROP ALL
     | ALTER RESOURCE GROUP identifier WITH '(' property (',' property)* ')'
+    | ALTER RESOURCE GROUP identifier addComputeNodeClause
+    | ALTER RESOURCE GROUP identifier addBackendClause
+    | ALTER RESOURCE GROUP identifier dropComputeNodeClause
+    | ALTER RESOURCE GROUP identifier dropBackendClause
     ;
 
 showResourceGroupStatement

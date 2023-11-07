@@ -23,17 +23,18 @@ import com.google.common.collect.Lists;
 import com.starrocks.common.AnalysisException;
 
 import java.util.List;
+import java.util.Map;
 
 /*
  * show proc "/colocation_group/group_name";
  */
 public class ColocationGroupBackendSeqsProcNode implements ProcNodeInterface {
     public static final ImmutableList<String> TITLE_NAMES = new ImmutableList.Builder<String>()
-            .add("BucketIndex").add("BackendIds").build();
+            .add("ResourceGroup").add("BucketIndex").add("BackendIds").build();
 
-    private List<List<Long>> backendsSeq;
+    private Map<String, List<List<Long>>> backendsSeq;
 
-    public ColocationGroupBackendSeqsProcNode(List<List<Long>> backendsSeq) {
+    public ColocationGroupBackendSeqsProcNode(Map<String, List<List<Long>>> backendsSeq) {
         this.backendsSeq = backendsSeq;
     }
 
@@ -42,12 +43,14 @@ public class ColocationGroupBackendSeqsProcNode implements ProcNodeInterface {
         BaseProcResult result = new BaseProcResult();
         result.setNames(TITLE_NAMES);
 
-        int index = 0;
-        for (List<Long> seqs : backendsSeq) {
-            List<String> info = Lists.newArrayList();
-            info.add(String.valueOf(index++));
-            info.add(Joiner.on(", ").join(seqs));
-            result.addRow(info);
+        for (Map.Entry<String, List<List<Long>>> seqs : backendsSeq.entrySet()) {
+            for (int i = 0; i < seqs.getValue().size(); i++) {
+                List<String> info = Lists.newArrayList();
+                info.add(seqs.getKey());
+                info.add(String.valueOf(i));
+                info.add(Joiner.on(", ").join(seqs.getValue().get(i)));
+                result.addRow(info);
+            }
         }
         return result;
     }

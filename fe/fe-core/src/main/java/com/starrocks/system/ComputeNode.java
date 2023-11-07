@@ -4,6 +4,7 @@ package com.starrocks.system;
 
 import com.google.gson.annotations.SerializedName;
 import com.starrocks.alter.DecommissionType;
+import com.starrocks.catalog.ResourceGroup;
 import com.starrocks.common.Config;
 import com.starrocks.common.io.Text;
 import com.starrocks.common.io.Writable;
@@ -78,6 +79,9 @@ public class ComputeNode implements IComputable, Writable {
 
     @SerializedName("lastWriteFail")
     private volatile boolean lastWriteFail = false;
+
+    @SerializedName("resourceGroup")
+    private String resourceGroup = ResourceGroup.DEFAULT_RESOURCE_GROUP_NAME;
 
     private volatile int numRunningQueries = 0;
     private volatile long memLimitBytes = 0;
@@ -404,6 +408,14 @@ public class ComputeNode implements IComputable, Writable {
 
     public void setCpuCores(int cpuCores) {
         this.cpuCores = cpuCores;
+    }
+
+    public String getResourceGroup() {
+        return resourceGroup;
+    }
+
+    public void setResourceGroup(String resourceGroup) {
+        this.resourceGroup = resourceGroup;
     }
 
     /**

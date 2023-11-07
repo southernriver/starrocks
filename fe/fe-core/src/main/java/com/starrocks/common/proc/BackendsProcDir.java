@@ -45,6 +45,7 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 public class BackendsProcDir implements ProcDirInterface {
     private static final Logger LOG = LogManager.getLogger(BackendsProcDir.class);
@@ -52,7 +53,7 @@ public class BackendsProcDir implements ProcDirInterface {
     public static final ImmutableList<String> TITLE_NAMES;
     static {
         ImmutableList.Builder<String> builder = new ImmutableList.Builder<String>()
-                .add("BackendId").add("IP").add("HeartbeatPort")
+                .add("BackendId").add("IP").add("ResourceGroup").add("HeartbeatPort")
                 .add("BePort").add("HttpPort").add("BrpcPort").add("LastStartTime").add("LastHeartbeat")
                 .add("Alive").add("SystemDecommissioned").add("ClusterDecommissioned").add("TabletNum")
                 .add("DataUsedCapacity").add("AvailCapacity").add("TotalCapacity").add("UsedPct")
@@ -110,6 +111,9 @@ public class BackendsProcDir implements ProcDirInterface {
             List<Comparable> backendInfo = Lists.newArrayList();
             backendInfo.add(String.valueOf(backendId));
             backendInfo.add(backend.getHost());
+            String resourceGroup = GlobalStateMgr.getCurrentState().getResourceGroupMgr()
+                    .getResourceGroupByBeId(backendId).stream().sorted().collect(Collectors.joining(","));
+            backendInfo.add(resourceGroup);
             backendInfo.add(String.valueOf(backend.getHeartbeatPort()));
             backendInfo.add(String.valueOf(backend.getBePort()));
             backendInfo.add(String.valueOf(backend.getHttpPort()));

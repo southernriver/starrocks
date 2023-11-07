@@ -31,6 +31,7 @@ import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.PartitionInfo;
 import com.starrocks.catalog.PartitionType;
 import com.starrocks.catalog.RangePartitionInfo;
+import com.starrocks.catalog.ReplicaAssignment;
 import com.starrocks.catalog.Table;
 import com.starrocks.catalog.Table.TableType;
 import com.starrocks.common.AnalysisException;
@@ -52,7 +53,7 @@ public class TablesProcDir implements ProcDirInterface {
     public static final ImmutableList<String> TITLE_NAMES = new ImmutableList.Builder<String>()
             .add("TableId").add("TableName").add("IndexNum").add("PartitionColumnName")
             .add("PartitionNum").add("State").add("Type").add("LastConsistencyCheckTime")
-            .add("ReplicaCount").add("PartitionType").add("StorageGroup")
+            .add("ReplicaAssignment").add("PartitionType").add("StorageGroup")
             .build();
     private static final int PARTITION_NUM_DEFAULT = 1;
     private static final int PARTITION_REPLICA_COUNT_DEFAULT = 0;
@@ -116,7 +117,7 @@ public class TablesProcDir implements ProcDirInterface {
                 tableInfo.add(findState(table));
                 tableInfo.add(tableType);
                 tableInfo.add(TimeUtils.longToTimeString(table.getLastCheckTime()));
-                tableInfo.add(findReplicaCount(table));
+                tableInfo.add(findReplicaAssignment(table));
                 tableInfo.add(findPartitionType(table));
                 tableInfo.add(findStorageGroup(table));
                 tableInfos.add(tableInfo);
@@ -144,12 +145,12 @@ public class TablesProcDir implements ProcDirInterface {
         return result;
     }
 
-    private long findReplicaCount(Table table) {
+    private String findReplicaAssignment(Table table) {
         if (table.isNativeTable()) {
             OlapTable olapTable = (OlapTable) table;
-            return olapTable.getReplicaCount();
+            return olapTable.getReplicaAssignment().toString();
         }
-        return PARTITION_REPLICA_COUNT_DEFAULT;
+        return new ReplicaAssignment().toString();
     }
 
     private String findState(Table table) {

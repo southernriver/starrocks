@@ -11,6 +11,7 @@ import com.starrocks.catalog.PartitionInfo;
 import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.PartitionType;
 import com.starrocks.catalog.RangePartitionInfo;
+import com.starrocks.catalog.ReplicaAssignment;
 import com.starrocks.catalog.Table;
 import com.starrocks.common.DdlException;
 import com.starrocks.persist.AddPartitionsInfo;
@@ -47,7 +48,8 @@ public class PartitionUtils {
                 long sourcePartitionId = sourcePartitions.get(i).getId();
                 partitionInfo.addPartition(newTempPartitions.get(i).getId(),
                         partitionInfo.getDataProperty(sourcePartitionId),
-                        partitionInfo.getReplicationNum(sourcePartitionId),
+                        // TODO(ganggewang): handle resource group info in temp partitions.
+                        new ReplicaAssignment(partitionInfo.getReplicationNum(sourcePartitionId)),
                         partitionInfo.getIsInMemory(sourcePartitionId));
                 Partition partition = newTempPartitions.get(i);
                 // range is null for UNPARTITIONED type
@@ -62,7 +64,7 @@ public class PartitionUtils {
                         new PartitionPersistInfo(db.getId(), targetTable.getId(), partition,
                                 range,
                                 partitionInfo.getDataProperty(partition.getId()),
-                                partitionInfo.getReplicationNum(partition.getId()),
+                                partitionInfo.getReplicaAssignment(partition.getId()),
                                 partitionInfo.getIsInMemory(partition.getId()),
                                 true);
                 partitionInfoList.add(info);

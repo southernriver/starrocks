@@ -247,6 +247,7 @@ public class TubeRoutineLoadJob extends RoutineLoadJob {
                 new TubeRoutineLoadJob(id, stmt.getName(), db.getId(), tableId, stmt.getTubeMasterAddr(),
                         stmt.getTubeTopic(), stmt.getTubeGroupName());
         tubeRoutineLoadJob.setOptional(stmt);
+        tubeRoutineLoadJob.setResourceGroup(stmt.getResourceGroup());
         return tubeRoutineLoadJob;
     }
 

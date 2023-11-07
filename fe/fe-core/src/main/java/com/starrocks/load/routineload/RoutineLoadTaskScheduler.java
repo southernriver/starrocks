@@ -37,7 +37,7 @@ import com.starrocks.common.util.LogKey;
 import com.starrocks.load.routineload.RoutineLoadJob.JobState;
 import com.starrocks.metric.MetricRepo;
 import com.starrocks.server.GlobalStateMgr;
-import com.starrocks.system.Backend;
+import com.starrocks.system.ComputeNode;
 import com.starrocks.thrift.BackendService;
 import com.starrocks.thrift.TNetworkAddress;
 import com.starrocks.thrift.TRoutineLoadTask;
@@ -329,7 +329,9 @@ public class RoutineLoadTaskScheduler extends LeaderDaemon {
     }
 
     private void submitTask(long beId, TRoutineLoadTask tTask) throws LoadException {
-        Backend backend = GlobalStateMgr.getCurrentSystemInfo().getBackend(beId);
+        ComputeNode backend = GlobalStateMgr.getCurrentSystemInfo().getBackend(beId) == null
+                ? GlobalStateMgr.getCurrentSystemInfo().getComputeNode(beId)
+                : GlobalStateMgr.getCurrentSystemInfo().getBackend(beId);
         if (backend == null) {
             throw new LoadException("failed to send tasks to backend " + beId + " because not exist");
         }
@@ -365,8 +367,14 @@ public class RoutineLoadTaskScheduler extends LeaderDaemon {
     // return true if allocate successfully. return false if failed.
     // throw exception if unrecoverable errors happen.
     private boolean allocateTaskToBe(RoutineLoadTaskInfo routineLoadTaskInfo) {
-        if (routineLoadTaskInfo.getPreviousBeId() != -1L) {
-            if (routineLoadManager.takeBeTaskSlot(routineLoadTaskInfo.getPreviousBeId()) != -1L) {
+        long jobId = routineLoadTaskInfo.getJobId();
+        String resourceGroup = routineLoadManager.getJob(jobId).getResourceGroup();
+        long previousId = routineLoadTaskInfo.getPreviousBeId();
+        if (previousId != -1L) {
+            ComputeNode previousNode = GlobalStateMgr.getCurrentSystemInfo()
+                    .getBackendOrComputeNode(previousId);
+            if (previousNode != null && previousNode.getResourceGroup().equals(resourceGroup)
+                    && routineLoadManager.takeBeTaskSlot(routineLoadTaskInfo.getPreviousBeId()) != -1L) {
                 if (LOG.isDebugEnabled()) {
                     LOG.debug(new LogBuilder(LogKey.ROUTINE_LOAD_TASK, routineLoadTaskInfo.getId())
                             .add("job_id", routineLoadTaskInfo.getJobId())
@@ -378,9 +386,8 @@ public class RoutineLoadTaskScheduler extends LeaderDaemon {
                 return true;
             }
         }
-
         // the previous BE is not available, try to find a better one
-        long beId = routineLoadManager.takeBeTaskSlot();
+        long beId = routineLoadManager.takeBeTaskSlotInResourceGroup(resourceGroup);
         if (beId < 0) {
             return false;
         }

@@ -1928,6 +1928,22 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
                         new AlterResourceGroupStmt.DropClassifiers(context.INTEGER_VALUE()
                                 .stream().map(ParseTree::getText).map(Long::parseLong).collect(toList())));
             }
+        } else if (context.addBackendClause() != null) {
+            return new AlterResourceGroupStmt(name,
+                    new AlterResourceGroupStmt.AddBackend(context.addBackendClause().string().stream()
+                            .map(c -> ((StringLiteral) visit(c)).getLongValue()).collect(toList())));
+        }  else if (context.addComputeNodeClause() != null) {
+            return new AlterResourceGroupStmt(name,
+                    new AlterResourceGroupStmt.AddComputeNode(context.addComputeNodeClause().string().stream()
+                            .map(c -> ((StringLiteral) visit(c)).getLongValue()).collect(toList())));
+        }  else if (context.dropBackendClause() != null) {
+            return new AlterResourceGroupStmt(name,
+                    new AlterResourceGroupStmt.DropBackend(context.dropBackendClause().string().stream()
+                            .map(c -> ((StringLiteral) visit(c)).getLongValue()).collect(toList())));
+        }  else if (context.dropComputeNodeClause() != null) {
+            return new AlterResourceGroupStmt(name,
+                    new AlterResourceGroupStmt.DropComputeNode(context.dropComputeNodeClause().string().stream()
+                            .map(c -> ((StringLiteral) visit(c)).getLongValue()).collect(toList())));
         } else {
             Map<String, String> properties = new HashMap<>();
             List<Property> propertyList = visit(context.property(), Property.class);

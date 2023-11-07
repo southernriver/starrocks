@@ -9,6 +9,7 @@ import com.google.common.collect.Maps;
 import com.starrocks.analysis.BrokerDesc;
 import com.starrocks.analysis.LabelName;
 import com.starrocks.analysis.ParseNode;
+import com.starrocks.catalog.ResourceGroup;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Config;
 import com.starrocks.common.Pair;
@@ -161,6 +162,7 @@ public class CreateRoutineLoadStmt extends DdlStmt {
             .add(LoadStmt.PARTIAL_UPDATE)
             .add(LoadStmt.MERGE_CONDITION)
             .add(SessionVariable.EXEC_MEM_LIMIT)
+            .add(SessionVariable.RESOURCE_GROUP)
             .build();
 
     private static final ImmutableSet<String> KAFKA_PROPERTIES_SET = new ImmutableSet.Builder<String>()
@@ -249,6 +251,8 @@ public class CreateRoutineLoadStmt extends DdlStmt {
     private String tubeGroupName;
     private String tubeFilters = null;
     private Integer tubeConsumePosition = null;
+
+    private String resourceGroup = null;
 
     // iceberg related
     private IcebergCreateRoutineLoadStmtConfig icebergCreateRoutineLoadStmtConfig;
@@ -468,6 +472,14 @@ public class CreateRoutineLoadStmt extends DdlStmt {
         return dataSourceProperties;
     }
 
+    public String getResourceGroup() {
+        return resourceGroup;
+    }
+
+    public void setResourceGroup(String resourceGroup) {
+        this.resourceGroup = resourceGroup;
+    }
+
     public static RoutineLoadDesc getLoadDesc(OriginStatement origStmt, Map<String, String> sessionVariables) {
 
         // parse the origin stmt to get routine load desc
@@ -585,6 +597,7 @@ public class CreateRoutineLoadStmt extends DdlStmt {
         recoverOffsetsFromLastJob = Util.getBooleanPropertyOrDefault(jobProperties.get(RECOVER_OFFSETS_FROM_LAST_JOB),
                 false,
                 LoadStmt.PARTIAL_UPDATE + " should be a boolean");
+        resourceGroup = jobProperties.getOrDefault(SessionVariable.RESOURCE_GROUP, ResourceGroup.DEFAULT_RESOURCE_GROUP_NAME);
 
         jobThatRecoverOffsetsFrom = jobProperties.get(JOB_THAT_RECOVER_OFFSETS_FROM);
 

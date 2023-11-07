@@ -33,6 +33,8 @@ import com.starrocks.catalog.LocalTablet;
 import com.starrocks.catalog.MaterializedIndex;
 import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.Partition;
+import com.starrocks.catalog.ReplicaAssignment;
+import com.starrocks.catalog.ResourceGroup;
 import com.starrocks.catalog.Tablet;
 import com.starrocks.catalog.TabletInvertedIndex;
 import com.starrocks.catalog.Type;
@@ -56,6 +58,7 @@ import org.junit.runners.MethodSorters;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -114,7 +117,9 @@ public class ColocateTableBalancerTest {
     private ColocateTableIndex createColocateIndex(GroupId groupId, List<Long> flatList, int replicationNum) {
         ColocateTableIndex colocateTableIndex = new ColocateTableIndex();
         List<List<Long>> backendsPerBucketSeq = Lists.partition(flatList, replicationNum);
-        colocateTableIndex.addBackendsPerBucketSeq(groupId, backendsPerBucketSeq);
+        HashMap<String, List<List<Long>>> assignment = Maps.newHashMap();
+        assignment.put(ResourceGroup.DEFAULT_RESOURCE_GROUP_NAME, backendsPerBucketSeq);
+        colocateTableIndex.addBackendsPerBucketSeq(groupId, assignment);
         return colocateTableIndex;
     }
 
@@ -161,7 +166,8 @@ public class ColocateTableBalancerTest {
         GroupId groupId = new GroupId(10000, 10001);
         List<Column> distributionCols = Lists.newArrayList();
         distributionCols.add(new Column("k1", Type.INT));
-        ColocateGroupSchema groupSchema = new ColocateGroupSchema(groupId, distributionCols, 5, (short) 3);
+        ColocateGroupSchema groupSchema = new ColocateGroupSchema(groupId, distributionCols,
+                5, new ReplicaAssignment((short) 3));
         Map<GroupId, ColocateGroupSchema> group2Schema = Maps.newHashMap();
         group2Schema.put(groupId, groupSchema);
 
@@ -219,7 +225,7 @@ public class ColocateTableBalancerTest {
         List<Column> distributionCols = Lists.newArrayList();
         distributionCols.add(new Column("k1", Type.INT));
         ColocateGroupSchema groupSchema =
-                new ColocateGroupSchema(groupId, distributionCols, bucketNum, replicationNum);
+                new ColocateGroupSchema(groupId, distributionCols, bucketNum, new ReplicaAssignment(replicationNum));
         Map<GroupId, ColocateGroupSchema> group2Schema = Maps.newHashMap();
         group2Schema.put(groupId, groupSchema);
         Deencapsulation.setField(colocateTableIndex, "group2Schema", group2Schema);
@@ -434,7 +440,8 @@ public class ColocateTableBalancerTest {
         GroupId groupId = new GroupId(10000, 10001);
         List<Column> distributionCols = Lists.newArrayList();
         distributionCols.add(new Column("k1", Type.INT));
-        ColocateGroupSchema groupSchema = new ColocateGroupSchema(groupId, distributionCols, 5, (short) 1);
+        ColocateGroupSchema groupSchema = new ColocateGroupSchema(groupId,
+                distributionCols, 5, new ReplicaAssignment((short) 1));
         Map<GroupId, ColocateGroupSchema> group2Schema = Maps.newHashMap();
         group2Schema.put(groupId, groupSchema);
 
@@ -594,7 +601,7 @@ public class ColocateTableBalancerTest {
                 result = true;
                 minTimes = 0;
 
-                colocateTableIndex.getBackendsByGroup(groupId);
+                colocateTableIndex.getBackendsByGroup(groupId, ResourceGroup.DEFAULT_RESOURCE_GROUP_NAME);
                 result = allBackendsInGroup;
                 minTimes = 0;
             }
@@ -728,7 +735,8 @@ public class ColocateTableBalancerTest {
         GroupId groupId = new GroupId(10000, 10001);
         List<Column> distributionCols = Lists.newArrayList();
         distributionCols.add(new Column("k1", Type.INT));
-        ColocateGroupSchema groupSchema = new ColocateGroupSchema(groupId, distributionCols, 5, (short) 3);
+        ColocateGroupSchema groupSchema = new ColocateGroupSchema(groupId,
+                distributionCols, 5, new ReplicaAssignment((short) 3));
         Map<GroupId, ColocateGroupSchema> group2Schema = Maps.newHashMap();
         group2Schema.put(groupId, groupSchema);
 
@@ -790,7 +798,9 @@ public class ColocateTableBalancerTest {
         bl.add(new ArrayList<>(Arrays.asList(1L, 2L, 3L)));
         bl.add(new ArrayList<>(Arrays.asList(1L, 2L, 3L)));
         bl.add(new ArrayList<>(Arrays.asList(1L, 2L, 3L)));
-        colocateIndex.addBackendsPerBucketSeq(colocateIndex.getGroup(table.getId()), Lists.newArrayList(bl));
+        HashMap<String, List<List<Long>>> assignment = Maps.newHashMap();
+        assignment.put(ResourceGroup.DEFAULT_RESOURCE_GROUP_NAME, bl);
+        colocateIndex.addBackendsPerBucketSeq(colocateIndex.getGroup(table.getId()), assignment);
 
         // test if group is unstable when all its tablets are in TabletScheduler
         long tableId = table.getId();

@@ -25,6 +25,7 @@ import com.google.common.collect.Range;
 import com.starrocks.catalog.DataProperty;
 import com.starrocks.catalog.Partition;
 import com.starrocks.catalog.PartitionKey;
+import com.starrocks.catalog.ReplicaAssignment;
 import com.starrocks.common.FeMetaVersion;
 import com.starrocks.common.io.Writable;
 import com.starrocks.common.util.RangeUtils;
@@ -41,7 +42,7 @@ public class PartitionPersistInfo implements Writable {
 
     private Range<PartitionKey> range;
     private DataProperty dataProperty;
-    private short replicationNum;
+    private ReplicaAssignment replicaAssignment;
     private boolean isInMemory = false;
     private boolean isTempPartition = false;
 
@@ -49,7 +50,7 @@ public class PartitionPersistInfo implements Writable {
     }
 
     public PartitionPersistInfo(long dbId, long tableId, Partition partition, Range<PartitionKey> range,
-                                DataProperty dataProperty, short replicationNum,
+                                DataProperty dataProperty, ReplicaAssignment replicaAssignment,
                                 boolean isInMemory, boolean isTempPartition) {
         this.dbId = dbId;
         this.tableId = tableId;
@@ -58,7 +59,7 @@ public class PartitionPersistInfo implements Writable {
         this.range = range;
         this.dataProperty = dataProperty;
 
-        this.replicationNum = replicationNum;
+        this.replicaAssignment = replicaAssignment;
         this.isInMemory = isInMemory;
         this.isTempPartition = isTempPartition;
     }
@@ -83,8 +84,8 @@ public class PartitionPersistInfo implements Writable {
         return dataProperty;
     }
 
-    public short getReplicationNum() {
-        return replicationNum;
+    public ReplicaAssignment getReplicaAssignment() {
+        return replicaAssignment;
     }
 
     public boolean isInMemory() {
@@ -102,7 +103,7 @@ public class PartitionPersistInfo implements Writable {
 
         RangeUtils.writeRange(out, range);
         dataProperty.write(out);
-        out.writeShort(replicationNum);
+        replicaAssignment.write(out);
         out.writeBoolean(isInMemory);
         out.writeBoolean(isTempPartition);
     }
@@ -120,7 +121,12 @@ public class PartitionPersistInfo implements Writable {
 
         range = RangeUtils.readRange(in);
         dataProperty = DataProperty.read(in);
-        replicationNum = in.readShort();
+        if (GlobalStateMgr.getCurrentStateJournalVersion() >= FeMetaVersion.VERSION_97) {
+            replicaAssignment = ReplicaAssignment.read(in);
+        } else {
+            short replicationNum = in.readShort();
+            replicaAssignment = new ReplicaAssignment(replicationNum);
+        }
         if (GlobalStateMgr.getCurrentStateJournalVersion() >= FeMetaVersion.VERSION_72) {
             isInMemory = in.readBoolean();
         }

@@ -422,4 +422,12 @@ public class BrokerLoadJob extends BulkLoadJob {
         }
         return String.valueOf(value);
     }
+
+    @Override
+    public String getResourceGroup() {
+        if (context == null || context.getResourceGroup() == null) {
+            return "";
+        }
+        return context.getResourceGroup().name;
+    }
 }

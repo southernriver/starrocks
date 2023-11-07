@@ -59,6 +59,7 @@ import com.starrocks.persist.gson.GsonUtils;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.Coordinator;
 import com.starrocks.qe.QeProcessorImpl;
+import com.starrocks.qe.SessionVariable;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.ast.AlterLoadStmt;
 import com.starrocks.sql.ast.LoadStmt;
@@ -706,6 +707,7 @@ public abstract class LoadJob extends AbstractTxnStateChangeCallback implements 
             jobInfo.add(id);
             // label
             jobInfo.add(label);
+            jobInfo.add(getResourceGroup());
             // state
             if (state == JobState.COMMITTED) {
                 jobInfo.add("PREPARED");
@@ -775,6 +777,14 @@ public abstract class LoadJob extends AbstractTxnStateChangeCallback implements 
     protected String getResourceName() {
         return "N/A";
     }
+
+    protected String getResourceGroup() {
+        if (ConnectContext.get() != null) {
+            SessionVariable var = ConnectContext.get().getSessionVariable();
+            return var.getResourceGroup();
+        }
+        return "";
+    };
 
     protected long getEtlStartTimestamp() {
         return loadStartTimestamp;

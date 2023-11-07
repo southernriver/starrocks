@@ -152,7 +152,8 @@ public class StatisticProcDir implements ProcDirInterface {
 
                                 Pair<TabletStatus, Priority> res = localTablet.getHealthStatusWithPriority(
                                         infoService, partition.getVisibleVersion(),
-                                        replicationNum, aliveBeIdsInCluster);
+                                        ((OlapTable) table).getReplicaAssignment(),
+                                        aliveBeIdsInCluster);
 
                                 // here we treat REDUNDANT as HEALTHY, for user friendly.
                                 if (res.first != TabletStatus.HEALTHY && res.first != TabletStatus.REDUNDANT

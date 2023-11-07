@@ -890,6 +890,7 @@ public class Alter {
                     throw new DdlException(
                             "table " + olapTable.getName() + " is colocate table, cannot change replicationNum");
                 }
+                // TODO(ganggewang): Support alter resrouce group assignment.
                 partitionInfo.setReplicationNum(partition.getId(), newReplicationNum);
                 // update default replication num if this table is unpartitioned table
                 if (partitionInfo.getType() == PartitionType.UNPARTITIONED) {

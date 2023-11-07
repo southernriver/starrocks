@@ -939,8 +939,9 @@ public class RestoreJob extends AbstractJob {
             long remotePartId = backupPartitionInfo.id;
             Range<PartitionKey> remoteRange = remotePartitionInfo.getRange(remotePartId);
             DataProperty remoteDataProperty = remotePartitionInfo.getDataProperty(remotePartId);
+            // TODO(ganggewang): check resource group info on restoring tables.
             localPartitionInfo.addPartition(restorePart.getId(), false, remoteRange,
-                    remoteDataProperty, (short) restoreReplicationNum,
+                    remoteDataProperty, remotePartitionInfo.getReplicaAssignment(remotePartId),
                     remotePartitionInfo.getIsInMemory(remotePartId));
             localTbl.addPartition(restorePart);
             if (modify) {

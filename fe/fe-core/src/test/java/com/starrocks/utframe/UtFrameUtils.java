@@ -82,6 +82,7 @@ import com.starrocks.sql.plan.PlanFragmentBuilder;
 import com.starrocks.statistic.StatsConstants;
 import com.starrocks.system.Backend;
 import com.starrocks.system.BackendCoreStat;
+import com.starrocks.system.ComputeNode;
 import com.starrocks.thrift.TExplainLevel;
 import com.starrocks.thrift.TResultSinkType;
 import org.apache.commons.codec.binary.Hex;
@@ -258,6 +259,21 @@ public class UtFrameUtils {
         GlobalStateMgr.getCurrentSystemInfo().addBackend(be);
 
         return be;
+    }
+
+    public static ComputeNode addMockComputeNode(int cnId) throws Exception {
+        // start be
+        MockedBackend backend = new MockedBackend("127.0.0.1");
+
+        // add be
+        ComputeNode cn = new ComputeNode(cnId, backend.getHost(), backend.getHeartBeatPort());
+        cn.setAlive(true);
+        cn.setBePort(backend.getBeThriftPort());
+        cn.setBrpcPort(backend.getBrpcPort());
+        cn.setHttpPort(backend.getHttpPort());
+        GlobalStateMgr.getCurrentSystemInfo().addComputeNodes(
+                Lists.newArrayList(new Pair(backend.getHost(), backend.getHeartBeatPort())));
+        return cn;
     }
 
     public static void dropMockBackend(int backendId) throws DdlException {

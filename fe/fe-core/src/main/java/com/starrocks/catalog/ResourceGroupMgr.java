@@ -2,7 +2,9 @@
 
 package com.starrocks.catalog;
 
+import com.clearspring.analytics.util.Lists;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.gson.annotations.SerializedName;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.DdlException;
@@ -14,6 +16,7 @@ import com.starrocks.persist.ResourceGroupOpEntry;
 import com.starrocks.persist.gson.GsonUtils;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.GlobalStateMgr;
+import com.starrocks.sql.analyzer.SemanticException;
 import com.starrocks.sql.ast.AlterResourceGroupStmt;
 import com.starrocks.sql.ast.CreateResourceGroupStmt;
 import com.starrocks.sql.ast.DropResourceGroupStmt;
@@ -24,6 +27,7 @@ import com.starrocks.thrift.TWorkGroupOpType;
 import com.starrocks.thrift.TWorkGroupType;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.util.Strings;
 
 import java.io.DataInputStream;
 import java.io.DataOutput;
@@ -35,6 +39,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -59,9 +64,12 @@ public class ResourceGroupMgr implements Writable {
     private final Map<Long, Map<Long, TWorkGroup>> activeResourceGroupsPerBe = new HashMap<>();
     private final Map<Long, Long> minVersionPerBe = new HashMap<>();
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+    private final ResourceGroup defaultResourceGroup;
 
     public ResourceGroupMgr(GlobalStateMgr globalStateMgr) {
         this.globalStateMgr = globalStateMgr;
+        this.defaultResourceGroup = new DefaultResourceGroup();
+        resourceGroupMap.put(ResourceGroup.DEFAULT_RESOURCE_GROUP_NAME, defaultResourceGroup);
     }
 
     private void readLock() {
@@ -100,7 +108,28 @@ public class ResourceGroupMgr implements Writable {
                         String.format("There can be only one short_query RESOURCE_GROUP (%s)",
                                 shortQueryResourceGroup.getName()));
             }
-
+            List<Long> availableCnList = null;
+            List<Long> availableBeList = null;
+            if (wg.getCnNumber() != null && wg.getCnNumber() > 0)  {
+                availableCnList = defaultResourceGroup.getCnList();
+                if (availableCnList.size() < wg.getCnNumber())  {
+                    throw new DdlException("Insufficient number of computer nodes, available count " +
+                            availableCnList.size() + " requested number " + wg.getCnNumber());
+                }
+            }
+            if (wg.getBeNumber() != null && wg.getBeNumber() > 0)  {
+                availableBeList = defaultResourceGroup.getBeList();
+                if (availableBeList.size() < wg.getBeNumber())  {
+                    throw new DdlException("Insufficient number of backends, available count " +
+                            availableBeList.size() + " requested number " + wg.getBeNumber());
+                }
+            }
+            if (availableBeList != null) {
+                wg.setBeList(availableBeList.stream().limit(wg.getBeNumber()).collect(Collectors.toList()));
+            }
+            if (availableCnList != null) {
+                wg.setCnList(availableCnList.stream().limit(wg.getCnNumber()).collect(Collectors.toList()));
+            }
             wg.setId(GlobalStateMgr.getCurrentState().getNextId());
             wg.setVersion(wg.getId());
             for (ResourceGroupClassifier classifier : wg.getClassifiers()) {
@@ -192,7 +221,8 @@ public class ResourceGroupMgr implements Writable {
 
     @Override
     public void write(DataOutput out) throws IOException {
-        List<ResourceGroup> resourceGroups = resourceGroupMap.values().stream().collect(Collectors.toList());
+        List<ResourceGroup> resourceGroups = new ArrayList<>(
+                resourceGroupMap.values().stream().filter(s -> s.getName() != null).collect(Collectors.toList()));
         SerializeData data = new SerializeData();
         data.resourceGroups = resourceGroups;
 
@@ -235,11 +265,20 @@ public class ResourceGroupMgr implements Writable {
     public ResourceGroup getResourceGroup(String name) {
         readLock();
         try {
-            if (resourceGroupMap.containsKey(name)) {
-                return resourceGroupMap.get(name);
+            if (Strings.isEmpty(name) || name.equals(ResourceGroup.DEFAULT_RESOURCE_GROUP_NAME)) {
+                return defaultResourceGroup;
             } else {
-                return null;
+                return resourceGroupMap.get(name);
             }
+        } finally {
+            readUnlock();
+        }
+    }
+
+    public List<ResourceGroup> getAllResourceGroups() {
+        readLock();
+        try {
+            return new ArrayList<>(resourceGroupMap.values());
         } finally {
             readUnlock();
         }
@@ -293,6 +332,36 @@ public class ResourceGroupMgr implements Writable {
                     wg.setConcurrencyLimit(concurrentLimit);
                 }
 
+                Integer cnNumber = changedProperties.getCnNumber();
+                if (cnNumber != null) {
+                    if (cnNumber < 0 || cnNumber > wg.getMaxCnNumber()) {
+                        throw new SemanticException("cn.number must be positive and less than cn.num.max");
+                    }
+                    wg.setCnNumber(cnNumber);
+                }
+                Integer maxCnNumber = changedProperties.getMaxCnNumber();
+                if (maxCnNumber != null) {
+                    if (maxCnNumber < 0 || maxCnNumber < wg.getCnNumber()) {
+                        throw new SemanticException("cn.number must be positive and larger than cn.num.max");
+                    }
+                    wg.setMaxCnNumber(maxCnNumber);
+                }
+
+                Integer beNumber = changedProperties.getBeNumber();
+                if (beNumber != null) {
+                    if (beNumber < 0 || beNumber > wg.getMaxBeNumber()) {
+                        throw new SemanticException("be.number must be positive and less than be.num.max");
+                    }
+                    wg.setBeNumber(beNumber);
+                }
+                Integer maxBeNumber = changedProperties.getMaxBeNumber();
+                if (maxBeNumber != null) {
+                    if (maxBeNumber < 0 || maxBeNumber < wg.getBeNumber()) {
+                        throw new SemanticException("be.number must be positive and larger than be.num.max");
+                    }
+                    wg.setMaxBeNumber(maxBeNumber);
+                }
+
                 // Type is guaranteed to be immutable during the analyzer phase.
                 TWorkGroupType workGroupType = changedProperties.getResourceGroupType();
                 Preconditions.checkState(workGroupType == null);
@@ -313,6 +382,20 @@ public class ResourceGroupMgr implements Writable {
                     classifierMap.remove(classifier.getId());
                 }
                 classifierList.clear();
+            } else if (cmd instanceof AlterResourceGroupStmt.AddBackend) {
+                AlterResourceGroupStmt.AddBackend addBackend = (AlterResourceGroupStmt.AddBackend) cmd;
+                addBackend.getIds().forEach(this::verifyBackendId);
+                addBackend.getIds().forEach(wg::addBackend);
+            } else if (cmd instanceof AlterResourceGroupStmt.AddComputeNode) {
+                AlterResourceGroupStmt.AddComputeNode addCn = (AlterResourceGroupStmt.AddComputeNode) cmd;
+                addCn.getIds().forEach(this::verifyComputeNodeId);
+                addCn.getIds().forEach(wg::addComputeNode);
+            } else if (cmd instanceof AlterResourceGroupStmt.DropBackend) {
+                AlterResourceGroupStmt.DropBackend dropBackend = (AlterResourceGroupStmt.DropBackend) cmd;
+                dropBackend.getIds().forEach(wg::dropBackend);
+            } else if (cmd instanceof AlterResourceGroupStmt.DropComputeNode) {
+                AlterResourceGroupStmt.DropComputeNode dropCn = (AlterResourceGroupStmt.DropComputeNode) cmd;
+                dropCn.getIds().forEach(wg::dropComputeNode);
             }
             // only when changing properties, version is required to update. because changing classifiers needs not
             // propagate to BE.
@@ -343,6 +426,7 @@ public class ResourceGroupMgr implements Writable {
     public void dropResourceGroupUnlocked(String name) {
         ResourceGroup wg = resourceGroupMap.get(name);
         removeResourceGroupInternal(name);
+        wg.destruct();
         wg.setVersion(GlobalStateMgr.getCurrentState().getNextId());
         ResourceGroupOpEntry workGroupOp = new ResourceGroupOpEntry(TWorkGroupOpType.WORKGROUP_OP_DELETE, wg);
         GlobalStateMgr.getCurrentState().getEditLog().logResourceGroupOp(workGroupOp);
@@ -383,14 +467,30 @@ public class ResourceGroupMgr implements Writable {
         }
     }
 
-    private void addResourceGroupInternal(ResourceGroup wg) {
-        resourceGroupMap.put(wg.getName(), wg);
-        id2ResourceGroupMap.put(wg.getId(), wg);
-        for (ResourceGroupClassifier classifier : wg.classifiers) {
-            classifierMap.put(classifier.getId(), classifier);
+    private void verifyBackendId(Long id) {
+        if (GlobalStateMgr.getCurrentSystemInfo().getBackend(id) == null) {
+            throw new IllegalArgumentException("Backend id " + id + " does not exist!");
         }
-        if (wg.getResourceGroupType() == TWorkGroupType.WG_SHORT_QUERY) {
-            shortQueryResourceGroup = wg;
+    }
+
+    private void verifyComputeNodeId(Long id) {
+        if (GlobalStateMgr.getCurrentSystemInfo().getComputeNode(id) == null) {
+            throw new IllegalArgumentException("Compute node id " + id + " does not exist!");
+        }
+    }
+
+    private void addResourceGroupInternal(ResourceGroup wg) {
+        if (wg.getName() != null) {
+            resourceGroupMap.put(wg.getName(), wg);
+            id2ResourceGroupMap.put(wg.getId(), wg);
+            if (wg.getClassifiers() != null) {
+                for (ResourceGroupClassifier classifier : wg.classifiers) {
+                    classifierMap.put(classifier.getId(), classifier);
+                }
+            }
+            if (wg.getResourceGroupType() == TWorkGroupType.WG_SHORT_QUERY) {
+                shortQueryResourceGroup = wg;
+            }
         }
     }
 
@@ -503,8 +603,124 @@ public class ResourceGroupMgr implements Writable {
         }
     }
 
+    public List<String> getResourceGroupByBeId(long beId) {
+        List<String> list = Lists.newArrayList();
+        for (Map.Entry<String, ResourceGroup> entry : resourceGroupMap.entrySet()) {
+            ResourceGroup rg = entry.getValue();
+            if (rg.getBeList() != null && rg.getBeList().contains(beId)) {
+                list.add(entry.getKey());
+            }
+        }
+        return list;
+    }
+
+    public List<String> getResourceGroupByCnId(long cnId) {
+        List<String> list = Lists.newArrayList();
+        for (Map.Entry<String, ResourceGroup> entry : resourceGroupMap.entrySet()) {
+            ResourceGroup rg = entry.getValue();
+            if (rg.getCnList() != null && rg.getCnList().contains(cnId)) {
+                list.add(entry.getKey());
+            }
+        }
+        return list;
+    }
+
     private static class SerializeData {
         @SerializedName("WorkGroups")
         public List<ResourceGroup> resourceGroups;
+    }
+
+    private class DefaultResourceGroup extends ResourceGroup {
+
+        public DefaultResourceGroup() {
+            setName(ResourceGroup.DEFAULT_RESOURCE_GROUP_NAME);
+            setResourceGroupType(TWorkGroupType.WG_NODE_LEVEL);
+        }
+
+        @Override
+        public Integer getBeNumber() {
+            return getBeList().size();
+        }
+
+        @Override
+        public Integer getMaxBeNumber() {
+            return getBeList().size();
+        }
+
+        @Override
+        public Integer getCnNumber() {
+            return getCnList().size();
+        }
+
+        @Override
+        public Integer getMaxCnNumber() {
+            return getCnList().size();
+        }
+
+        @Override
+        public List<Long> getBeList() {
+            List<Long> ids = GlobalStateMgr.getCurrentSystemInfo().getBackendIds(true);
+            Set<Long> allocated = new HashSet<>();
+            for (Map.Entry<String, ResourceGroup> entry : resourceGroupMap.entrySet()) {
+                if (!entry.getKey().equals(DEFAULT_RESOURCE_GROUP_NAME) && !entry.getValue().getBeList().isEmpty()) {
+                    allocated.addAll(entry.getValue().getBeList());
+                }
+            }
+            return ids.stream().filter(id -> !allocated.contains(id)).collect(Collectors.toList());
+        }
+
+        @Override
+        public List<Long> getCnList() {
+            List<Long> ids = GlobalStateMgr.getCurrentSystemInfo().getComputeNodeIds(true);
+            Set<Long> allocated = new HashSet<>();
+            for (Map.Entry<String, ResourceGroup> entry : resourceGroupMap.entrySet()) {
+                if (!entry.getKey().equals(DEFAULT_RESOURCE_GROUP_NAME) && !entry.getValue().getCnList().isEmpty()) {
+                    allocated.addAll(entry.getValue().getCnList());
+                }
+            }
+            return ids.stream().filter(id -> !allocated.contains(id)).collect(Collectors.toList());
+        }
+    }
+
+    private class EmptyResourceGroup extends ResourceGroup {
+        @Override
+        public ImmutableList<Long> getBeList() {
+            return ImmutableList.of();
+        }
+
+        @Override
+        public ImmutableList<Long> getCnList() {
+            return ImmutableList.of();
+        }
+
+        @Override
+        public String getName() {
+            return "EMPTY_GROUP";
+        }
+
+        @Override
+        public Integer getBeNumber() {
+            return 0;
+        }
+
+        @Override
+        public Integer getMaxBeNumber() {
+            return 0;
+        }
+
+        @Override
+        public Integer getCnNumber() {
+            return 0;
+        }
+
+        @Override
+        public Integer getMaxCnNumber() {
+            return 0;
+        }
+
+        @Override
+        public TWorkGroupType getResourceGroupType() {
+            return TWorkGroupType.WG_NODE_LEVEL;
+        }
     }
 }

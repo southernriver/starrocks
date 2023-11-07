@@ -37,6 +37,7 @@ import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.Partition;
 import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.RangePartitionInfo;
+import com.starrocks.catalog.ReplicaAssignment;
 import com.starrocks.catalog.Table;
 import com.starrocks.catalog.Type;
 import com.starrocks.common.AnalysisException;
@@ -1770,7 +1771,7 @@ public class AlterTest {
         boolean isInMemory = partitionInfo.getIsInMemory(partitionId);
         boolean isTempPartition = false;
         ListPartitionPersistInfo partitionPersistInfoOut = new ListPartitionPersistInfo(dbId, tableId, partition,
-                dataProperty, replicationNum, isInMemory, isTempPartition, values, new ArrayList<>());
+                dataProperty, new ReplicaAssignment(replicationNum), isInMemory, isTempPartition, values, new ArrayList<>());
 
         // write log
         File file = new File("./test_serial.log");
@@ -1789,7 +1790,7 @@ public class AlterTest {
         Assert.assertEquals(tableId, partitionPersistInfoIn.getTableId().longValue());
         Assert.assertEquals(partitionId, partitionPersistInfoIn.getPartition().getId());
         Assert.assertEquals(partition.getName(), partitionPersistInfoIn.getPartition().getName());
-        Assert.assertEquals(replicationNum, partitionPersistInfoIn.getReplicationNum());
+        Assert.assertEquals(replicationNum, partitionPersistInfoIn.getReplicaAssignment().getTotalReplicaNum());
         Assert.assertEquals(isInMemory, partitionPersistInfoIn.isInMemory());
         Assert.assertEquals(isTempPartition, partitionPersistInfoIn.isTempPartition());
         Assert.assertEquals(dataProperty, partitionPersistInfoIn.getDataProperty());
@@ -1846,7 +1847,7 @@ public class AlterTest {
         boolean isInMemory = partitionInfo.getIsInMemory(partitionId);
         boolean isTempPartition = false;
         ListPartitionPersistInfo partitionPersistInfoOut = new ListPartitionPersistInfo(dbId, tableId, partition,
-                dataProperty, replicationNum, isInMemory, isTempPartition, new ArrayList<>(), multiValues);
+                dataProperty, new ReplicaAssignment(replicationNum), isInMemory, isTempPartition, new ArrayList<>(), multiValues);
 
         // write log
         File file = new File("./test_serial.log");
@@ -1865,7 +1866,7 @@ public class AlterTest {
         Assert.assertEquals(tableId, partitionPersistInfoIn.getTableId().longValue());
         Assert.assertEquals(partitionId, partitionPersistInfoIn.getPartition().getId());
         Assert.assertEquals(partition.getName(), partitionPersistInfoIn.getPartition().getName());
-        Assert.assertEquals(replicationNum, partitionPersistInfoIn.getReplicationNum());
+        Assert.assertEquals(replicationNum, partitionPersistInfoIn.getReplicaAssignment().getTotalReplicaNum());
         Assert.assertEquals(isInMemory, partitionPersistInfoIn.isInMemory());
         Assert.assertEquals(isTempPartition, partitionPersistInfoIn.isTempPartition());
         Assert.assertEquals(dataProperty, partitionPersistInfoIn.getDataProperty());
@@ -1951,7 +1952,7 @@ public class AlterTest {
         Range<PartitionKey> range = partitionInfo.getRange(partitionId);
         StorageCacheInfo storageCacheInfo = partitionInfo.getStorageCacheInfo(partitionId);
         RangePartitionPersistInfo partitionPersistInfoOut = new RangePartitionPersistInfo(dbId, tableId, partition,
-                dataProperty, replicationNum, isInMemory, isTempPartition, range, storageCacheInfo);
+                dataProperty, new ReplicaAssignment(replicationNum), isInMemory, isTempPartition, range, storageCacheInfo);
 
         // write log
         File file = new File("./test_serial.log");
@@ -1970,7 +1971,7 @@ public class AlterTest {
         Assert.assertEquals(tableId, partitionPersistInfoIn.getTableId().longValue());
         Assert.assertEquals(partitionId, partitionPersistInfoIn.getPartition().getId());
         Assert.assertEquals(partition.getName(), partitionPersistInfoIn.getPartition().getName());
-        Assert.assertEquals(replicationNum, partitionPersistInfoIn.getReplicationNum());
+        Assert.assertEquals(replicationNum, partitionPersistInfoIn.getReplicaAssignment().getTotalReplicaNum());
         Assert.assertEquals(isInMemory, partitionPersistInfoIn.isInMemory());
         Assert.assertEquals(isTempPartition, partitionPersistInfoIn.isTempPartition());
         Assert.assertEquals(dataProperty, partitionPersistInfoIn.getDataProperty());

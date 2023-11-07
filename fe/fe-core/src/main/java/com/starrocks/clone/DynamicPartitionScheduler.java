@@ -49,6 +49,7 @@ import com.starrocks.common.Pair;
 import com.starrocks.common.util.DateUtils;
 import com.starrocks.common.util.DynamicPartitionUtil;
 import com.starrocks.common.util.LeaderDaemon;
+import com.starrocks.common.util.PropertyAnalyzer;
 import com.starrocks.common.util.RangeUtils;
 import com.starrocks.common.util.TimeUtils;
 import com.starrocks.load.ColddownJob;
@@ -235,6 +236,10 @@ public class DynamicPartitionScheduler extends LeaderDaemon {
                 partitionProperties.put("replication_num",
                         String.valueOf(dynamicPartitionProperty.getReplicationNum()));
             }
+            // TODO(ganggewang): Support replica assignment in dynamic partition properties.
+            partitionProperties.put(
+                    PropertyAnalyzer.PROPERTIES_RESOURCE_GROUP_ASSIGNMENT, olapTable.getReplicaAssignment().toString());
+
             String partitionName = dynamicPartitionProperty.getPrefix() +
                     DynamicPartitionUtil.getFormattedPartitionName(dynamicPartitionProperty.getTimeZone(), prevBorder,
                             dynamicPartitionProperty.getTimeUnit());

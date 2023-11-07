@@ -106,7 +106,7 @@ public class DiskAndTabletLoadReBalancer extends Rebalancer {
     public void completeSchedCtx(TabletSchedCtx tabletCtx, Map<Long, TabletScheduler.PathSlot> backendsWorkingSlots)
             throws SchedException {
         TStorageMedium medium = tabletCtx.getStorageMedium();
-        ClusterLoadStatistic clusterStat = loadStatistic;
+        ClusterLoadStatistic clusterStat = resourceGroupLoadStatistic.get(tabletCtx.getResourceGroup());
         if (clusterStat == null) {
             throw new SchedException(SchedException.Status.UNRECOVERABLE, "cluster does not exist");
         }
@@ -557,6 +557,7 @@ public class DiskAndTabletLoadReBalancer extends Rebalancer {
                         schedCtx.setSrc(replica);
                         schedCtx.setDest(lBackend.getId(), destPathHash);
                         schedCtx.setBalanceType(BalanceType.DISK);
+                        schedCtx.setResourceGroup(clusterStat.getResourceGroup());
                         selectedTablets.add(tabletId);
                         alternativeTablets.add(schedCtx);
 
@@ -1380,7 +1381,7 @@ public class DiskAndTabletLoadReBalancer extends Rebalancer {
             Pair<LocalTablet.TabletStatus, TabletSchedCtx.Priority> statusPair =
                     tablet.getHealthStatusWithPriority(infoService,
                             partition.getVisibleVersion(),
-                            replicaNum,
+                            table.getReplicaAssignment(),
                             aliveBeIds);
 
             return statusPair.first == LocalTablet.TabletStatus.HEALTHY;

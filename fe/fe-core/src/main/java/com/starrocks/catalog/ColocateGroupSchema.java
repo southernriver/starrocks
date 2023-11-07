@@ -26,7 +26,9 @@ import com.starrocks.catalog.ColocateTableIndex.GroupId;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.ErrorCode;
 import com.starrocks.common.ErrorReport;
+import com.starrocks.common.FeMetaVersion;
 import com.starrocks.common.io.Writable;
+import com.starrocks.server.GlobalStateMgr;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -42,16 +44,18 @@ public class ColocateGroupSchema implements Writable {
     private List<Type> distributionColTypes = Lists.newArrayList();
     private int bucketsNum;
     private short replicationNum;
+    private ReplicaAssignment replicaAssignment;
 
     private ColocateGroupSchema() {
 
     }
 
-    public ColocateGroupSchema(GroupId groupId, List<Column> distributionCols, int bucketsNum, short replicationNum) {
+    public ColocateGroupSchema(GroupId groupId, List<Column> distributionCols, int bucketsNum,
+                               ReplicaAssignment replicaAssignment) {
         this.groupId = groupId;
         this.distributionColTypes = distributionCols.stream().map(c -> c.getType()).collect(Collectors.toList());
         this.bucketsNum = bucketsNum;
-        this.replicationNum = replicationNum;
+        this.replicaAssignment = replicaAssignment;
     }
 
     public GroupId getGroupId() {
@@ -62,17 +66,13 @@ public class ColocateGroupSchema implements Writable {
         return bucketsNum;
     }
 
-    public short getReplicationNum() {
-        return replicationNum;
-    }
-
     public List<Type> getDistributionColTypes() {
         return distributionColTypes;
     }
 
     public void checkColocateSchema(OlapTable tbl) throws DdlException {
         checkDistribution(tbl.getDefaultDistributionInfo());
-        checkReplicationNum(tbl.getPartitionInfo());
+        checkReplicaAssignment(tbl.getPartitionInfo());
     }
 
     public void checkDistribution(DistributionInfo distributionInfo) throws DdlException {
@@ -106,21 +106,24 @@ public class ColocateGroupSchema implements Writable {
         }
     }
 
-    public void checkReplicationNum(PartitionInfo partitionInfo) throws DdlException {
-        for (Short repNum : partitionInfo.idToReplicationNum.values()) {
-            if (repNum != replicationNum) {
-                ErrorReport
-                        .reportDdlException(ErrorCode.ERR_COLOCATE_TABLE_MUST_HAS_SAME_REPLICATION_NUM,
-                                replicationNum, groupId.toString());
+    public void checkReplicaAssignment(PartitionInfo partitionInfo) throws DdlException {
+        for (ReplicaAssignment replicaAlloc : partitionInfo.idToReplicaAssignment.values()) {
+            if (!replicaAlloc.equals(this.replicaAssignment)) {
+                ErrorReport.reportDdlException(ErrorCode.ERR_COLOCATE_TABLE_MUST_HAS_SAME_REPLICATION_ASSIGNMENT,
+                        replicaAssignment, groupId.toString());
             }
         }
     }
 
-    public void checkReplicationNum(short repNum) throws DdlException {
-        if (repNum != replicationNum) {
-            ErrorReport.reportDdlException(ErrorCode.ERR_COLOCATE_TABLE_MUST_HAS_SAME_REPLICATION_NUM,
-                    replicationNum, groupId.toString());
+    public void checkReplicaAssignment(ReplicaAssignment assignment) throws DdlException {
+        if (!assignment.equals(replicaAssignment)) {
+            ErrorReport.reportDdlException(ErrorCode.ERR_COLOCATE_TABLE_MUST_HAS_SAME_REPLICATION_ASSIGNMENT,
+                    replicaAssignment, groupId.toString());
         }
+    }
+
+    public ReplicaAssignment getReplicaAssignment() {
+        return replicaAssignment;
     }
 
     public static ColocateGroupSchema read(DataInput in) throws IOException {
@@ -137,7 +140,7 @@ public class ColocateGroupSchema implements Writable {
             ColumnType.write(out, type);
         }
         out.writeInt(bucketsNum);
-        out.writeShort(replicationNum);
+        this.replicaAssignment.write(out);
     }
 
     public void readFields(DataInput in) throws IOException {
@@ -147,6 +150,11 @@ public class ColocateGroupSchema implements Writable {
             distributionColTypes.add(ColumnType.read(in));
         }
         bucketsNum = in.readInt();
-        replicationNum = in.readShort();
+        if (GlobalStateMgr.getCurrentStateJournalVersion() < FeMetaVersion.VERSION_97) {
+            replicationNum = in.readShort();
+            this.replicaAssignment = new ReplicaAssignment(replicationNum);
+        } else {
+            this.replicaAssignment = ReplicaAssignment.read(in);
+        }
     }
 }

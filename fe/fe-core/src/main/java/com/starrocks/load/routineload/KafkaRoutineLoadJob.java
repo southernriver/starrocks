@@ -416,6 +416,7 @@ public class KafkaRoutineLoadJob extends RoutineLoadJob {
         KafkaRoutineLoadJob kafkaRoutineLoadJob = new KafkaRoutineLoadJob(id, stmt.getName(),
                 db.getId(), tableId, stmt.getKafkaBrokerList(), stmt.getKafkaTopic());
         kafkaRoutineLoadJob.setOptional(stmt);
+        kafkaRoutineLoadJob.setResourceGroup(stmt.getResourceGroup());
         recoverOffsetFromLastJob(stmt, kafkaRoutineLoadJob, db.getFullName());
         kafkaRoutineLoadJob.checkCustomProperties();
         kafkaRoutineLoadJob.checkCustomPartition(kafkaRoutineLoadJob.customKafkaPartitions);

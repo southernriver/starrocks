@@ -45,6 +45,8 @@ public class TabletMeta {
 
     private ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
+    private ReplicaAssignment replicaAssignment;
+
     public TabletMeta(long dbId, long tableId, long partitionId, long indexId, int schemaHash,
                       TStorageMedium storageMedium, boolean isLakeTablet) {
         this.dbId = dbId;
@@ -152,6 +154,14 @@ public class TabletMeta {
 
     public boolean isLakeTablet() {
         return isLakeTablet;
+    }
+
+    public ReplicaAssignment getReplicaAssignment() {
+        return replicaAssignment;
+    }
+
+    public void setReplicaAssignment(ReplicaAssignment replicaAssignment) {
+        this.replicaAssignment = replicaAssignment;
     }
 
     @Override

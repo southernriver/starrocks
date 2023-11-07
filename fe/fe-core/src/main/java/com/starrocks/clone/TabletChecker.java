@@ -326,7 +326,7 @@ public class TabletChecker extends LeaderDaemon {
                                         localTablet.getHealthStatusWithPriority(
                                                 infoService,
                                                 partition.getVisibleVersion(),
-                                                replicaNum,
+                                                olapTbl.getReplicaAssignment(),
                                                 aliveBeIdsInCluster);
 
                                 if (statusWithPrio.first == TabletStatus.HEALTHY) {
@@ -354,6 +354,7 @@ public class TabletChecker extends LeaderDaemon {
                                 tabletCtx.setTabletStatus(statusWithPrio.first);
                                 tabletCtx.setOrigPriority(statusWithPrio.second);
                                 tabletCtx.setTablet(localTablet);
+                                tabletCtx.setReplicaAssignment(olapTbl.getReplicaAssignment());
                                 if (!tryChooseSrcBeforeSchedule(tabletCtx)) {
                                     continue;
                                 }

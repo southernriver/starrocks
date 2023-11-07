@@ -6,13 +6,16 @@ import com.google.common.base.Preconditions;
 import com.starrocks.analysis.Predicate;
 import com.starrocks.catalog.ResourceGroup;
 import com.starrocks.catalog.ResourceGroupClassifier;
+import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.analyzer.ResourceGroupAnalyzer;
 import com.starrocks.sql.analyzer.SemanticException;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 // Alter ResourceGroup specified by name
 // 1. Add a new classifier to the ResourceGroup
@@ -63,10 +66,43 @@ public class AlterResourceGroupStmt extends DdlStmt {
                     changedProperties.getConcurrencyLimit() == null &&
                     changedProperties.getBigQueryCpuSecondLimit() == null &&
                     changedProperties.getBigQueryMemLimit() == null &&
-                    changedProperties.getBigQueryScanRowsLimit() == null) {
+                    changedProperties.getBigQueryScanRowsLimit() == null &&
+                    changedProperties.getMaxBeNumber() == null &&
+                    changedProperties.getBeNumber() == null &&
+                    changedProperties.getMaxCnNumber() == null &&
+                    changedProperties.getCnNumber() == null) {
                 throw new SemanticException(
                         "At least one of ('cpu_core_limit', 'mem_limit', 'concurrency_limit','big_query_mem_limit', " +
-                                "'big_query_scan_rows_limit', 'big_query_cpu_second_limit', should be specified");
+                                "'big_query_scan_rows_limit', 'big_query_cpu_second_limit', 'be.number', 'be.number.max', " +
+                                "'cn.number', 'cn.number.max' should be specified");
+            }
+        } else if (cmd instanceof AddBackend) {
+            AddBackend addBackend = (AddBackend) cmd;
+            List<Long> unExistIds = addBackend.getIds().stream().filter(
+                    h -> GlobalStateMgr.getCurrentSystemInfo().getBackend(h) == null).collect(Collectors.toList());
+            if (!unExistIds.isEmpty()) {
+                throw new SemanticException("Backend id does not exist " + Arrays.toString(unExistIds.toArray()));
+            }
+        } else if (cmd instanceof DropBackend) {
+            DropBackend dropBackend = (DropBackend) cmd;
+            List<Long> unExistIds = dropBackend.getIds().stream().filter(
+                    h -> GlobalStateMgr.getCurrentSystemInfo().getBackend(h) == null).collect(Collectors.toList());
+            if (!unExistIds.isEmpty()) {
+                throw new SemanticException("Backend id does not exist " + Arrays.toString(unExistIds.toArray()));
+            }
+        } else if (cmd instanceof AddComputeNode) {
+            AddComputeNode addComputeNode = (AddComputeNode) cmd;
+            List<Long> unExistIds = addComputeNode.getIds().stream().filter(
+                    h -> GlobalStateMgr.getCurrentSystemInfo().getComputeNode(h) == null).collect(Collectors.toList());
+            if (!unExistIds.isEmpty()) {
+                throw new SemanticException("Compute node id does not exist " + Arrays.toString(unExistIds.toArray()));
+            }
+        } else if (cmd instanceof DropComputeNode) {
+            DropComputeNode dropComputeNode = (DropComputeNode) cmd;
+            List<Long> unExistIds = dropComputeNode.getIds().stream().filter(
+                    h -> GlobalStateMgr.getCurrentSystemInfo().getComputeNode(h) == null).collect(Collectors.toList());
+            if (!unExistIds.isEmpty()) {
+                throw new SemanticException("Compute node id does not exist " + Arrays.toString(unExistIds.toArray()));
             }
         }
     }
@@ -115,6 +151,54 @@ public class AlterResourceGroupStmt extends DdlStmt {
 
         public AlterProperties(Map<String, String> properties) {
             this.properties = properties;
+        }
+    }
+
+    public static class AddBackend extends SubCommand {
+        private List<Long> ids;
+
+        public AddBackend(List<Long> ids) {
+            this.ids = ids;
+        }
+
+        public List<Long> getIds() {
+            return ids;
+        }
+    }
+
+    public static class AddComputeNode extends SubCommand {
+        private List<Long> ids;
+
+        public AddComputeNode(List<Long> ids) {
+            this.ids = ids;
+        }
+
+        public List<Long> getIds() {
+            return ids;
+        }
+    }
+
+    public static class DropBackend extends SubCommand {
+        private List<Long> ids;
+
+        public DropBackend(List<Long> ids) {
+            this.ids = ids;
+        }
+
+        public List<Long> getIds() {
+            return ids;
+        }
+    }
+
+    public static class DropComputeNode extends SubCommand {
+        private List<Long> ids;
+
+        public DropComputeNode(List<Long> ids) {
+            this.ids = ids;
+        }
+
+        public List<Long> getIds() {
+            return ids;
         }
     }
 

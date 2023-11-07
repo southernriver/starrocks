@@ -51,6 +51,7 @@ import com.starrocks.thrift.TPartitionType;
 import com.starrocks.thrift.TResultSinkType;
 import com.starrocks.thrift.TRoutineLoadTask;
 import com.starrocks.thrift.TUniqueId;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -347,6 +348,10 @@ public class LoadPlanner {
             fileScanNode.setLoadInfo(loadJobId, txnId, destTable, brokerDesc, fileGroups, strictMode,
                     parallelInstanceNum);
             fileScanNode.setUseVectorizedLoad(true);
+            if (context.getSessionVariable().isEnableResourceGroup()
+                    && StringUtils.isNotEmpty(context.getSessionVariable().getResourceGroup())) {
+                fileScanNode.setResourceGroup(context.getSessionVariable().getResourceGroup());
+            }
             fileScanNode.init(analyzer);
             fileScanNode.finalizeStats(analyzer);
             scanNode = fileScanNode;

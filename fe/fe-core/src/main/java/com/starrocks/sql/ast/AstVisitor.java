@@ -736,6 +736,10 @@ public abstract class AstVisitor<R, C> {
         return visitNode(clause, context);
     }
 
+    public R visitBackendIdClause(BackendIdClause clause, C context) {
+        return visitNode(clause, context);
+    }
+
     public R visitModifyBackendHostClause(ModifyBackendAddressClause clause, C context) {
         return visitNode(clause, context);
     }

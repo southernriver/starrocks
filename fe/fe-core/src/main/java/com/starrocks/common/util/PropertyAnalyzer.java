@@ -25,6 +25,7 @@ import com.clearspring.analytics.util.Lists;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.base.Strings;
+import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Streams;
 import com.starrocks.analysis.DateLiteral;
@@ -42,6 +43,8 @@ import com.starrocks.catalog.KeysType;
 import com.starrocks.catalog.MaterializedView;
 import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.Partition;
+import com.starrocks.catalog.ReplicaAssignment;
+import com.starrocks.catalog.ResourceGroup;
 import com.starrocks.catalog.Table;
 import com.starrocks.catalog.Type;
 import com.starrocks.catalog.UniqueConstraint;
@@ -61,6 +64,7 @@ import org.apache.logging.log4j.Logger;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -126,6 +130,7 @@ public class PropertyAnalyzer {
     public static final String ENABLE_LOW_CARD_DICT_TYPE = "enable_low_card_dict";
     public static final String ABLE_LOW_CARD_DICT = "1";
     public static final String DISABLE_LOW_CARD_DICT = "0";
+    public static final String PROPERTIES_RESOURCE_GROUP_ASSIGNMENT = "resource_group_assignment";
 
     // hot cold query
     public static final int PROPERTIE_COLD_TABLE_INFO_LENGTH = 3;
@@ -144,6 +149,7 @@ public class PropertyAnalyzer {
     public static final String PROPERTIES_PARTITION_REFRESH_NUMBER = "partition_refresh_number";
     public static final String PROPERTIES_EXCLUDED_TRIGGER_TABLES = "excluded_trigger_tables";
     public static final String PROPERTIES_FORCE_EXTERNAL_TABLE_QUERY_REWRITE = "force_external_table_query_rewrite";
+    public static final String PROPERTIES_RESOURCE_GROUP = "table_resource_group";
     public static final String PROPERTIES_OLAP_TABLE_QUERY_REWRITE = "olap_table_query_rewrite_consistency";
 
     // constraint for rewrite
@@ -412,6 +418,37 @@ public class PropertyAnalyzer {
             properties.remove(PROPERTIES_TABLET_TYPE);
         }
         return tTabletType;
+    }
+
+    public static ReplicaAssignment analyzeReplicaAssignment(
+            Map<String, String> properties, short replicaNum) throws AnalysisException {
+        if (properties == null) {
+            return ReplicaAssignment.DEFAULT_ALLOCATION;
+        }
+        Map<String, Short> assignmentMap = Maps.newHashMap();
+        String assignmentProperty = properties.get(PROPERTIES_RESOURCE_GROUP_ASSIGNMENT);
+        if (assignmentProperty != null) {
+            String[] assignments = assignmentProperty.split(",");
+            for (String assignment : assignments) {
+                String[] kv = assignment.split(":");
+                String resourceGroup = kv[0].toLowerCase(Locale.ROOT).trim();
+                if (GlobalStateMgr.getCurrentState().getResourceGroupMgr().getResourceGroup(resourceGroup) == null) {
+                    throw new AnalysisException("Resource group " + resourceGroup + " does not exist!");
+                }
+                short replica = Short.parseShort(kv[1].trim());
+                assignmentMap.put(resourceGroup, replica);
+            }
+            int assignedReplicaNum = assignmentMap.values().stream().reduce((x, y) -> (short) (x + y)).get();
+            if (assignedReplicaNum != replicaNum) {
+                throw new AnalysisException("Assigned replica number " + assignedReplicaNum
+                        + " does not equal to total replica number " + replicaNum);
+            }
+            properties.remove(PROPERTIES_RESOURCE_GROUP_ASSIGNMENT);
+        }
+        if (assignmentMap.isEmpty()) {
+            assignmentMap.put(ResourceGroup.DEFAULT_RESOURCE_GROUP_NAME, (short) replicaNum);
+        }
+        return new ReplicaAssignment(assignmentMap);
     }
 
     public static Long analyzeVersionInfo(Map<String, String> properties) throws AnalysisException {

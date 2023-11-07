@@ -23,6 +23,7 @@ package com.starrocks.catalog;
 
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import com.google.gson.annotations.SerializedName;
@@ -46,6 +47,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -68,6 +70,7 @@ public class LocalTablet extends Tablet implements GsonPostProcessable {
         COLOCATE_MISMATCH, // replicas do not all locate in right colocate backends set.
         COLOCATE_REDUNDANT, // replicas match the colocate backends set, but redundant.
         NEED_FURTHER_REPAIR, // one of replicas need a definite repair.
+        REPLICA_MISSING_IN_RESOURCEGROUP, // not enough healthy replicas in resource group.
     }
 
     // Most read only accesses to replicas should acquire db lock, to prevent
@@ -487,14 +490,16 @@ public class LocalTablet extends Tablet implements GsonPostProcessable {
      */
     public Pair<TabletStatus, TabletSchedCtx.Priority> getHealthStatusWithPriority(
             SystemInfoService systemInfoService,
-            long visibleVersion, int replicationNum,
+            long visibleVersion,
+            ReplicaAssignment replicaAssignment,
             List<Long> aliveBeIdsInCluster) {
-
+        short replicationNum = replicaAssignment.getTotalReplicaNum();
         int alive = 0;
         int aliveAndVersionComplete = 0;
         int stable = 0;
         int availableInCluster = 0;
 
+        Map<String, Short> resourceGroup2ReplicaNum = Maps.newHashMap();
         Replica needFurtherRepairReplica = null;
         Set<String> hosts = Sets.newHashSet();
         for (Replica replica : replicas) {
@@ -527,6 +532,8 @@ public class LocalTablet extends Tablet implements GsonPostProcessable {
             stable++;
 
             availableInCluster++;
+            int curNum = resourceGroup2ReplicaNum.getOrDefault(backend.getResourceGroup(), (short) 0);
+            resourceGroup2ReplicaNum.put(backend.getResourceGroup(), (short) (curNum + 1));
         }
 
         // 1. alive replicas are not enough
@@ -599,6 +606,14 @@ public class LocalTablet extends Tablet implements GsonPostProcessable {
             // we set REDUNDANT as VERY_HIGH, because delete redundant replicas can free the space quickly.
             return createRedundantSchedCtx(TabletStatus.REDUNDANT, TabletSchedCtx.Priority.VERY_HIGH,
                     needFurtherRepairReplica);
+        }
+
+        // 5. got enough healthy replicas, check tag
+        for (Map.Entry<String, Short> assignment : replicaAssignment.getAssignMap().entrySet()) {
+            if (!resourceGroup2ReplicaNum.containsKey(assignment.getKey())
+                    || resourceGroup2ReplicaNum.get(assignment.getKey()) < assignment.getValue()) {
+                return Pair.create(TabletStatus.REPLICA_MISSING_IN_RESOURCEGROUP, TabletSchedCtx.Priority.NORMAL);
+            }
         }
 
         // 5. healthy

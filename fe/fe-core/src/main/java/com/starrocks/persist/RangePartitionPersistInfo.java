@@ -7,6 +7,7 @@ import com.google.gson.annotations.SerializedName;
 import com.starrocks.catalog.DataProperty;
 import com.starrocks.catalog.Partition;
 import com.starrocks.catalog.PartitionKey;
+import com.starrocks.catalog.ReplicaAssignment;
 import com.starrocks.common.util.RangeUtils;
 import com.starrocks.lake.StorageCacheInfo;
 import com.starrocks.persist.gson.GsonPostProcessable;
@@ -29,11 +30,11 @@ public class RangePartitionPersistInfo extends PartitionPersistInfoV2
     private byte[] serializedRange;
 
     public RangePartitionPersistInfo(Long dbId, Long tableId, Partition partition,
-                                     DataProperty dataProperty, short replicationNum,
+                                     DataProperty dataProperty, ReplicaAssignment replicaAssignment,
                                      boolean isInMemory, boolean isTempPartition,
                                      Range<PartitionKey> range,
                                      StorageCacheInfo storageCacheInfo) {
-        super(dbId, tableId, partition, dataProperty, replicationNum, isInMemory, isTempPartition, storageCacheInfo);
+        super(dbId, tableId, partition, dataProperty, replicaAssignment, isInMemory, isTempPartition, storageCacheInfo);
         this.range = range;
     }
 

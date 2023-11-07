@@ -113,6 +113,14 @@ public class BrokerUtil {
         }
     }
 
+    public static void mockParseFile(String path, BrokerDesc brokerDesc, List<TBrokerFileStatus> fileStatuses)
+            throws UserException {
+        for (int i = 0; i < 5; i++) {
+            TBrokerFileStatus status = new TBrokerFileStatus(path + "/test_" + i, false, 102400000, false);
+            fileStatuses.add(status);
+        }
+    }
+
     public static String printBroker(String brokerName, TNetworkAddress address) {
         return brokerName + "[" + address.toString() + "]";
     }

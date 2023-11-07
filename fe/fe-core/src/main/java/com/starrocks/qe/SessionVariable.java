@@ -355,6 +355,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String ENABLE_HIVE_MODE = "enable_hive_mode";
 
+    public static final String USE_CN_IN_LOAD_JOB = "use_cn_in_load_job";
+
     public static final List<String> DEPRECATED_VARIABLES = ImmutableList.<String>builder()
             .add(CODEGEN_LEVEL)
             .add(ENABLE_SPILLING)
@@ -610,6 +612,9 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VariableMgr.VarAttr(name = FORWARD_TO_LEADER, alias = FORWARD_TO_MASTER)
     private boolean forwardToLeader = false;
+
+    @VariableMgr.VarAttr(name = USE_CN_IN_LOAD_JOB)
+    private boolean useCnInLoadJob = false;
 
     // compatible with some mysql client connect, say DataGrip of JetBrains
     @VariableMgr.VarAttr(name = EVENT_SCHEDULER)
@@ -1091,6 +1096,10 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public int getMaxParallelScanInstanceNum() {
         return maxParallelScanInstanceNum;
+    }
+
+    public boolean useCnInLoadJob() {
+        return useCnInLoadJob;
     }
 
     // when pipeline engine is enabled

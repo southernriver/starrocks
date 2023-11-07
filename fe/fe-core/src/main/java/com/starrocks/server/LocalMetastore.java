@@ -71,6 +71,7 @@ import com.starrocks.catalog.PartitionType;
 import com.starrocks.catalog.RandomDistributionInfo;
 import com.starrocks.catalog.RangePartitionInfo;
 import com.starrocks.catalog.Replica;
+import com.starrocks.catalog.ReplicaAssignment;
 import com.starrocks.catalog.SinglePartitionInfo;
 import com.starrocks.catalog.Table;
 import com.starrocks.catalog.TableIndexes;
@@ -1041,7 +1042,7 @@ public class LocalMetastore implements ConnectorMetadata {
             Preconditions.checkNotNull(groupSchema);
             groupSchema.checkDistribution(distributionInfo);
             for (PartitionDesc partitionDesc : partitionDescs) {
-                groupSchema.checkReplicationNum(partitionDesc.getReplicationNum());
+                groupSchema.checkReplicaAssignment(partitionDesc.getReplicaAssignment());
             }
         }
     }
@@ -1067,9 +1068,11 @@ public class LocalMetastore implements ConnectorMetadata {
 
             copiedTable.getPartitionInfo().setDataProperty(partitionId, dataProperty);
             copiedTable.getPartitionInfo().setTabletType(partitionId, partitionDesc.getTabletType());
-            copiedTable.getPartitionInfo().setReplicationNum(partitionId, partitionDesc.getReplicationNum());
+            copiedTable.getPartitionInfo().setReplicaAssignment(partitionId, partitionDesc.getReplicaAssignment());
             copiedTable.getPartitionInfo().setIsInMemory(partitionId, partitionDesc.isInMemory());
             copiedTable.getPartitionInfo().setStorageCacheInfo(partitionId, partitionDesc.getStorageCacheInfo());
+            // TODO(ganggewang): Support specify resource group assignment info in alter partition clause.
+            copiedTable.getPartitionInfo().setReplicaAssignment(partitionId, copiedTable.getReplicaAssignment());
 
             Partition partition =
                     createPartition(db, copiedTable, partitionId, partitionName, version, tabletIdSet);
@@ -1158,7 +1161,7 @@ public class LocalMetastore implements ConnectorMetadata {
             long partitionId = partition.getId();
             if (olapTable.isLakeTable()) {
                 PartitionPersistInfoV2 info = new RangePartitionPersistInfo(db.getId(), olapTable.getId(), partition,
-                        partitionDescs.get(0).getPartitionDataProperty(), partitionInfo.getReplicationNum(partition.getId()),
+                        partitionDescs.get(0).getPartitionDataProperty(), partitionInfo.getReplicaAssignment(partition.getId()),
                         partitionInfo.getIsInMemory(partition.getId()), isTempPartition,
                         ((RangePartitionInfo) partitionInfo).getRange(partition.getId()),
                         ((SingleRangePartitionDesc) partitionDescs.get(0)).getStorageCacheInfo());
@@ -1169,7 +1172,7 @@ public class LocalMetastore implements ConnectorMetadata {
                 PartitionPersistInfo info = new PartitionPersistInfo(db.getId(), olapTable.getId(), partition,
                         ((RangePartitionInfo) partitionInfo).getRange(partitionId),
                         partitionDescs.get(0).getPartitionDataProperty(),
-                        partitionInfo.getReplicationNum(partitionId),
+                        partitionInfo.getReplicaAssignment(partitionId),
                         partitionInfo.getIsInMemory(partitionId),
                         isTempPartition);
                 editLog.logAddPartition(info);
@@ -1185,7 +1188,7 @@ public class LocalMetastore implements ConnectorMetadata {
                     if (olapTable.isLakeTable()) {
                         PartitionPersistInfoV2 info = new RangePartitionPersistInfo(db.getId(), olapTable.getId(),
                                 partition, partitionDescs.get(i).getPartitionDataProperty(),
-                                partitionInfo.getReplicationNum(partition.getId()),
+                                partitionInfo.getReplicaAssignment(partition.getId()),
                                 partitionInfo.getIsInMemory(partition.getId()), isTempPartition,
                                 ((RangePartitionInfo) partitionInfo).getRange(partition.getId()),
                                 ((SingleRangePartitionDesc) partitionDescs.get(i)).getStorageCacheInfo());
@@ -1196,7 +1199,7 @@ public class LocalMetastore implements ConnectorMetadata {
                                 new PartitionPersistInfo(db.getId(), olapTable.getId(), partition,
                                         ((RangePartitionInfo) partitionInfo).getRange(partition.getId()),
                                         partitionDescs.get(i).getPartitionDataProperty(),
-                                        partitionInfo.getReplicationNum(partition.getId()),
+                                        partitionInfo.getReplicaAssignment(partition.getId()),
                                         partitionInfo.getIsInMemory(partition.getId()),
                                         isTempPartition);
                         partitionInfoList.add(info);
@@ -1236,7 +1239,7 @@ public class LocalMetastore implements ConnectorMetadata {
         long partitionId = partition.getId();
         PartitionPersistInfoV2 info = new ListPartitionPersistInfo(db.getId(), olapTable.getId(), partition,
                 partitionDescs.get(0).getPartitionDataProperty(),
-                partitionInfo.getReplicationNum(partitionId),
+                partitionInfo.getReplicaAssignment(partitionId),
                 partitionInfo.getIsInMemory(partitionId),
                 isTempPartition,
                 ((ListPartitionInfo) partitionInfo).getIdToValues().get(partitionId),
@@ -1456,11 +1459,11 @@ public class LocalMetastore implements ConnectorMetadata {
 
             if (partitionInfo.getType() == PartitionType.RANGE) {
                 ((RangePartitionInfo) partitionInfo).unprotectHandleNewSinglePartitionDesc(partition.getId(),
-                        info.isTempPartition(), info.getRange(), info.getDataProperty(), info.getReplicationNum(),
+                        info.isTempPartition(), info.getRange(), info.getDataProperty(), info.getReplicaAssignment(),
                         info.isInMemory());
             } else {
                 partitionInfo.addPartition(
-                        partition.getId(), info.getDataProperty(), info.getReplicationNum(), info.isInMemory());
+                        partition.getId(), info.getDataProperty(), olapTable.getReplicaAssignment(), info.isInMemory());
             }
             if (!isCheckpointThread()) {
                 // add to inverted index
@@ -1630,6 +1633,7 @@ public class LocalMetastore implements ConnectorMetadata {
             GlobalStateMgr.getCurrentState().getStarOSAgent().createShardGroup(partitionId);
         }
 
+        ReplicaAssignment replicaAssignment = partitionInfo.getReplicaAssignment(partitionId);
         short replicationNum = partitionInfo.getReplicationNum(partitionId);
         TStorageMedium storageMedium = partitionInfo.getDataProperty(partitionId).getStorageMedium();
         for (Map.Entry<Long, MaterializedIndex> entry : indexMap.entrySet()) {
@@ -1650,6 +1654,7 @@ public class LocalMetastore implements ConnectorMetadata {
                 createLakeTablets((LakeTable) table, partitionId, index, distributionInfo, replicationNum, tabletMeta,
                         tabletIdSet);
             } else {
+                tabletMeta.setReplicaAssignment(replicaAssignment);
                 createOlapTablets(index, Replica.ReplicaState.NORMAL, distributionInfo,
                         partition.getVisibleVersion(), replicationNum, tabletMeta, tabletIdSet);
             }
@@ -2143,18 +2148,31 @@ public class LocalMetastore implements ConnectorMetadata {
             throw new DdlException(e.getMessage());
         }
 
-        // analyze replication_num
-        short replicationNum = FeConstants.default_replication_num;
-        try {
-            boolean isReplicationNumSet =
-                    properties != null && properties.containsKey(PropertyAnalyzer.PROPERTIES_REPLICATION_NUM);
-            replicationNum = PropertyAnalyzer.analyzeReplicationNum(properties, replicationNum);
-            if (isReplicationNumSet) {
-                olapTable.setReplicationNum(replicationNum);
+
+
+        ReplicaAssignment replicaAssignment;
+        if (partitionDesc != null) {
+            replicaAssignment = partitionDesc.getReplicaAssignment();
+        } else {
+            // analyze replication_num
+            short replicationNum = FeConstants.default_replication_num;
+            try {
+                boolean isReplicationNumSet =
+                        properties != null && properties.containsKey(PropertyAnalyzer.PROPERTIES_REPLICATION_NUM);
+                replicationNum = PropertyAnalyzer.analyzeReplicationNum(properties, replicationNum);
+                if (isReplicationNumSet) {
+                    olapTable.setReplicationNum(replicationNum);
+                }
+            } catch (AnalysisException e) {
+                throw new DdlException(e.getMessage());
             }
-        } catch (AnalysisException e) {
-            throw new DdlException(e.getMessage());
+            try {
+                replicaAssignment = PropertyAnalyzer.analyzeReplicaAssignment(properties, replicationNum);
+            } catch (AnalysisException e) {
+                throw new DdlException(e.getMessage());
+            }
         }
+        olapTable.setReplicaAssignment(replicaAssignment.toString());
 
         // analyze hot cold query info
         boolean isColdTableSet =
@@ -2241,7 +2259,7 @@ public class LocalMetastore implements ConnectorMetadata {
             }
             Preconditions.checkNotNull(dataProperty);
             partitionInfo.setDataProperty(partitionId, dataProperty);
-            partitionInfo.setReplicationNum(partitionId, replicationNum);
+            partitionInfo.setReplicaAssignment(partitionId, replicaAssignment);
             partitionInfo.setIsInMemory(partitionId, isInMemory);
             partitionInfo.setTabletType(partitionId, tabletType);
             StorageInfo storageInfo = olapTable.getTableProperty().getStorageInfo();
@@ -2469,7 +2487,7 @@ public class LocalMetastore implements ConnectorMetadata {
             // we have added these index to memory, only need to persist here
             if (colocateTableIndex.isColocateTable(tableId)) {
                 ColocateTableIndex.GroupId groupId = colocateTableIndex.getGroup(tableId);
-                List<List<Long>> backendsPerBucketSeq = colocateTableIndex.getBackendsPerBucketSeq(groupId);
+                Map<String, List<List<Long>>> backendsPerBucketSeq = colocateTableIndex.getBackendsPerBucketSeq(groupId);
                 ColocatePersistInfo info =
                         ColocatePersistInfo.createForAddTable(groupId, tableId, backendsPerBucketSeq);
                 editLog.logColocateAddTable(info);
@@ -2792,7 +2810,7 @@ public class LocalMetastore implements ConnectorMetadata {
             throw new DdlException("Unknown distribution type: " + distributionInfoType);
         }
 
-        List<List<Long>> backendsPerBucketSeq = null;
+        Map<String, List<List<Long>>> backendsPerBucketSeq = null;
         ColocateTableIndex.GroupId groupId = null;
         boolean initBucketSeqWithSameOrigNameGroup = false;
         if (colocateTableIndex.isColocateTable(tabletMeta.getTableId())) {
@@ -2824,7 +2842,7 @@ public class LocalMetastore implements ConnectorMetadata {
         // otherwise, backends should be chosen from backendsPerBucketSeq;
         boolean chooseBackendsArbitrary = backendsPerBucketSeq == null || backendsPerBucketSeq.isEmpty();
         if (chooseBackendsArbitrary) {
-            backendsPerBucketSeq = Lists.newArrayList();
+            backendsPerBucketSeq = Maps.newHashMap();
         }
         for (int i = 0; i < distributionInfo.getBucketNum(); ++i) {
             // create a new tablet with random chosen backends
@@ -2835,30 +2853,43 @@ public class LocalMetastore implements ConnectorMetadata {
             tabletIdSet.add(tablet.getId());
 
             // get BackendIds
-            List<Long> chosenBackendIds;
+            Map<String, List<Long>> chosenBackendIds;
             if (chooseBackendsArbitrary) {
                 // This is the first colocate table in the group, or just a normal table,
                 // randomly choose backends
                 if (Config.enable_strict_storage_medium_check) {
                     chosenBackendIds =
-                            chosenBackendIdBySeq(replicationNum, tabletMeta.getStorageMedium());
+                            chosenBackendIdBySeq(
+                                    tabletMeta.getStorageMedium(), tabletMeta.getReplicaAssignment());
                 } else {
-                    chosenBackendIds = chosenBackendIdBySeq(replicationNum);
+                    chosenBackendIds = chosenBackendIdBySeq(tabletMeta.getReplicaAssignment());
                 }
-                backendsPerBucketSeq.add(chosenBackendIds);
+                for (Map.Entry<String, List<Long>> backendsInRG : chosenBackendIds.entrySet()) {
+                    if (!backendsPerBucketSeq.containsKey(backendsInRG.getKey())) {
+                        backendsPerBucketSeq.put(backendsInRG.getKey(), new ArrayList<>());
+                    }
+                    backendsPerBucketSeq.get(backendsInRG.getKey()).add(backendsInRG.getValue());
+                }
             } else {
                 // get backends from existing backend sequence
-                chosenBackendIds = backendsPerBucketSeq.get(i);
+                chosenBackendIds = Maps.newHashMap();
+                List<Long> allIds = Lists.newArrayList();
+                for (List<List<Long>> ids : backendsPerBucketSeq.values()) {
+                    allIds.addAll(ids.get(i));
+                }
+                chosenBackendIds.put("", allIds);
             }
+            List<Long> allChosenBackends =
+                    chosenBackendIds.values().stream().flatMap(List::stream).collect(Collectors.toList());
 
             // create replicas
-            for (long backendId : chosenBackendIds) {
+            for (long backendId : allChosenBackends) {
                 long replicaId = getNextId();
                 Replica replica = new Replica(replicaId, backendId, replicaState, version,
                         tabletMeta.getOldSchemaHash());
                 tablet.addReplica(replica);
             }
-            Preconditions.checkState(chosenBackendIds.size() == replicationNum,
+            Preconditions.checkState(allChosenBackends.size() == replicationNum,
                     chosenBackendIds.size() + " vs. " + replicationNum);
         }
 
@@ -2877,29 +2908,39 @@ public class LocalMetastore implements ConnectorMetadata {
     }
 
     // create replicas for tablet with random chosen backends
-    private List<Long> chosenBackendIdBySeq(int replicationNum, TStorageMedium storageMedium)
+    private Map<String, List<Long>> chosenBackendIdBySeq(
+            TStorageMedium storageMedium, ReplicaAssignment replicaAssignment)
             throws DdlException {
-        List<Long> chosenBackendIds = systemInfoService.seqChooseBackendIdsByStorageMedium(replicationNum,
-                true, true, storageMedium);
-        if (CollectionUtils.isEmpty(chosenBackendIds)) {
-            throw new DdlException(
-                    "Failed to find enough hosts with storage medium " + storageMedium +
-                            " at all backends, number of replicas needed: " +
-                            replicationNum + ". Storage medium check failure can be forcefully ignored by executing " +
-                            "'ADMIN SET FRONTEND CONFIG (\"enable_strict_storage_medium_check\" = \"false\");', " +
-                            "but incompatible medium type can cause balance problem, so we strongly recommend" +
-                            " creating table with compatible 'storage_medium' property set.");
+        Map<String, List<Long>> chosenBackendIds = Maps.newHashMap();
+        for (Map.Entry<String, Short> assignment : replicaAssignment.getAssignMap().entrySet()) {
+            List<Long> curChosen = systemInfoService.seqChooseBackendIdsByStorageMedium(assignment.getValue(),
+                    true, true, storageMedium, assignment.getKey());
+            if (CollectionUtils.isEmpty(curChosen)) {
+                throw new DdlException(
+                        "Failed to find enough hosts with storage medium " + storageMedium +
+                                " at all backends, number of replicas needed: " + replicaAssignment.getTotalReplicaNum() +
+                                ". Storage medium check failure can be forcefully ignored by executing " +
+                                "'ADMIN SET FRONTEND CONFIG (\"enable_strict_storage_medium_check\" = \"false\");', " +
+                                "but incompatible medium type can cause balance problem, so we strongly recommend" +
+                                " creating table with compatible 'storage_medium' property set.");
+            }
+            chosenBackendIds.put(assignment.getKey(), curChosen);
         }
         return chosenBackendIds;
     }
 
-    private List<Long> chosenBackendIdBySeq(int replicationNum) throws DdlException {
-        List<Long> chosenBackendIds =
-                systemInfoService.seqChooseBackendIds(replicationNum, true, true);
-        if (CollectionUtils.isEmpty(chosenBackendIds)) {
-            List<Long> backendIds = systemInfoService.getBackendIds(true);
-            throw new DdlException("Failed to find enough host in all backends. need: " + replicationNum +
-                    ", Current alive backend is [" + Joiner.on(",").join(backendIds) + "]");
+    private Map<String, List<Long>> chosenBackendIdBySeq(ReplicaAssignment replicaAssignment) throws DdlException {
+        Map<String, List<Long>> chosenBackendIds = Maps.newHashMap();
+        for (Map.Entry<String, Short> assignment : replicaAssignment.getAssignMap().entrySet()) {
+            List<Long> curChosen = systemInfoService.seqChooseBackendIds(
+                    assignment.getValue(), true, true, assignment.getKey());
+            if (CollectionUtils.isEmpty(curChosen)) {
+                List<Long> backendIds = GlobalStateMgr.getCurrentState().getResourceGroupMgr()
+                        .getResourceGroup(assignment.getKey()).getBeList();
+                throw new DdlException("Failed to find enough host in all backends. need: " + assignment.getValue() +
+                        ", Current alive backend is [" + Joiner.on(",").join(backendIds) + "]");
+            }
+            chosenBackendIds.put(assignment.getKey(), curChosen);
         }
         return chosenBackendIds;
     }
@@ -3429,6 +3470,17 @@ public class LocalMetastore implements ConnectorMetadata {
             replicationNum = PropertyAnalyzer.analyzeReplicationNum(properties, replicationNum);
             if (isReplicationNumSet) {
                 materializedView.setReplicationNum(replicationNum);
+            }
+        } catch (AnalysisException e) {
+            throw new DdlException(e.getMessage(), e);
+        }
+
+        ReplicaAssignment replicaAssignment;
+        try {
+            boolean isReplicationAssignSet = properties.containsKey(PropertyAnalyzer.PROPERTIES_RESOURCE_GROUP_ASSIGNMENT);
+            replicaAssignment = PropertyAnalyzer.analyzeReplicaAssignment(properties, replicationNum);
+            if (isReplicationAssignSet) {
+                materializedView.setReplicaAssignment(replicaAssignment.toString());
             }
         } catch (AnalysisException e) {
             throw new DdlException(e.getMessage(), e);
@@ -3989,7 +4041,6 @@ public class LocalMetastore implements ConnectorMetadata {
         boolean isInMemory = partitionInfo.getIsInMemory(partition.getId());
         DataProperty newDataProperty = partitionInfo.getDataProperty(partition.getId());
         partitionInfo.setReplicationNum(partition.getId(), replicationNum);
-
         // update table default replication num
         table.setReplicationNum(replicationNum);
 

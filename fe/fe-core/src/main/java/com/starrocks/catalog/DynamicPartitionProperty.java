@@ -42,6 +42,7 @@ public class DynamicPartitionProperty {
     public static final String TIME_ZONE = "dynamic_partition.time_zone";
     public static final String REPLICATION_NUM = "dynamic_partition.replication_num";
     public static final String HISTORY_PARTITION_NUM = "dynamic_partition.history_partition_num";
+    public static final String REPLICATION_ASSIGNMENT = "dynamic_partition.replication_assignment";
     public static final int MIN_START_OFFSET = Integer.MIN_VALUE;
     public static final int DEFAULT_END_OFFSET = 0;
     public static final int NOT_SET_REPLICATION_NUM = -1;

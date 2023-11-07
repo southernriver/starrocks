@@ -76,7 +76,15 @@ public class LoadAction extends RestBaseAction {
         // check auth
         checkTblAuth(ConnectContext.get().getCurrentUserIdentity(), dbName, tableName, PrivPredicate.LOAD);
 
+        // TODO(ganggewang): Support use CN in stream load.
         // Choose a backend sequentially.
+        // List<Long> backendIds = null;
+        // if (Config.use_cn_in_load_job) {
+        //     backendIds = GlobalStateMgr.getCurrentSystemInfo().seqChooseCnIds(1, true, false);
+        // }
+        // if (backendIds == null || backendIds.isEmpty()) {
+        //     backendIds = GlobalStateMgr.getCurrentSystemInfo().seqChooseBackendIds(1, true, false);
+        // }
         List<Long> backendIds = GlobalStateMgr.getCurrentSystemInfo().seqChooseBackendIds(1, true, false);
         if (CollectionUtils.isEmpty(backendIds)) {
             throw new DdlException("No backend alive.");

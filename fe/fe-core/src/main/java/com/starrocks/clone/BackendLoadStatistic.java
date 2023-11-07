@@ -137,6 +137,8 @@ public class BackendLoadStatistic {
     private long beId;
     private String clusterName;
 
+    private String resourceGroup;
+
     private boolean isAvailable;
 
     public static class LoadScore {
@@ -483,6 +485,14 @@ public class BackendLoadStatistic {
         return false;
     }
 
+    public String getResourceGroup() {
+        return resourceGroup;
+    }
+
+    public void setResourceGroup(String resourceGroup) {
+        this.resourceGroup = resourceGroup;
+    }
+
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
@@ -503,6 +513,7 @@ public class BackendLoadStatistic {
 
     public List<String> getInfo(TStorageMedium medium) {
         List<String> info = Lists.newArrayList();
+        info.add(String.valueOf(resourceGroup));
         info.add(String.valueOf(beId));
         info.add(clusterName);
         info.add(String.valueOf(isAvailable));

@@ -21,10 +21,15 @@
 
 package com.starrocks.persist;
 
-import com.google.common.collect.Lists;
+import com.clearspring.analytics.util.Lists;
+import com.google.common.collect.Maps;
+import com.google.gson.annotations.SerializedName;
 import com.starrocks.catalog.ColocateTableIndex.GroupId;
+import com.starrocks.catalog.ResourceGroup;
 import com.starrocks.common.FeMetaVersion;
+import com.starrocks.common.io.Text;
 import com.starrocks.common.io.Writable;
+import com.starrocks.persist.gson.GsonUtils;
 import com.starrocks.server.GlobalStateMgr;
 
 import java.io.DataInput;
@@ -32,42 +37,46 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * PersistInfo for ColocateTableIndex
  */
 public class ColocatePersistInfo implements Writable {
+    @SerializedName(value = "groupId")
     private GroupId groupId;
+    @SerializedName(value = "tableId")
     private long tableId;
-    private List<List<Long>> backendsPerBucketSeq = Lists.newArrayList();
+    @SerializedName(value = "backendsPerBucketSeq")
+    private Map<String, List<List<Long>>> backendsPerBucketSeq = Maps.newHashMap();
 
     public ColocatePersistInfo() {
 
     }
 
     public static ColocatePersistInfo createForAddTable(GroupId groupId, long tableId,
-                                                        List<List<Long>> backendsPerBucketSeq) {
+                                                        Map<String, List<List<Long>>> backendsPerBucketSeq) {
         return new ColocatePersistInfo(groupId, tableId, backendsPerBucketSeq);
     }
 
     public static ColocatePersistInfo createForBackendsPerBucketSeq(GroupId groupId,
-                                                                    List<List<Long>> backendsPerBucketSeq) {
+                                                                    Map<String, List<List<Long>>> backendsPerBucketSeq) {
         return new ColocatePersistInfo(groupId, -1L, backendsPerBucketSeq);
     }
 
     public static ColocatePersistInfo createForMarkUnstable(GroupId groupId) {
-        return new ColocatePersistInfo(groupId, -1L, new ArrayList<>());
+        return new ColocatePersistInfo(groupId, -1L, Maps.newHashMap());
     }
 
     public static ColocatePersistInfo createForMarkStable(GroupId groupId) {
-        return new ColocatePersistInfo(groupId, -1L, new ArrayList<>());
+        return new ColocatePersistInfo(groupId, -1L, Maps.newHashMap());
     }
 
     public static ColocatePersistInfo createForRemoveTable(long tableId) {
-        return new ColocatePersistInfo(new GroupId(-1, -1), tableId, new ArrayList<>());
+        return new ColocatePersistInfo(new GroupId(-1, -1), tableId, Maps.newHashMap());
     }
 
-    private ColocatePersistInfo(GroupId groupId, long tableId, List<List<Long>> backendsPerBucketSeq) {
+    private ColocatePersistInfo(GroupId groupId, long tableId, Map<String, List<List<Long>>> backendsPerBucketSeq) {
         this.groupId = groupId;
         this.tableId = tableId;
         this.backendsPerBucketSeq = backendsPerBucketSeq;
@@ -81,45 +90,44 @@ public class ColocatePersistInfo implements Writable {
         return groupId;
     }
 
-    public List<List<Long>> getBackendsPerBucketSeq() {
+    public Map<String, List<List<Long>>> getBackendsPerBucketSeq() {
         return backendsPerBucketSeq;
     }
 
     @Override
     public void write(DataOutput out) throws IOException {
-        out.writeLong(tableId);
-        groupId.write(out);
-        // out.writeLong(groupId);
-        // out.writeLong(dbId);
-        int size = backendsPerBucketSeq.size();
-        out.writeInt(size);
-        for (List<Long> beList : backendsPerBucketSeq) {
-            out.writeInt(beList.size());
-            for (Long be : beList) {
-                out.writeLong(be);
-            }
-        }
+        Text.writeString(out, GsonUtils.GSON.toJson(this));
     }
 
     public void readFields(DataInput in) throws IOException {
-        tableId = in.readLong();
-        if (GlobalStateMgr.getCurrentStateJournalVersion() < FeMetaVersion.VERSION_55) {
-            long grpId = in.readLong();
-            long dbId = in.readLong();
-            groupId = new GroupId(dbId, grpId);
-        } else {
-            groupId = GroupId.read(in);
-        }
-
-        int size = in.readInt();
-        backendsPerBucketSeq = new ArrayList<>();
-        for (int i = 0; i < size; i++) {
-            int beListSize = in.readInt();
-            List<Long> beLists = new ArrayList<>();
-            for (int j = 0; j < beListSize; j++) {
-                beLists.add(in.readLong());
+        if (GlobalStateMgr.getCurrentStateJournalVersion() < FeMetaVersion.VERSION_97) {
+            tableId = in.readLong();
+            if (GlobalStateMgr.getCurrentStateJournalVersion() < FeMetaVersion.VERSION_55) {
+                long grpId = in.readLong();
+                long dbId = in.readLong();
+                groupId = new GroupId(dbId, grpId);
+            } else {
+                groupId = GroupId.read(in);
             }
-            backendsPerBucketSeq.add(beLists);
+
+            int size = in.readInt();
+            backendsPerBucketSeq = Maps.newHashMap();
+            List<List<Long>> backendsPerBucketSeqList = Lists.newArrayList();
+            backendsPerBucketSeq.put(ResourceGroup.DEFAULT_RESOURCE_GROUP_NAME, backendsPerBucketSeqList);
+            for (int i = 0; i < size; i++) {
+                int beListSize = in.readInt();
+                List<Long> beLists = new ArrayList<>();
+                for (int j = 0; j < beListSize; j++) {
+                    beLists.add(in.readLong());
+                }
+                backendsPerBucketSeqList.add(beLists);
+            }
+        } else {
+            String json = Text.readString(in);
+            ColocatePersistInfo colocatePersistInfo = GsonUtils.GSON.fromJson(json, ColocatePersistInfo.class);
+            tableId = colocatePersistInfo.getTableId();
+            groupId = colocatePersistInfo.groupId;
+            backendsPerBucketSeq = colocatePersistInfo.getBackendsPerBucketSeq();
         }
     }
 

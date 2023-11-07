@@ -383,7 +383,8 @@ public class ExternalOlapTable extends OlapTable {
                                 thriftDataProperty.getCold_time());
                         // TODO: confirm false is ok
                         RangePartitionInfo rangePartitionInfo = (RangePartitionInfo) partitionInfo;
-                        rangePartitionInfo.addPartition(partitionId, false, range, dataProperty, replicaNum, inMemory);
+                        rangePartitionInfo.addPartition(partitionId, false, range, dataProperty,
+                                new ReplicaAssignment(replicaNum), inMemory);
                     }
                     break;
                 case UNPARTITIONED:
@@ -398,7 +399,7 @@ public class ExternalOlapTable extends OlapTable {
                                 singePartitionDesc.getBase_desc().getData_property().get(partitionId);
                         DataProperty dataProperty = new DataProperty(thriftDataProperty.getStorage_medium(),
                                 thriftDataProperty.getCold_time());
-                        partitionInfo.addPartition(partitionId, dataProperty, replicaNum, inMemory);
+                        partitionInfo.addPartition(partitionId, dataProperty, new ReplicaAssignment(replicaNum), inMemory);
                     }
                     break;
                 default:

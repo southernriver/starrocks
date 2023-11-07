@@ -27,6 +27,7 @@ import com.google.gson.reflect.TypeToken;
 import com.starrocks.catalog.ColocateGroupSchema;
 import com.starrocks.catalog.ColocateTableIndex;
 import com.starrocks.catalog.ColocateTableIndex.GroupId;
+import com.starrocks.catalog.ResourceGroup;
 import com.starrocks.common.DdlException;
 import com.starrocks.http.ActionController;
 import com.starrocks.http.BaseRequest;
@@ -45,7 +46,9 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.lang.reflect.Type;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /*
  * the colocate meta define in {@link ColocateTableIndex}
@@ -217,9 +220,9 @@ public class ColocateMetaService {
                     GlobalStateMgr.getCurrentSystemInfo().getBackendIds(true);
             //check the Backend id
             for (List<Long> backendIds : backendsPerBucketSeq) {
-                if (backendIds.size() != groupSchema.getReplicationNum()) {
+                if (backendIds.size() != groupSchema.getReplicaAssignment().getTotalReplicaNum()) {
                     throw new DdlException("Invalid backend num per bucket. expected: "
-                            + groupSchema.getReplicationNum() + ", actual: " + backendIds.size());
+                            + groupSchema.getReplicaAssignment().getTotalReplicaNum() + ", actual: " + backendIds.size());
                 }
                 for (Long beId : backendIds) {
                     if (!clusterBackendIds.contains(beId)) {
@@ -246,9 +249,11 @@ public class ColocateMetaService {
         }
 
         private void updateBackendPerBucketSeq(GroupId groupId, List<List<Long>> backendsPerBucketSeq) {
-            colocateIndex.addBackendsPerBucketSeq(groupId, backendsPerBucketSeq);
+            Map<String, List<List<Long>>> assignment = new HashMap<>();
+            assignment.put(ResourceGroup.DEFAULT_RESOURCE_GROUP_NAME, backendsPerBucketSeq);
+            colocateIndex.addBackendsPerBucketSeq(groupId, assignment);
             ColocatePersistInfo info2 =
-                    ColocatePersistInfo.createForBackendsPerBucketSeq(groupId, backendsPerBucketSeq);
+                    ColocatePersistInfo.createForBackendsPerBucketSeq(groupId, assignment);
             GlobalStateMgr.getCurrentState().getEditLog().logColocateBackendsPerBucketSeq(info2);
         }
     }

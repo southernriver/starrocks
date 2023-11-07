@@ -8,6 +8,7 @@ import com.starrocks.catalog.Column;
 import com.starrocks.catalog.DataProperty;
 import com.starrocks.catalog.PartitionInfo;
 import com.starrocks.catalog.PartitionType;
+import com.starrocks.catalog.ReplicaAssignment;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.DdlException;
 import com.starrocks.lake.StorageCacheInfo;
@@ -51,7 +52,7 @@ public class PartitionDesc implements ParseNode {
         throw new NotImplementedException();
     }
 
-    public short getReplicationNum() throws NotImplementedException {
+    public ReplicaAssignment getReplicaAssignment() throws NotImplementedException {
         throw new NotImplementedException();
     }
 

@@ -9,6 +9,7 @@ import com.starrocks.qe.ConnectContext;
 import com.starrocks.sql.ast.AlterSystemStmt;
 import com.starrocks.sql.ast.AstVisitor;
 import com.starrocks.sql.ast.BackendClause;
+import com.starrocks.sql.ast.BackendIdClause;
 import com.starrocks.sql.ast.CancelAlterSystemStmt;
 import com.starrocks.sql.ast.ComputeNodeClause;
 import com.starrocks.sql.ast.CreateImageClause;
@@ -84,6 +85,16 @@ public class AlterSystemStmtAnalyzer {
                 Preconditions.checkState(!Strings.isNullOrEmpty(frontendClause.getHost()));
             } catch (AnalysisException e) {
                 throw new SemanticException("frontend host or port is wrong!");
+            }
+            return null;
+        }
+
+        @Override
+        public Void visitBackendIdClause(BackendIdClause backendIdClause, ConnectContext context) {
+            try {
+                backendIdClause.getBackendIds().forEach(Long::parseLong);
+            } catch (Exception e) {
+                throw new SemanticException("Unrecognized backend ids: " + backendIdClause.getBackendIds());
             }
             return null;
         }

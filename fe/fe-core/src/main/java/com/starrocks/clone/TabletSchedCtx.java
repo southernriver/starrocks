@@ -35,6 +35,7 @@ import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.Partition;
 import com.starrocks.catalog.Replica;
 import com.starrocks.catalog.Replica.ReplicaState;
+import com.starrocks.catalog.ReplicaAssignment;
 import com.starrocks.clone.DiskAndTabletLoadReBalancer.BalanceType;
 import com.starrocks.clone.SchedException.Status;
 import com.starrocks.clone.TabletScheduler.PathSlot;
@@ -219,6 +220,11 @@ public class TabletSchedCtx implements Comparable<TabletSchedCtx> {
 
     private Replica decommissionedReplica;
     private ReplicaState decommissionedReplicaPreviousState;
+
+    // replicaAlloc is only set for REPAIR task
+    private ReplicaAssignment replicaAssignment;
+    // this is only set for BALANCE task, used to identify which resource group this Balance job is in
+    private String resourceGroup;
 
     public TabletSchedCtx(Type type, long dbId, long tblId, long partId,
                           long idxId, long tabletId, long createTime) {
@@ -510,6 +516,22 @@ public class TabletSchedCtx implements Comparable<TabletSchedCtx> {
 
     public boolean isDestPathResourceHold() {
         return this.destPathResourceHold;
+    }
+
+    public void setResourceGroup(String resourceGroup) {
+        this.resourceGroup = resourceGroup;
+    }
+
+    public String getResourceGroup() {
+        return resourceGroup;
+    }
+
+    public ReplicaAssignment getReplicaAsignment() {
+        return replicaAssignment;
+    }
+
+    public void setReplicaAssignment(ReplicaAssignment replicaAssignment) {
+        this.replicaAssignment = replicaAssignment;
     }
 
     public boolean needCloneFromSource() {
@@ -952,7 +974,7 @@ public class TabletSchedCtx implements Comparable<TabletSchedCtx> {
             if (cloneTask.isLocal()) {
                 unprotectedFinishLocalMigration(request);
             } else {
-                finishInfo = unprotectedFinishClone(request, db, partition, replicationNum);
+                finishInfo = unprotectedFinishClone(request, db, olapTable, partition, replicationNum);
             }
 
             state = State.FINISHED;
@@ -991,11 +1013,12 @@ public class TabletSchedCtx implements Comparable<TabletSchedCtx> {
         replica.updateVersion(reportedTablet.version);
     }
 
-    private String unprotectedFinishClone(TFinishTaskRequest request, Database db, Partition partition,
-                                          short replicationNum) throws SchedException {
+    private String unprotectedFinishClone(TFinishTaskRequest request, Database db, OlapTable table,
+                                          Partition partition, short replicationNum) throws SchedException {
         List<Long> aliveBeIdsInCluster = infoService.getBackendIds(true);
         Pair<TabletStatus, TabletSchedCtx.Priority> pair = tablet.getHealthStatusWithPriority(
-                infoService, visibleVersion, replicationNum,
+                infoService, visibleVersion,
+                table.getReplicaAssignment(),
                 aliveBeIdsInCluster);
         if (pair.first == TabletStatus.HEALTHY) {
             throw new SchedException(Status.FINISHED, "tablet is healthy");

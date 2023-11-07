@@ -5,6 +5,7 @@ package com.starrocks.persist;
 import com.google.gson.annotations.SerializedName;
 import com.starrocks.catalog.DataProperty;
 import com.starrocks.catalog.Partition;
+import com.starrocks.catalog.ReplicaAssignment;
 import com.starrocks.common.io.Text;
 import com.starrocks.common.io.Writable;
 import com.starrocks.lake.StorageCacheInfo;
@@ -32,22 +33,24 @@ public class PartitionPersistInfoV2 implements Writable {
     private boolean isTempPartition;
     @SerializedName("storageCacheInfo")
     private StorageCacheInfo storageCacheInfo;
+    @SerializedName("replicaAssignment")
+    private ReplicaAssignment replicaAssignment;
 
     public PartitionPersistInfoV2(Long dbId, Long tableId, Partition partition,
-                                  DataProperty dataProperty, short replicationNum,
+                                  DataProperty dataProperty, ReplicaAssignment replicaAssignment,
                                   boolean isInMemory, boolean isTempPartition) {
-        this(dbId, tableId, partition, dataProperty, replicationNum, isInMemory, isTempPartition, null);
+        this(dbId, tableId, partition, dataProperty, replicaAssignment, isInMemory, isTempPartition, null);
     }
 
     public PartitionPersistInfoV2(Long dbId, Long tableId, Partition partition,
-                                  DataProperty dataProperty, short replicationNum,
+                                  DataProperty dataProperty, ReplicaAssignment replicaAssignment,
                                   boolean isInMemory, boolean isTempPartition,
                                   StorageCacheInfo storageCacheInfo) {
         this.dbId = dbId;
         this.tableId = tableId;
         this.partition = partition;
         this.dataProperty = dataProperty;
-        this.replicationNum = replicationNum;
+        this.replicaAssignment = replicaAssignment;
         this.isInMemory = isInMemory;
         this.isTempPartition = isTempPartition;
         this.storageCacheInfo = storageCacheInfo;
@@ -96,8 +99,8 @@ public class PartitionPersistInfoV2 implements Writable {
         return this.dataProperty;
     }
 
-    public short getReplicationNum() {
-        return this.replicationNum;
+    public ReplicaAssignment getReplicaAssignment() {
+        return this.replicaAssignment;
     }
 
     public boolean isInMemory() {

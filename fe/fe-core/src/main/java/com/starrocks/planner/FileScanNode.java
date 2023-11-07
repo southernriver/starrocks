@@ -30,6 +30,8 @@ import com.starrocks.analysis.ArithmeticExpr;
 import com.starrocks.analysis.BrokerDesc;
 import com.starrocks.analysis.Expr;
 import com.starrocks.analysis.FunctionCallExpr;
+import com.starrocks.catalog.ResourceGroup;
+import com.starrocks.qe.ConnectContext;
 import com.starrocks.sql.ast.ImportColumnDesc;
 import com.starrocks.analysis.IntLiteral;
 import com.starrocks.analysis.NullLiteral;
@@ -56,6 +58,8 @@ import com.starrocks.load.BrokerFileGroup;
 import com.starrocks.load.Load;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.system.Backend;
+import com.starrocks.system.ComputeNode;
+import com.starrocks.system.IComputable;
 import com.starrocks.thrift.TBrokerFileStatus;
 import com.starrocks.thrift.TBrokerRangeDesc;
 import com.starrocks.thrift.TBrokerScanRange;
@@ -75,6 +79,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -131,7 +137,7 @@ public class FileScanNode extends LoadScanNode {
     private int filesAdded;
 
     // Only used for external table in select statement
-    private List<Backend> backends;
+    private List<ComputeNode> backends;
     private int nextBe = 0;
 
     private Analyzer analyzer;
@@ -141,6 +147,7 @@ public class FileScanNode extends LoadScanNode {
     // 2. remove cast string, and transform data from orig datatype directly
     // 3. use vectorized engine
     private boolean useVectorizedLoad;
+    private String resourceGroup = ResourceGroup.DEFAULT_RESOURCE_GROUP_NAME;
 
     private static class ParamCreateContext {
         public BrokerFileGroup fileGroup;
@@ -227,6 +234,10 @@ public class FileScanNode extends LoadScanNode {
 
     public void setUseVectorizedLoad(boolean useVectorizedLoad) {
         this.useVectorizedLoad = useVectorizedLoad;
+    }
+
+    public void setResourceGroup(String resourceGroup) {
+        this.resourceGroup = resourceGroup;
     }
 
     // Called from init, construct source tuple information
@@ -383,7 +394,7 @@ public class FileScanNode extends LoadScanNode {
 
     private TScanRangeLocations newLocations(TBrokerScanRangeParams params, String brokerName, boolean hasBroker)
             throws UserException {
-        Backend selectedBackend = backends.get(nextBe++);
+        ComputeNode selectedBackend = backends.get(nextBe++);
         nextBe = nextBe % backends.size();
 
         // Generate on broker scan range
@@ -474,15 +485,22 @@ public class FileScanNode extends LoadScanNode {
 
     private void assignBackends() throws UserException {
         backends = Lists.newArrayList();
-        for (Backend be : GlobalStateMgr.getCurrentSystemInfo().getIdToBackend().values()) {
-            if (be.isAvailable()) {
-                backends.add(be);
-            }
+
+        Collection<ComputeNode> candidateCns = GlobalStateMgr.getCurrentSystemInfo().getIdToComputeNodeInResourceGroup(resourceGroup).values();
+        Collection<Backend> candidateBes = GlobalStateMgr.getCurrentSystemInfo().getIdToBackendInResourceGroup(resourceGroup).values();
+
+        if (candidateCns != null) {
+            List<ComputeNode> aliveCns = candidateCns.stream().filter(ComputeNode::isAlive).collect(Collectors.toList());
+            Collections.shuffle(aliveCns, random);
+            backends.addAll(aliveCns);
+            LOG.debug("Use compute node in load job: " + Arrays.toString(aliveCns.toArray()));
         }
-        if (backends.isEmpty()) {
+        List<ComputeNode> aliveBes = candidateBes.stream().filter(ComputeNode::isAlive).collect(Collectors.toList());
+        if (backends.isEmpty() && aliveBes.isEmpty()) {
             throw new UserException("No available backends");
         }
-        Collections.shuffle(backends, random);
+        Collections.shuffle(aliveBes, random);
+        backends.addAll(aliveBes);
     }
 
     private TFileFormatType formatType(String fileFormat, String path) {
@@ -660,7 +678,7 @@ public class FileScanNode extends LoadScanNode {
             return;
         }
 
-        Set<Long> aliveBes = backends.stream().map(Backend::getId).collect(Collectors.toSet());
+        Set<Long> aliveBes = backends.stream().map(ComputeNode::getId).collect(Collectors.toSet());
         nextBe = 0;
         for (TScanRangeLocations locations : locationsList) {
             TScanRangeLocation scanRangeLocation = locations.getLocations().get(0);

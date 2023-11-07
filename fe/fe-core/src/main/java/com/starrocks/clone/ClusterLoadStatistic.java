@@ -24,6 +24,7 @@ package com.starrocks.clone;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.starrocks.catalog.ResourceGroup;
 import com.starrocks.catalog.TabletInvertedIndex;
 import com.starrocks.clone.BackendLoadStatistic.Classification;
 import com.starrocks.clone.BackendLoadStatistic.LoadScore;
@@ -58,19 +59,28 @@ public class ClusterLoadStatistic {
     // storage medium -> number of backend which has this kind of medium
     private Map<TStorageMedium, Integer> backendNumMap = Maps.newHashMap();
     private List<BackendLoadStatistic> beLoadStatistics = Lists.newArrayList();
+    private String resourceGroup;
 
     public ClusterLoadStatistic(SystemInfoService infoService, TabletInvertedIndex invertedIndex) {
         this.infoService = infoService;
         this.invertedIndex = invertedIndex;
+        this.resourceGroup = ResourceGroup.DEFAULT_RESOURCE_GROUP_NAME;
+    }
+
+    public ClusterLoadStatistic(SystemInfoService infoService, TabletInvertedIndex invertedIndex, String resourceGroup) {
+        this.infoService = infoService;
+        this.invertedIndex = invertedIndex;
+        this.resourceGroup = resourceGroup;
     }
 
     public void init() {
-        ImmutableMap<Long, Backend> backends = infoService.getIdToBackend();
+        ImmutableMap<Long, Backend> backends = infoService.getIdToBackendInResourceGroup(resourceGroup);
         for (Backend backend : backends.values()) {
             BackendLoadStatistic beStatistic = new BackendLoadStatistic(backend.getId(),
                     SystemInfoService.DEFAULT_CLUSTER, infoService, invertedIndex);
             try {
                 beStatistic.init();
+                beStatistic.setResourceGroup(resourceGroup);
             } catch (LoadBalanceException e) {
                 LOG.info(e.getMessage());
                 continue;
@@ -326,5 +336,9 @@ public class ClusterLoadStatistic {
             sb.append("    ").append(backendLoadStatistic).append("\n");
         }
         return sb.toString();
+    }
+
+    public String getResourceGroup() {
+        return resourceGroup;
     }
 }

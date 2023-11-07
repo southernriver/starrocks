@@ -521,6 +521,7 @@ public class PulsarRoutineLoadJob extends RoutineLoadJob {
                 db.getId(), tableId, stmt.getPulsarServiceUrl(), stmt.getPulsarTopic(),
                 stmt.getPulsarSubscription());
         pulsarRoutineLoadJob.setOptional(stmt);
+        pulsarRoutineLoadJob.setResourceGroup(stmt.getResourceGroup());
         pulsarRoutineLoadJob.checkCustomProperties();
         pulsarRoutineLoadJob.checkCustomPartition();
 

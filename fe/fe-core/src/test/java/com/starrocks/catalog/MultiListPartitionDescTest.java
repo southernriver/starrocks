@@ -76,7 +76,7 @@ public class MultiListPartitionDescTest {
 
         Assert.assertEquals(partitionName, partitionDesc.getPartitionName());
         Assert.assertEquals(PartitionType.LIST, partitionDesc.getType());
-        Assert.assertEquals(1, partitionDesc.getReplicationNum());
+        Assert.assertEquals(1, partitionDesc.getReplicaAssignment().getTotalReplicaNum());
         Assert.assertEquals(TTabletType.TABLET_TYPE_MEMORY, partitionDesc.getTabletType());
         Assert.assertEquals(true, partitionDesc.isInMemory());
 

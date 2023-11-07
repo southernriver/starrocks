@@ -34,6 +34,7 @@ import com.starrocks.analysis.RoutineLoadDataSourceProperties;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.MaterializedView;
 import com.starrocks.catalog.OlapTable;
+import com.starrocks.catalog.ResourceGroup;
 import com.starrocks.catalog.Table;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Config;
@@ -76,6 +77,7 @@ import com.starrocks.transaction.AbstractTxnStateChangeCallback;
 import com.starrocks.transaction.TransactionException;
 import com.starrocks.transaction.TransactionState;
 import com.starrocks.transaction.TransactionStatus;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -231,6 +233,7 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
     protected long totalTaskExcutionTimeMs = 1; // init as 1 to avoid division by zero
     protected long committedTaskNum = 0;
     protected long abortedTaskNum = 0;
+    protected boolean useCnNode = false;
 
     // The tasks belong to this job
     protected List<RoutineLoadTaskInfo> routineLoadTaskInfoList = Lists.newArrayList();
@@ -269,10 +272,15 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
             sessionVariables.put(SessionVariable.SQL_MODE, Long.toString(var.getSqlMode()));
             sessionVariables.put(SessionVariable.EXEC_MEM_LIMIT, Long.toString(var.getMaxExecMemByte()));
             sessionVariables.put(SessionVariable.LOAD_TRANSMISSION_COMPRESSION_TYPE, var.getloadTransmissionCompressionType());
+            if (var.isEnableResourceGroup() && StringUtils.isNotEmpty(var.getResourceGroup())) {
+                jobProperties.put(SessionVariable.RESOURCE_GROUP, ResourceGroup.DEFAULT_RESOURCE_GROUP_NAME);
+            }
+            this.useCnNode = var.useCnInLoadJob();
         } else {
             sessionVariables.put(SessionVariable.SQL_MODE, String.valueOf(SqlModeHelper.MODE_DEFAULT));
             sessionVariables.put(SessionVariable.EXEC_MEM_LIMIT, Long.toString(SessionVariable.DEFAULT_EXEC_MEM_LIMIT));
         }
+        LOG.info("Use CN in routine load job: " + useCnNode);
     }
 
     protected void setOptional(CreateRoutineLoadStmt stmt) throws UserException {
@@ -1427,6 +1435,15 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback impl
 
     public Map<String, String> getJobProperties() {
         return jobProperties;
+    }
+
+    public String getResourceGroup() {
+        return jobProperties.getOrDefault(
+                SessionVariable.RESOURCE_GROUP, ResourceGroup.DEFAULT_RESOURCE_GROUP_NAME);
+    }
+
+    public void setResourceGroup(String resourceGroup) {
+        this.jobProperties.put(SessionVariable.RESOURCE_GROUP, resourceGroup);
     }
 
     private String jobPropertiesToJsonString() {

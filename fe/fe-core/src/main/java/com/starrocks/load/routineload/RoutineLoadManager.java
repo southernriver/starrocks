@@ -123,6 +123,37 @@ public class RoutineLoadManager implements Writable {
         }
     }
 
+    // returns -1 if there is no available be
+    public long takeBeTaskSlotInResourceGroup(String resourceGroup) {
+        List<Long> cnsInGroup = GlobalStateMgr.getCurrentState().getResourceGroupMgr()
+                .getResourceGroup(resourceGroup).getCnList();
+        List<Long> besInGroup = GlobalStateMgr.getCurrentState().getResourceGroupMgr()
+                .getResourceGroup(resourceGroup).getBeList();
+        slotLock.lock();
+        try {
+            long beId = -1L;
+            int minTasksNum = Integer.MAX_VALUE;
+            for (Map.Entry<Long, Integer> entry : beTasksNum.entrySet()) {
+                if (cnsInGroup.contains(entry.getKey()) && entry.getValue() < Config.max_routine_load_task_num_per_be
+                        && entry.getValue() < minTasksNum) {
+                    beId = entry.getKey();
+                    minTasksNum = entry.getValue();
+                }
+                if (besInGroup.contains(entry.getKey()) && entry.getValue() < Config.max_routine_load_task_num_per_be
+                        && entry.getValue() < minTasksNum) {
+                    beId = entry.getKey();
+                    minTasksNum = entry.getValue();
+                }
+            }
+            if (beId != -1) {
+                beTasksNum.put(beId, minTasksNum + 1);
+            }
+            return beId;
+        } finally {
+            slotLock.unlock();
+        }
+    }
+
     public long takeBeTaskSlot(long beId) {
         slotLock.lock();
         try {
@@ -158,6 +189,7 @@ public class RoutineLoadManager implements Writable {
         slotLock.lock();
         try {
             Set<Long> aliveBeIds = Sets.newHashSet();
+            aliveBeIds.addAll(GlobalStateMgr.getCurrentSystemInfo().getComputeNodeIds(true));
             aliveBeIds.addAll(GlobalStateMgr.getCurrentSystemInfo().getBackendIds(true));
 
             // add new be

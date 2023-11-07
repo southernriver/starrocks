@@ -59,6 +59,7 @@ import com.starrocks.persist.gson.GsonPostProcessable;
 import com.starrocks.qe.OriginStatement;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.ast.CreateTableStmt;
+import com.starrocks.system.Backend;
 import com.starrocks.system.SystemInfoService;
 import com.starrocks.task.AgentBatchTask;
 import com.starrocks.task.AgentTask;
@@ -252,6 +253,13 @@ public class OlapTable extends Table implements GsonPostProcessable {
         return this.tableProperty;
     }
 
+    public ReplicaAssignment getReplicaAssignment() {
+        return this.getTableProperty().buildReplicaAssignment();
+    }
+
+    public void setReplicaAssignment(String prop) {
+        this.getTableProperty().setReplicaAssignment(prop);
+    }
 
     //take care: only use at create olap table.
     public int incAndGetMaxColUniqueId() {
@@ -543,9 +551,9 @@ public class OlapTable extends Table implements GsonPostProcessable {
                 long newPartId = globalStateMgr.getNextId();
                 rangePartitionInfo.idToDataProperty.put(newPartId,
                         rangePartitionInfo.idToDataProperty.remove(entry.getValue()));
-                rangePartitionInfo.idToReplicationNum.remove(entry.getValue());
-                rangePartitionInfo.idToReplicationNum.put(newPartId,
-                        (short) restoreReplicationNum);
+                rangePartitionInfo.idToReplicaAssignment.remove(entry.getValue());
+                rangePartitionInfo.idToReplicaAssignment.put(newPartId,
+                        new ReplicaAssignment((short) restoreReplicationNum));
                 rangePartitionInfo.getIdToRange(false).put(newPartId,
                         rangePartitionInfo.getIdToRange(false).remove(entry.getValue()));
 
@@ -558,8 +566,9 @@ public class OlapTable extends Table implements GsonPostProcessable {
             long newPartId = globalStateMgr.getNextId();
             for (Map.Entry<String, Long> entry : origPartNameToId.entrySet()) {
                 partitionInfo.idToDataProperty.put(newPartId, partitionInfo.idToDataProperty.remove(entry.getValue()));
-                partitionInfo.idToReplicationNum.remove(entry.getValue());
-                partitionInfo.idToReplicationNum.put(newPartId, (short) restoreReplicationNum);
+                partitionInfo.idToReplicaAssignment.remove(entry.getValue());
+                // TODO(ganggewang): Should we restore replica assignment as well?
+                partitionInfo.idToReplicaAssignment.put(newPartId, new ReplicaAssignment((short) restoreReplicationNum));
                 partitionInfo.idToInMemory.put(newPartId, partitionInfo.idToInMemory.remove(entry.getValue()));
                 idToPartition.put(newPartId, idToPartition.remove(entry.getValue()));
             }
@@ -603,14 +612,17 @@ public class OlapTable extends Table implements GsonPostProcessable {
             long newTabletId = globalStateMgr.getNextId();
             LocalTablet newTablet = new LocalTablet(newTabletId);
             index.addTablet(newTablet, null /* tablet meta */, false/* update inverted index*/);
-
             // replicas
-            List<Long> beIds = GlobalStateMgr.getCurrentSystemInfo()
-                    .seqChooseBackendIds(replicationNum, true, true);
-            if (CollectionUtils.isEmpty(beIds)) {
-                return new Status(ErrCode.COMMON_ERROR, "failed to find "
-                        + replicationNum
-                        + " different hosts to create table: " + name);
+            List<Long> beIds = Lists.newArrayList();
+            for (Map.Entry<String, Short> assignment : getReplicaAssignment().getAssignMap().entrySet()) {
+                List<Long> curChosen = GlobalStateMgr.getCurrentSystemInfo()
+                        .seqChooseBackendIds(assignment.getValue(), true, true, assignment.getKey());
+                if (CollectionUtils.isEmpty(beIds)) {
+                    return new Status(ErrCode.COMMON_ERROR, "failed to find "
+                            + replicationNum + " different hosts to create table: " + name
+                            + " in resource group " + assignment.getValue());
+                }
+                beIds.addAll(curChosen);
             }
             for (Long beId : beIds) {
                 long newReplicaId = globalStateMgr.getNextId();
@@ -1058,7 +1070,7 @@ public class OlapTable extends Table implements GsonPostProcessable {
             }
 
             ColocateTableIndex.GroupId groupId = colocateTableIndex.getGroup(this.id);
-            List<List<Long>> backendsPerBucketSeq = colocateTableIndex.getBackendsPerBucketSeq(groupId);
+            Map<String, List<List<Long>>> backendsPerBucketSeq = colocateTableIndex.getBackendsPerBucketSeq(groupId);
             ColocatePersistInfo info =
                     ColocatePersistInfo.createForAddTable(groupId, this.id, backendsPerBucketSeq);
             GlobalStateMgr.getCurrentState().getEditLog().logColocateAddTable(info);
@@ -1444,7 +1456,7 @@ public class OlapTable extends Table implements GsonPostProcessable {
                     for (long partitionId : tempRangeInfo.getIdToRange(false).keySet()) {
                         ((RangePartitionInfo) this.partitionInfo).addPartition(partitionId, true,
                                 tempRangeInfo.getRange(partitionId), tempRangeInfo.getDataProperty(partitionId),
-                                tempRangeInfo.getReplicationNum(partitionId), tempRangeInfo.getIsInMemory(partitionId));
+                                tempRangeInfo.getReplicaAssignment(partitionId), tempRangeInfo.getIsInMemory(partitionId));
                     }
                 }
                 tempPartitions.unsetPartitionInfo();
@@ -1555,16 +1567,17 @@ public class OlapTable extends Table implements GsonPostProcessable {
         short replicationNum = partitionInfo.getReplicationNum(oldPartition.getId());
         boolean isInMemory = partitionInfo.getIsInMemory(oldPartition.getId());
         StorageCacheInfo storageCacheInfo = partitionInfo.getStorageCacheInfo(oldPartition.getId());
+        ReplicaAssignment assignment = partitionInfo.getReplicaAssignment(oldPartition.getId());
 
         if (partitionInfo.getType() == PartitionType.RANGE) {
             RangePartitionInfo rangePartitionInfo = (RangePartitionInfo) partitionInfo;
             Range<PartitionKey> range = rangePartitionInfo.getRange(oldPartition.getId());
             rangePartitionInfo.dropPartition(oldPartition.getId());
             rangePartitionInfo.addPartition(newPartition.getId(), false, range, dataProperty,
-                    replicationNum, isInMemory, storageCacheInfo);
+                    assignment, isInMemory, storageCacheInfo);
         } else {
             partitionInfo.dropPartition(oldPartition.getId());
-            partitionInfo.addPartition(newPartition.getId(), dataProperty, replicationNum, isInMemory, storageCacheInfo);
+            partitionInfo.addPartition(newPartition.getId(), dataProperty, assignment, isInMemory, storageCacheInfo);
         }
 
         return oldPartition;
@@ -1615,7 +1628,8 @@ public class OlapTable extends Table implements GsonPostProcessable {
                     }
 
                     Pair<TabletStatus, TabletSchedCtx.Priority> statusPair = localTablet.getHealthStatusWithPriority(
-                            infoService, visibleVersion, replicationNum,
+                            infoService, visibleVersion,
+                            getReplicaAssignment(),
                             aliveBeIdsInCluster);
                     if (statusPair.first != TabletStatus.HEALTHY) {
                         LOG.info("table {} is not stable because tablet {} status is {}. replicas: {}",
@@ -1629,20 +1643,44 @@ public class OlapTable extends Table implements GsonPostProcessable {
     }
 
     // arbitrarily choose a partition, and get the buckets backends sequence from base index.
-    public List<List<Long>> getArbitraryTabletBucketsSeq() throws DdlException {
-        List<List<Long>> backendsPerBucketSeq = Lists.newArrayList();
+    public Map<String, List<List<Long>>> getArbitraryTabletBucketsSeq() throws DdlException {
+        Map<String, List<List<Long>>> backendsPerBucketSeq = Maps.newHashMap();
         for (Partition partition : idToPartition.values()) {
-            short replicationNum = partitionInfo.getReplicationNum(partition.getId());
+            ReplicaAssignment replicaAlloc = partitionInfo.getReplicaAssignment(partition.getId());
+            short totalReplicaNum = replicaAlloc.getTotalReplicaNum();
             MaterializedIndex baseIdx = partition.getBaseIndex();
             for (Long tabletId : baseIdx.getTabletIdsInOrder()) {
-                LocalTablet tablet = (LocalTablet) baseIdx.getTablet(tabletId);
-                List<Long> replicaBackendIds = tablet.getNormalReplicaBackendIds();
-                if (replicaBackendIds.size() < replicationNum) {
+                Tablet tablet = baseIdx.getTablet(tabletId);
+                Set<Long> replicaBackendIds = tablet.getBackendIds();
+                if (replicaBackendIds.size() != totalReplicaNum) {
                     // this should not happen, but in case, throw an exception to terminate this process
                     throw new DdlException("Normal replica number of tablet " + tabletId + " is: "
-                            + replicaBackendIds.size() + ", which is less than expected: " + replicationNum);
+                            + replicaBackendIds.size() + ", but expected: " + totalReplicaNum);
                 }
-                backendsPerBucketSeq.add(replicaBackendIds.subList(0, replicationNum));
+
+                // check tag
+                Map<String, Short> currentReplicaAlloc = Maps.newHashMap();
+                Map<String, List<Long>> tag2beIds = Maps.newHashMap();
+                for (long beId : replicaBackendIds) {
+                    Backend be = GlobalStateMgr.getCurrentSystemInfo().getBackend(beId);
+                    if (be == null) {
+                        continue;
+                    }
+                    short num = currentReplicaAlloc.getOrDefault(be.getResourceGroup(), (short) 0);
+                    currentReplicaAlloc.put(be.getResourceGroup(), (short) (num + 1));
+                    List<Long> beIds = tag2beIds.getOrDefault(be.getResourceGroup(), Lists.newArrayList());
+                    beIds.add(beId);
+                    tag2beIds.put(be.getResourceGroup(), beIds);
+                }
+                if (!currentReplicaAlloc.equals(replicaAlloc.getAssignMap())) {
+                    throw new DdlException("The relica allocation is " + currentReplicaAlloc.toString()
+                            + ", but expected: " + replicaAlloc.toCreateStmt());
+                }
+
+                for (Map.Entry<String, List<Long>> entry : tag2beIds.entrySet()) {
+                    backendsPerBucketSeq.putIfAbsent(entry.getKey(), Lists.newArrayList());
+                    backendsPerBucketSeq.get(entry.getKey()).add(entry.getValue());
+                }
             }
             break;
         }
@@ -1714,6 +1752,19 @@ public class OlapTable extends Table implements GsonPostProcessable {
         }
         tableProperty.modifyTableProperties(PropertyAnalyzer.PROPERTIES_REPLICATION_NUM, replicationNum.toString());
         tableProperty.buildReplicationNum();
+
+        // If the table has been allocated to different resource group, we have no idea how to do reallocation,
+        // hence throw exception here.
+        if (getReplicaAssignment().getAssignMap().size() > 1) {
+            throw new DdlException("Table has been allocated to multiple resource group," +
+                    " do not support alter replication_num yet!");
+        } else {
+            String rg = getReplicaAssignment().getAssignMap().keySet().iterator().next();
+            getReplicaAssignment().put(rg, replicationNum);
+            tableProperty.modifyTableProperties(PropertyAnalyzer.PROPERTIES_RESOURCE_GROUP_ASSIGNMENT,
+                    getReplicaAssignment().toString());
+            tableProperty.buildReplicaAssignment();
+        }
     }
 
     public Short getDefaultReplicationNum() {

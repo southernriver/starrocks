@@ -2,11 +2,17 @@
 
 package com.starrocks.catalog;
 
+import com.clearspring.analytics.util.Lists;
+import com.google.common.collect.ImmutableList;
 import com.google.gson.annotations.SerializedName;
 import com.starrocks.common.io.Text;
 import com.starrocks.common.io.Writable;
 import com.starrocks.persist.gson.GsonUtils;
 import com.starrocks.qe.ShowResultSetMetaData;
+import com.starrocks.server.GlobalStateMgr;
+import com.starrocks.system.Backend;
+import com.starrocks.system.ComputeNode;
+import com.starrocks.system.SystemInfoService;
 import com.starrocks.thrift.TWorkGroup;
 import com.starrocks.thrift.TWorkGroupType;
 
@@ -14,9 +20,11 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 public class ResourceGroup implements Writable {
@@ -33,6 +41,10 @@ public class ResourceGroup implements Writable {
     public static final String BIG_QUERY_CPU_SECOND_LIMIT = "big_query_cpu_second_limit";
     public static final String CONCURRENCY_LIMIT = "concurrency_limit";
     public static final String DEFAULT_RESOURCE_GROUP_NAME = "default_wg";
+    public static final String CN_NUMBER = "cn.number";
+    public static final String MAX_CN_NUMBER = "cn.number.max";
+    public static final String BE_NUMBER = "be.number";
+    public static final String MAX_BE_NUMBER = "be.number.max";
 
     public static final ShowResultSetMetaData META_DATA =
             ShowResultSetMetaData.builder()
@@ -46,9 +58,15 @@ public class ResourceGroup implements Writable {
                     .addColumn(new Column("concurrency_limit", ScalarType.createVarchar(200)))
                     .addColumn(new Column("type", ScalarType.createVarchar(200)))
                     .addColumn(new Column("classifiers", ScalarType.createVarchar(1024)))
+                    .addColumn(new Column("cn_number", ScalarType.createVarchar(1024)))
+                    .addColumn(new Column("max_cn_number", ScalarType.createVarchar(1024)))
+                    .addColumn(new Column("be_number", ScalarType.createVarchar(1024)))
+                    .addColumn(new Column("max_be_number", ScalarType.createVarchar(1024)))
+                    .addColumn(new Column("cn_list", ScalarType.createVarchar(10240)))
+                    .addColumn(new Column("be_list", ScalarType.createVarchar(10240)))
                     .build();
     @SerializedName(value = "classifiers")
-    List<ResourceGroupClassifier> classifiers;
+    List<ResourceGroupClassifier> classifiers = Lists.newArrayList();
     @SerializedName(value = "name")
     private String name;
     @SerializedName(value = "id")
@@ -69,6 +87,19 @@ public class ResourceGroup implements Writable {
     private TWorkGroupType resourceGroupType;
     @SerializedName(value = "version")
     private long version;
+    @SerializedName(value = "cnNumber")
+    private Integer cnNumber;
+    @SerializedName(value = "maxCnNumber")
+    private Integer maxCnNumber;
+    @SerializedName(value = "beNumber")
+    private Integer beNumber;
+    @SerializedName(value = "maxBeNumber")
+    private Integer maxBeNumber;
+    @SerializedName(value = "cnList")
+    private List<Long> cnList = Lists.newArrayList();
+    @SerializedName(value = "beList")
+    private List<Long> beList = Lists.newArrayList();
+
 
     public ResourceGroup() {
     }
@@ -82,8 +113,16 @@ public class ResourceGroup implements Writable {
         List<String> row = new ArrayList<>();
         row.add(this.name);
         row.add("" + this.id);
-        row.add("" + cpuCoreLimit);
-        row.add("" + (memLimit * 100) + "%");
+        if (cpuCoreLimit != null) {
+            row.add("" + cpuCoreLimit);
+        } else {
+            row.add("" + 0);
+        }
+        if (memLimit != null) {
+            row.add("" + (memLimit * 100) + "%");
+        } else {
+            row.add("" + 0);
+        }
         if (bigQueryCpuSecondLimit != null) {
             row.add("" + bigQueryCpuSecondLimit);
         } else {
@@ -99,9 +138,19 @@ public class ResourceGroup implements Writable {
         } else {
             row.add("" + 0);
         }
-        row.add("" + concurrencyLimit);
+        if (concurrencyLimit != null) {
+            row.add("" + concurrencyLimit);
+        } else {
+            row.add("" + 0);
+        }
         row.add("" + resourceGroupType.name().substring("WG_".length()));
         row.add(classifier.toString());
+        row.add("" + Optional.ofNullable(getCnNumber()).orElse(0));
+        row.add("" + Optional.ofNullable(getMaxCnNumber()).orElse(0));
+        row.add("" + Optional.ofNullable(getBeNumber()).orElse(0));
+        row.add("" + Optional.ofNullable(getMaxBeNumber()).orElse(0));
+        row.add(Arrays.toString(getCnList().toArray()));
+        row.add(Arrays.toString(getBeList().toArray()));
         return row;
     }
 
@@ -241,6 +290,149 @@ public class ResourceGroup implements Writable {
 
     public void setClassifiers(List<ResourceGroupClassifier> classifiers) {
         this.classifiers = classifiers;
+    }
+
+    public Integer getCnNumber() {
+        return cnNumber;
+    }
+
+    public void setCnNumber(int cnNumber) {
+        this.cnNumber = cnNumber;
+    }
+
+    public Integer getMaxCnNumber() {
+        return maxCnNumber;
+    }
+
+    public void setMaxCnNumber(int maxCnNumber) {
+        this.maxCnNumber = maxCnNumber;
+    }
+
+    public Integer getBeNumber() {
+        return beNumber;
+    }
+
+    public void setBeNumber(int beNumber) {
+        this.beNumber = beNumber;
+    }
+
+    public Integer getMaxBeNumber() {
+        return maxBeNumber;
+    }
+
+    public void setMaxBeNumber(int maxBeNumber) {
+        this.maxBeNumber = maxBeNumber;
+    }
+
+    public List<Long> getCnList() {
+        return cnList;
+    }
+
+    public void setCnList(List<Long> cnList) {
+        this.cnList = ImmutableList.<Long>copyOf(cnList);
+    }
+
+    public List<Long> getBeList() {
+        return beList;
+    }
+
+    public void addBackend(Long id) {
+        if (GlobalStateMgr.getCurrentSystemInfo().getBackend(id) == null) {
+            throw new IllegalArgumentException("Backend id " + id + " does not exist!");
+        }
+        if (beList.contains(id)) {
+            throw new IllegalArgumentException("Backend  " + id + ", already added!");
+        }
+        if (beList.size() + 1 > maxBeNumber) {
+            throw new IllegalArgumentException("Backend number exceed limit " + maxBeNumber
+                    + ", please alter `be.number.max` first");
+        }
+        List<Long> list = Lists.newArrayList();
+        if (beList != null) {
+            list.addAll(beList);
+        }
+        list.add(id);
+        beList = ImmutableList.<Long>copyOf(list);
+        GlobalStateMgr.getCurrentSystemInfo().getBackend(id).setResourceGroup(this.name);
+    }
+
+    public void addComputeNode(Long id) {
+        if (GlobalStateMgr.getCurrentSystemInfo().getComputeNode(id) == null) {
+            throw new IllegalArgumentException("Compute node id " + id + " does not exist!");
+        }
+        if (cnList.contains(id)) {
+            throw new IllegalArgumentException("Compute node " + id + ", already added!");
+        }
+        if (cnList.size() + 1 > maxCnNumber) {
+            throw new IllegalArgumentException("Compute number exceed limit " + maxCnNumber
+                    + ", please alter `cn.number.max` first");
+        }
+        List<Long> list = Lists.newArrayList();
+        if (cnList != null) {
+            list.addAll(cnList);
+        }
+        list.add(id);
+        cnList = ImmutableList.<Long>copyOf(list);
+        GlobalStateMgr.getCurrentSystemInfo().getComputeNode(id).setResourceGroup(this.name);
+    }
+
+    public void dropBackend(Long id) {
+        if (beList == null || !beList.contains(id)) {
+            throw new IllegalArgumentException("Backend id " + id + " does not exist!");
+        }
+        if (beList.size() - 1 > beNumber) {
+            throw new IllegalArgumentException("Backend number less than limit " + beNumber
+                    + ", please alter `be.number` first");
+        }
+        List<Long> list = Lists.newArrayList();
+        if (beList != null) {
+            list.addAll(beList);
+        }
+        list.remove(id);
+        beList = ImmutableList.<Long>copyOf(list);
+        Backend be = GlobalStateMgr.getCurrentSystemInfo().getBackend(id);
+        be.setResourceGroup(ResourceGroup.DEFAULT_RESOURCE_GROUP_NAME);
+    }
+
+    public void dropComputeNode(Long id) {
+        if (cnList == null || !cnList.contains(id)) {
+            throw new IllegalArgumentException("Computer node id " + id + " does not exist!");
+        }
+        if (cnList.size() - 1 > cnNumber) {
+            throw new IllegalArgumentException("Compute node number less than limit " + cnNumber
+                    + ", please alter `cn.number` first");
+        }
+        List<Long> list = Lists.newArrayList();
+        if (cnList != null) {
+            list.addAll(cnList);
+        }
+        list.remove(id);
+        cnList = ImmutableList.<Long>copyOf(list);
+        ComputeNode cn = GlobalStateMgr.getCurrentSystemInfo().getComputeNode(id);
+        cn.setResourceGroup(ResourceGroup.DEFAULT_RESOURCE_GROUP_NAME);
+    }
+
+    public void setBeList(List<Long> beList) {
+        this.beList = ImmutableList.<Long>copyOf(beList);
+    }
+
+    // Remove resource group tag from ComputeNode/Backend.
+    public void destruct() {
+        if (!name.equals(ResourceGroup.DEFAULT_RESOURCE_GROUP_NAME)) {
+            SystemInfoService systemInfoService = GlobalStateMgr.getCurrentSystemInfo();
+            cnList.forEach(id -> {
+                ComputeNode cn = systemInfoService.getComputeNode(id);
+                if (systemInfoService.getComputeNode(id) != null) {
+                    cn.setResourceGroup(ResourceGroup.DEFAULT_RESOURCE_GROUP_NAME);
+                }
+            });
+            beList.forEach(id -> {
+                Backend be = systemInfoService.getBackend(id);
+                if (systemInfoService.getBackend(id) != null) {
+                    be.setResourceGroup(ResourceGroup.DEFAULT_RESOURCE_GROUP_NAME);
+                }
+            });
+        }
     }
 
     @Override

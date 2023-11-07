@@ -14,6 +14,7 @@ import com.starrocks.common.util.TimeUtils;
 import com.starrocks.common.util.Util;
 import com.starrocks.load.RoutineLoadDesc;
 import com.starrocks.qe.SessionVariable;
+import com.starrocks.server.GlobalStateMgr;
 
 import java.util.List;
 import java.util.Map;
@@ -49,6 +50,7 @@ public class AlterRoutineLoadStmt extends DdlStmt {
             .add(LoadStmt.TASK_NUM_EXCEED_BE_NUM)
             .add(LoadStmt.TIMEZONE)
             .add(SessionVariable.EXEC_MEM_LIMIT)
+            .add(SessionVariable.RESOURCE_GROUP)
             .build();
 
     private LabelName labelName;
@@ -211,6 +213,14 @@ public class AlterRoutineLoadStmt extends DdlStmt {
 
         if (jobProperties.containsKey(SessionVariable.EXEC_MEM_LIMIT)) {
             analyzedJobProperties.put(SessionVariable.EXEC_MEM_LIMIT, jobProperties.get(SessionVariable.EXEC_MEM_LIMIT));
+        }
+
+        if (jobProperties.containsKey(SessionVariable.RESOURCE_GROUP)) {
+            String resourceGroup = jobProperties.get(SessionVariable.RESOURCE_GROUP);
+            if (GlobalStateMgr.getCurrentState().getResourceGroupMgr().getResourceGroup(resourceGroup) == null) {
+                throw new AnalysisException("Resource group " + resourceGroup + " does not exist!");
+            }
+            analyzedJobProperties.put(SessionVariable.RESOURCE_GROUP, resourceGroup);
         }
     }
 
