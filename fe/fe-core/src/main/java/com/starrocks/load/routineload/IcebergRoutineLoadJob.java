@@ -9,6 +9,7 @@ import com.google.gson.GsonBuilder;
 import com.starrocks.analysis.BrokerDesc;
 import com.starrocks.analysis.Expr;
 import com.starrocks.analysis.RoutineLoadDataSourceProperties;
+import com.starrocks.analysis.SlotDescriptor;
 import com.starrocks.analysis.TupleDescriptor;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
@@ -17,6 +18,7 @@ import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.Partition;
 import com.starrocks.catalog.RandomDistributionInfo;
 import com.starrocks.catalog.Table;
+import com.starrocks.catalog.Type;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Config;
 import com.starrocks.common.DdlException;
@@ -62,6 +64,7 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -190,8 +193,16 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
             if (table == null) {
                 throw new MetaNotFoundException("table " + this.tableId + " does not exist");
             }
+            Map<String, Column> dummyColumns = new HashMap<>();
+            for (ImportColumnDesc importColumnDesc : getColumnDescs()) {
+                dummyColumns.put(importColumnDesc.getColumnName(),
+                        new Column(importColumnDesc.getColumnName(), Type.UNKNOWN_TYPE));
+            }
+            for (Column column : IcebergApiConverter.toFullSchemas(iceTbl)) {
+                dummyColumns.put(column.getName(), column);
+            }
             OlapTable icebergPretendToOlapTable =
-                    new OlapTable(1, name + "_dummy", IcebergApiConverter.toFullSchemas(iceTbl), KeysType.DUP_KEYS,
+                    new OlapTable(1, name + "_dummy", new ArrayList<>(dummyColumns.values()), KeysType.DUP_KEYS,
                             ((OlapTable) table).getPartitionInfo(), new RandomDistributionInfo(3));
             for (Partition partition : table.getPartitions()) {
                 icebergPretendToOlapTable.addPartition(partition);
@@ -210,6 +221,18 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
                                         @Override
                                         protected Expr analyzeAndCastFold(Expr whereExpr) {
                                             return whereExpr;
+                                        }
+
+                                        protected Expr castToSlot(SlotDescriptor slotDesc, Expr expr) throws UserException {
+                                            if (slotDesc.getType() == Type.UNKNOWN_TYPE) {
+                                                slotDesc.setColumn(
+                                                        new Column(slotDesc.getColumn().getName(), expr.getType(), true));
+                                                return expr;
+                                            } else if (!slotDesc.getType().matchesType(expr.getType())) {
+                                                return expr.castTo(slotDesc.getType());
+                                            } else {
+                                                return expr;
+                                            }
                                         }
                                     };
                             scanNode.setUseVectorizedLoad(true);
