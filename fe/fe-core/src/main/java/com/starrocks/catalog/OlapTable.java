@@ -1750,21 +1750,20 @@ public class OlapTable extends Table implements GsonPostProcessable {
         if (tableProperty == null) {
             tableProperty = new TableProperty(new HashMap<>());
         }
-        tableProperty.modifyTableProperties(PropertyAnalyzer.PROPERTIES_REPLICATION_NUM, replicationNum.toString());
-        tableProperty.buildReplicationNum();
-
         // If the table has been allocated to different resource group, we have no idea how to do reallocation,
         // hence throw exception here.
         if (getReplicaAssignment().getAssignMap().size() > 1) {
             throw new DdlException("Table has been allocated to multiple resource group," +
                     " do not support alter replication_num yet!");
-        } else {
-            String rg = getReplicaAssignment().getAssignMap().keySet().iterator().next();
-            getReplicaAssignment().put(rg, replicationNum);
-            tableProperty.modifyTableProperties(PropertyAnalyzer.PROPERTIES_RESOURCE_GROUP_ASSIGNMENT,
-                    getReplicaAssignment().toString());
-            tableProperty.buildReplicaAssignment();
         }
+        tableProperty.modifyTableProperties(PropertyAnalyzer.PROPERTIES_REPLICATION_NUM, replicationNum.toString());
+        tableProperty.buildReplicationNum();
+
+        String rg = getReplicaAssignment().getAssignMap().keySet().iterator().next();
+        Map<String, Short> newAssignment = Maps.newHashMap();
+        newAssignment.put(rg, replicationNum);
+        tableProperty.modifyTableProperties(PropertyAnalyzer.PROPERTIES_RESOURCE_GROUP_ASSIGNMENT,
+                new ReplicaAssignment(newAssignment).toString());
     }
 
     public Short getDefaultReplicationNum() {
