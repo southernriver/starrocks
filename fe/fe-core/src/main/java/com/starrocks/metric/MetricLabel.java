@@ -35,6 +35,16 @@ public class MetricLabel {
         return key;
     }
 
+    public MetricLabel setKey(String key) {
+        this.key = key;
+        return this;
+    }
+
+    public MetricLabel setValue(String value) {
+        this.value = value;
+        return this;
+    }
+
     public String getValue() {
         return value;
     }

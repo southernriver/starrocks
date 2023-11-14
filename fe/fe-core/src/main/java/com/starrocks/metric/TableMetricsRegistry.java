@@ -9,6 +9,7 @@ import com.starrocks.common.Config;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
@@ -33,6 +34,19 @@ public final class TableMetricsRegistry {
 
     public static TableMetricsRegistry getInstance() {
         return INSTANCE;
+    }
+
+    public synchronized void renameMetricsEntity(long tableId, String newTableName) {
+        TableMetricsEntity metricsEntity = getMetricsEntity(tableId);
+        if (metricsEntity == null) {
+            return;
+        }
+        Optional.ofNullable(metricsEntity.getMetrics())
+                .ifPresent(metrics -> metrics.forEach(metric -> metric.getLabels().stream().forEach(label -> {
+                    if (label instanceof MetricLabel && ((MetricLabel) label).getKey().equalsIgnoreCase("tbl_name")) {
+                        ((MetricLabel) label).setValue(newTableName);
+                    }
+                })));
     }
 
     public synchronized TableMetricsEntity getMetricsEntity(long tableId) {

@@ -111,6 +111,7 @@ import com.starrocks.lake.LakeTablet;
 import com.starrocks.lake.StorageCacheInfo;
 import com.starrocks.lake.StorageInfo;
 import com.starrocks.meta.MetaContext;
+import com.starrocks.metric.TableMetricsRegistry;
 import com.starrocks.persist.AddPartitionsInfo;
 import com.starrocks.persist.AddPartitionsInfoV2;
 import com.starrocks.persist.BackendIdsUpdateInfo;
@@ -3823,6 +3824,7 @@ public class LocalMetastore implements ConnectorMetadata {
         db.dropTable(oldTableName);
         db.createTable(olapTable);
         disableMaterializedViewForRenameTable(db, olapTable);
+        TableMetricsRegistry.getInstance().renameMetricsEntity(table.getId(), newTableName);
 
         TableInfo tableInfo = TableInfo.createForTableRename(db.getId(), olapTable.getId(), newTableName);
         editLog.logTableRename(tableInfo);
@@ -3856,6 +3858,7 @@ public class LocalMetastore implements ConnectorMetadata {
             table.setName(newTableName);
             db.createTable(table);
             disableMaterializedViewForRenameTable(db, table);
+            TableMetricsRegistry.getInstance().renameMetricsEntity(table.getId(), newTableName);
 
             LOG.info("replay rename table[{}] to {}, tableId: {}", tableName, newTableName, table.getId());
         } finally {
