@@ -125,7 +125,14 @@ public:
 
     size_t num_columns() const { return _column_readers.size(); }
 
-    const ColumnReader* column(size_t i) const { return _column_readers.at(_tablet_schema->column(i).unique_id()).get(); }
+    const ColumnReader* column(size_t i) const {
+        auto unique_id = _tablet_schema->column(i).unique_id();
+        return column_with_uid(unique_id);
+    }
+
+    const ColumnReader* column_with_uid(size_t uid) const {
+        return _column_readers.count(uid) > 0 ? _column_readers.at(uid).get() : nullptr;
+    }
 
     FileSystem* file_system() const { return _fs.get(); }
 
