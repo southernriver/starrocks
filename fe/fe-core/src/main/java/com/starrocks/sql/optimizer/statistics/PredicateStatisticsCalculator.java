@@ -267,15 +267,12 @@ public class PredicateStatisticsCalculator {
             }
 
             if (predicate.isAnd()) {
-                Preconditions.checkState(predicate.getChildren().size() == 2);
                 Statistics leftStatistics = predicate.getChild(0).accept(this, null);
                 Statistics andStatistics = predicate.getChild(1)
                         .accept(new PredicateStatisticsCalculatingVisitor(leftStatistics), null);
                 return StatisticsEstimateUtils.adjustStatisticsByRowCount(andStatistics,
                         andStatistics.getOutputRowCount());
             } else if (predicate.isOr()) {
-                Preconditions.checkState(predicate.getChildren().size() == 2);
-
                 List<ScalarOperator> disjunctive = Utils.extractDisjunctive(predicate);
                 Statistics cumulativeStatistics = disjunctive.get(0).accept(this, null);
                 double rowCount = cumulativeStatistics.getOutputRowCount();

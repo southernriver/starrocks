@@ -38,6 +38,7 @@ import com.starrocks.sql.optimizer.rule.transformation.RemoveAggregationFromAggT
 import com.starrocks.sql.optimizer.rule.transformation.RewriteGroupingSetsByCTERule;
 import com.starrocks.sql.optimizer.rule.transformation.SemiReorderRule;
 import com.starrocks.sql.optimizer.rule.transformation.SplitOlapScanIntoHybridScanRule;
+import com.starrocks.sql.optimizer.rule.transformation.SplitScanORToUnionRule;
 import com.starrocks.sql.optimizer.rule.transformation.materialization.MvUtils;
 import com.starrocks.sql.optimizer.rule.tree.AddDecodeNodeForDictStringRule;
 import com.starrocks.sql.optimizer.rule.tree.ExchangeSortToMergeRule;
@@ -321,6 +322,8 @@ public class Optimizer {
             ruleRewriteOnlyOnce(tree, rootTaskContext, RuleSetType.PUSH_DOWN_AGG_TO_UNION);
             ruleRewriteOnlyOnce(tree, rootTaskContext, new CastColForUnionRule());
         }
+
+        ruleRewriteOnlyOnce(tree, rootTaskContext, SplitScanORToUnionRule.getInstance());
 
         if (isEnableSingleTableMVRewrite(rootTaskContext, sessionVariable, tree)) {
             // now add single table materialized view rewrite rules in rule based rewrite phase to boost optimization

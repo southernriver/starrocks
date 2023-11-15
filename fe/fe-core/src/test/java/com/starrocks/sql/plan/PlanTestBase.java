@@ -1073,6 +1073,12 @@ public class PlanTestBase {
         }
     }
 
+    public static void assertContains(String text, List<String> patterns) {
+        for (String s : patterns) {
+            Assert.assertTrue(text, text.contains(s));
+        }
+    }
+
     public static void assertNotContains(String text, String pattern) {
         Assert.assertFalse(text, text.contains(pattern));
     }

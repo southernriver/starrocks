@@ -30,6 +30,9 @@ public final class LogicalOlapScanOperator extends LogicalScanOperator {
     private final List<Long> hintsTabletIds;
     private final List<ScalarOperator> prunedPartitionPredicates;
 
+    // record if this scan is derived from SplitScanORToUnionRule
+    private boolean fromSplitOR;
+
     // Only for UT
     public LogicalOlapScanOperator(Table table) {
         this(table, Maps.newHashMap(), Maps.newHashMap(), null, Operator.DEFAULT_LIMIT, null);
@@ -141,6 +144,9 @@ public final class LogicalOlapScanOperator extends LogicalScanOperator {
         return prunedPartitionPredicates;
     }
 
+    public boolean isFromSplitOR() {
+        return fromSplitOR;
+    }
 
     @Override
     public <R, C> R accept(OperatorVisitor<R, C> visitor, C context) {
@@ -183,6 +189,7 @@ public final class LogicalOlapScanOperator extends LogicalScanOperator {
         private List<Long> selectedTabletId;
         private List<Long> hintsTabletIds;
         private List<ScalarOperator> prunedPartitionPredicates;
+        private boolean fromSplitOR;
 
         @Override
         public LogicalOlapScanOperator build() {
@@ -201,6 +208,7 @@ public final class LogicalOlapScanOperator extends LogicalScanOperator {
             this.selectedTabletId = scanOperator.selectedTabletId;
             this.hintsTabletIds = scanOperator.hintsTabletIds;
             this.prunedPartitionPredicates = scanOperator.prunedPartitionPredicates;
+            this.fromSplitOR = scanOperator.fromSplitOR;
             return this;
         }
 
@@ -221,6 +229,11 @@ public final class LogicalOlapScanOperator extends LogicalScanOperator {
 
         public Builder setPrunedPartitionPredicates(List<ScalarOperator> prunedPartitionPredicates) {
             this.prunedPartitionPredicates = prunedPartitionPredicates;
+            return this;
+        }
+
+        public Builder setFromSplitOR(boolean fromSplitOR) {
+            this.fromSplitOR = fromSplitOR;
             return this;
         }
     }
