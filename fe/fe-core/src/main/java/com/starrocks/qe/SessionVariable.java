@@ -363,6 +363,10 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String SELECT_RATIO_THRESHOLD = "SELECT_RATIO_THRESHOLD";
 
+    public static final String FORCE_OR_TO_UNION_ENABLED = "force_scan_or_to_union";
+
+    public static final String OR_TO_UNION_SELECTIVITY_THRESHOLD = "or_to_union_selectivity_threshold";
+
     public static final List<String> DEPRECATED_VARIABLES = ImmutableList.<String>builder()
             .add(CODEGEN_LEVEL)
             .add(ENABLE_SPILLING)
@@ -908,6 +912,12 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VarAttr(name = SELECT_RATIO_THRESHOLD, flag = VariableMgr.INVISIBLE)
     private double selectRatioThreshold = 0.15;
+
+    @VarAttr(name = FORCE_OR_TO_UNION_ENABLED, flag = VariableMgr.INVISIBLE)
+    private boolean forceOrToUnionEnabled = false;
+
+    @VarAttr(name = OR_TO_UNION_SELECTIVITY_THRESHOLD, flag = VariableMgr.INVISIBLE)
+    private double orToUnionSelectivityThreshold = 1E-4;
 
     private int exprChildrenLimit = -1;
 
@@ -1731,6 +1741,14 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public int getScanOrToUnionLimit() {
         return scanOrToUnionLimit;
+    }
+
+    public double getOrToUnionSelectivityThreshold() {
+        return orToUnionSelectivityThreshold;
+    }
+
+    public boolean forceScanOrToUnion() {
+        return forceOrToUnionEnabled;
     }
 
     public void setScanOrToUnionLimit(int scanOrToUnionLimit) {

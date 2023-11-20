@@ -105,7 +105,8 @@ public class SplitScanORToUnionRule extends TransformationRule {
         List<ColumnFilter> columnFilters = selectivityEvaluator.evaluate();
 
         // already has a predicate can use index and late materialized to filter a large part of rows
-        if (columnFilters.get(0).getSelectRatio() < HIGH_SELECTIVITY) {
+        double lowSelectivity = ConnectContext.get().getSessionVariable().getOrToUnionSelectivityThreshold();
+        if (columnFilters.get(0).getSelectRatio() < lowSelectivity) {
             return Lists.newArrayList();
         }
 
@@ -165,7 +166,8 @@ public class SplitScanORToUnionRule extends TransformationRule {
         if (idx != -1) {
             List<ColumnFilter> selectedFilters = decomposeFilters.get(idx);
             double maxSelectRatio = selectedFilters.get(selectedFilters.size() - 1).getSelectRatio();
-            if (canBenefitFromSplit(existSelectRatio, maxSelectRatio)) {
+            if (ConnectContext.get().getSessionVariable().forceScanOrToUnion()
+                    || canBenefitFromSplit(existSelectRatio, maxSelectRatio)) {
                 columnFilters.remove(idx);
                 return Pair.create(selectedFilters, columnFilters);
             }
