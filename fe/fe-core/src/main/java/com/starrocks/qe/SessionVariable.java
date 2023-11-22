@@ -357,12 +357,6 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String USE_CN_IN_LOAD_JOB = "use_cn_in_load_job";
 
-    public static final String SCAN_OR_TO_UNION_LIMIT = "scan_or_to_union_limit";
-
-    public static final String SCAN_OR_TO_UNION_THRESHOLD = "scan_or_to_union_threshold";
-
-    public static final String SELECT_RATIO_THRESHOLD = "SELECT_RATIO_THRESHOLD";
-
     public static final List<String> DEPRECATED_VARIABLES = ImmutableList.<String>builder()
             .add(CODEGEN_LEVEL)
             .add(ENABLE_SPILLING)
@@ -899,25 +893,6 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VariableMgr.VarAttr(name = TABLET_PARALLEL_DEGREE)
     private int tabletParallelDegree = 0;
-
-    @VarAttr(name = SCAN_OR_TO_UNION_LIMIT, flag = VariableMgr.INVISIBLE)
-    private int scanOrToUnionLimit = 4;
-
-    @VarAttr(name = SCAN_OR_TO_UNION_THRESHOLD, flag = VariableMgr.INVISIBLE)
-    private long scanOrToUnionThreshold = 50000000;
-
-    @VarAttr(name = SELECT_RATIO_THRESHOLD, flag = VariableMgr.INVISIBLE)
-    private double selectRatioThreshold = 0.15;
-
-    private int exprChildrenLimit = -1;
-
-    public int getExprChildrenLimit() {
-        return exprChildrenLimit;
-    }
-
-    public void setExprChildrenLimit(int exprChildrenLimit) {
-        this.exprChildrenLimit = exprChildrenLimit;
-    }
 
     public void setFullSortMaxBufferedRows(long v) {
         fullSortMaxBufferedRows = v;
@@ -1727,30 +1702,6 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public void setHiveMode(boolean enableHiveMode) {
         this.enableHiveMode = enableHiveMode;
-    }
-
-    public int getScanOrToUnionLimit() {
-        return scanOrToUnionLimit;
-    }
-
-    public void setScanOrToUnionLimit(int scanOrToUnionLimit) {
-        this.scanOrToUnionLimit = scanOrToUnionLimit;
-    }
-
-    public long getScanOrToUnionThreshold() {
-        return scanOrToUnionThreshold;
-    }
-
-    public void setScanOrToUnionThreshold(long scanOrToUnionThreshold) {
-        this.scanOrToUnionThreshold = scanOrToUnionThreshold;
-    }
-
-    public double getSelectRatioThreshold() {
-        return selectRatioThreshold;
-    }
-
-    public void setSelectRatioThreshold(double selectRatioThreshold) {
-        this.selectRatioThreshold = selectRatioThreshold;
     }
 
     // Serialize to thrift object
