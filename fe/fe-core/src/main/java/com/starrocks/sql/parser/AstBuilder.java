@@ -66,6 +66,7 @@ import com.starrocks.analysis.UserIdentity;
 import com.starrocks.analysis.VariableExpr;
 import com.starrocks.catalog.AggregateType;
 import com.starrocks.catalog.ArrayType;
+import com.starrocks.catalog.FsBroker;
 import com.starrocks.catalog.FunctionSet;
 import com.starrocks.catalog.KeysType;
 import com.starrocks.catalog.MapType;
@@ -374,6 +375,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -2108,7 +2110,18 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
                 String brokerName = ((Identifier) visit(context.identifierOrString())).getValue();
                 return new BrokerDesc(brokerName, properties);
             } else {
-                return new BrokerDesc(properties);
+                String brokerName = null;
+                if (ConnectContext.get() != null) {
+                    // If broker name is not specified, choose broker name with the largest broker number.
+                    Map<String, List<FsBroker>> brokerMap =
+                            ConnectContext.get().getGlobalStateMgr().getBrokerMgr().getBrokerListMap();
+                    if (brokerMap != null && !brokerMap.isEmpty()) {
+                        brokerName = brokerMap.entrySet().stream()
+                                .max(Comparator.comparingInt(e -> e.getValue().size()))
+                                .get().getKey();
+                    }
+                }
+                return new BrokerDesc(brokerName != null ? brokerName : "broker", properties);
             }
 
         }
