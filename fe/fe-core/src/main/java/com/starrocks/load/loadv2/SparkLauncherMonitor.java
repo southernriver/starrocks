@@ -97,7 +97,7 @@ public class SparkLauncherMonitor {
         }
 
         public void setRedirectLogPath(String redirectLogPath) throws IOException {
-            this.outputStream = new FileOutputStream(new File(redirectLogPath), false);
+            this.outputStream = new FileOutputStream(new File(redirectLogPath), true);
             this.handle.setLogPath(redirectLogPath);
         }
 
