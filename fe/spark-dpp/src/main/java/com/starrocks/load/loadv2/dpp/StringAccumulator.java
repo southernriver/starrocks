@@ -49,13 +49,17 @@ public class StringAccumulator extends AccumulatorV2<String, String> {
 
     @Override
     public void add(String v) {
-        strs.add(v);
+        if (strs.size() < 100) {
+            strs.add(v);
+        }
     }
 
     @Override
     public void merge(AccumulatorV2<String, String> other) {
-        StringAccumulator o = (StringAccumulator) other;
-        strs.addAll(o.strs);
+        if (strs.size() < 100) {
+            StringAccumulator o = (StringAccumulator) other;
+            strs.addAll(o.strs);
+        }
     }
 
     @Override
