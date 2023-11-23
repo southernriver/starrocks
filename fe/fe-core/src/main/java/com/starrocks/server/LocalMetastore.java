@@ -1505,7 +1505,12 @@ public class LocalMetastore implements ConnectorMetadata {
                 LOG.info("drop partition[{}] which does not exist", partitionName);
                 return;
             } else {
-                ErrorReport.reportDdlException(ErrorCode.ERR_DROP_PARTITION_NON_EXISTENT, partitionName);
+                if (clause.isForceDrop()) {
+                    LOG.info("drop partition[{}] which does not exist in nameToPartition but in idToPartition",
+                            partitionName);
+                } else {
+                    ErrorReport.reportDdlException(ErrorCode.ERR_DROP_PARTITION_NON_EXISTENT, partitionName);
+                }
             }
         }
 
