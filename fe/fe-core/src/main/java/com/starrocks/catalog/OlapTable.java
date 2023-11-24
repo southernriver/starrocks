@@ -88,13 +88,11 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.zip.Adler32;
 
@@ -144,7 +142,7 @@ public class OlapTable extends Table implements GsonPostProcessable {
     protected PartitionInfo partitionInfo;
 
     @SerializedName(value = "idToPartition")
-    protected Map<Long, Partition> idToPartition = new ConcurrentHashMap<>();
+    protected Map<Long, Partition> idToPartition = new HashMap<>();
     protected Map<String, Partition> nameToPartition = Maps.newTreeMap(String.CASE_INSENSITIVE_ORDER);
 
     @SerializedName(value = "defaultDistributionInfo")
@@ -833,27 +831,7 @@ public class OlapTable extends Table implements GsonPostProcessable {
             // drop partition info
             rangePartitionInfo.dropPartition(partition.getId());
         }
-        if (isForceDrop) {
-            dropExtraPartitions(partitionName, tabletIds, reserveTablets);
-        }
         return tabletIds;
-    }
-
-    private void dropExtraPartitions(String partitionName, Set<Long> tabletIds, boolean reserveTablets) {
-        Iterator<Map.Entry<Long, Partition>> iterator = idToPartition.entrySet().iterator();
-        while (iterator.hasNext()) {
-            Map.Entry<Long, Partition> entry = iterator.next();
-            if (entry.getValue().getName().equals(partitionName)) {
-                iterator.remove();
-                LOG.info("Partition in idToPartition and name not in nameToPartition, " + entry.getValue());
-                if (!reserveTablets) {
-                    tabletIds.addAll(GlobalStateMgr.getCurrentState().onErasePartition(entry.getValue()));
-                }
-                // drop partition info
-                RangePartitionInfo rangePartitionInfo = (RangePartitionInfo) partitionInfo;
-                rangePartitionInfo.dropPartition(entry.getValue().getId());
-            }
-        }
     }
 
     public Set<Long> dropPartitionAndReserveTablet(String partitionName) {
