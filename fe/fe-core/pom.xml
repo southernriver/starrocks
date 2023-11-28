@@ -38,7 +38,7 @@ under the License.
         <starrocks.home>${basedir}/../../</starrocks.home>
         <fe_ut_parallel>${env.FE_UT_PARALLEL}</fe_ut_parallel>
         <jacoco.version>0.8.5</jacoco.version>
-        <iceberg.version>1.1.1-1-tencent</iceberg.version>
+        <iceberg.version>1.3.3-2-tq-SNAPSHOT</iceberg.version>
         <python>python</python>
     </properties>
 
@@ -1096,6 +1096,21 @@ under the License.
             </releases>
             <snapshots>
                 <enabled>false</enabled>
+            </snapshots>
+        </repository>
+        <repository>
+            <id>tianqiong-snapshots</id>
+            <name>Tencent TianQiong Snapshot Repository</name>
+            <url>https://mirrors.tencent.com/repository/maven/tianqiong-snapshots/</url>
+            <releases>
+                <enabled>true</enabled>
+                <updatePolicy>always</updatePolicy>
+                <checksumPolicy>warn</checksumPolicy>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
+                <updatePolicy>always</updatePolicy>
+                <checksumPolicy>warn</checksumPolicy>
             </snapshots>
         </repository>
     </repositories>

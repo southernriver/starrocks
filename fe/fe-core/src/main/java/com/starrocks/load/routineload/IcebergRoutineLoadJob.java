@@ -44,6 +44,7 @@ import com.starrocks.planner.PlanNodeId;
 import com.starrocks.planner.ScanNode;
 import com.starrocks.planner.StreamLoadPlanner;
 import com.starrocks.planner.StreamLoadScanNode;
+import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.OriginStatement;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.ast.CreateRoutineLoadStmt;
@@ -56,6 +57,9 @@ import com.starrocks.transaction.TransactionStatus;
 import org.apache.iceberg.CombinedScanTask;
 import org.apache.iceberg.expressions.Expression;
 import org.apache.iceberg.expressions.Expressions;
+import org.apache.iceberg.metrics.MetricJobType;
+import org.apache.iceberg.metrics.MetricVars;
+import org.apache.iceberg.metrics.ReadMetrics;
 import org.apache.iceberg.types.Types;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -174,6 +178,14 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob {
             } else if (IcebergCreateRoutineLoadStmtConfig.isExternalCatalogType(icebergCatalogType)) {
                 iceTbl = IcebergUtil.getTableFromCatalog(icebergCatalogName, icebergDatabase, icebergTable);
             }
+
+            if (IcebergUtil.reportMetrics(iceTbl)) {
+                LOG.info("StarRocks TableScan init metrics reporter");
+                Map<String, String> contextTags = IcebergUtil.getContext(ConnectContext.get(),
+                        iceTbl.name(), MetricJobType.BATCH);
+                ReadMetrics.INSTANCE.init(MetricVars.STARROCKS_METRICS_PROP_PREFIX, contextTags);
+            }
+
             return iceTbl;
         } catch (StarRocksConnectorException | AnalysisException e) {
             throw new UserException(e);
