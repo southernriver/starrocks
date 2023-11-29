@@ -2156,22 +2156,20 @@ public class LocalMetastore implements ConnectorMetadata {
 
 
 
-        ReplicaAssignment replicaAssignment;
+        ReplicaAssignment replicaAssignment = null;
+        short replicationNum = FeConstants.default_replication_num;
         if (partitionDesc != null) {
+            // For partition table, property `replication_num` has been removed during analyze replicaAssigment.
             replicaAssignment = partitionDesc.getReplicaAssignment();
-        } else {
-            // analyze replication_num
-            short replicationNum = FeConstants.default_replication_num;
-            try {
-                boolean isReplicationNumSet =
-                        properties != null && properties.containsKey(PropertyAnalyzer.PROPERTIES_REPLICATION_NUM);
-                replicationNum = PropertyAnalyzer.analyzeReplicationNum(properties, replicationNum);
-                if (isReplicationNumSet) {
-                    olapTable.setReplicationNum(replicationNum);
-                }
-            } catch (AnalysisException e) {
-                throw new DdlException(e.getMessage());
-            }
+            replicationNum = replicaAssignment.getTotalReplicaNum();
+        }
+        try {
+            replicationNum = PropertyAnalyzer.analyzeReplicationNum(properties, replicationNum);
+            olapTable.setReplicationNum(replicationNum);
+        } catch (AnalysisException e) {
+            throw new DdlException(e.getMessage());
+        }
+        if (replicaAssignment == null) {
             try {
                 replicaAssignment = PropertyAnalyzer.analyzeReplicaAssignment(properties, replicationNum);
             } catch (AnalysisException e) {
