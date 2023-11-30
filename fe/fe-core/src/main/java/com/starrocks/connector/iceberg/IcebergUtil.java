@@ -18,6 +18,7 @@ import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.connector.iceberg.hive.IcebergHiveCatalog;
 import com.starrocks.fs.HdfsUtil;
 import com.starrocks.fs.hdfs.HdfsFs;
+import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.server.MetadataMgr;
 import org.apache.iceberg.CatalogProperties;
@@ -26,6 +27,10 @@ import org.apache.iceberg.TableProperties;
 import org.apache.iceberg.UpdateSchema;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.hadoop.Util;
+import org.apache.iceberg.metrics.MetricDimension;
+import org.apache.iceberg.metrics.MetricJobType;
+import org.apache.iceberg.metrics.MetricsEngineVersion;
+import org.apache.iceberg.util.PropertyUtil;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -168,5 +173,27 @@ public class IcebergUtil {
         return GlobalStateMgr.getCurrentState().getConnectorMgr()
                 .getConnector(table.getCatalogName()).getMetadata()
                 .getTable(table.getRemoteDbName(), table.getRemoteTableName());
+    }
+
+    public static Map<String, String> getContext(
+            ConnectContext connectContext, String tableName, MetricJobType jobType) {
+        return org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap.of(
+                MetricDimension.TABLE.value(), tableName,
+                MetricDimension.USER.value(), connectContext.getUserIdentity().getQualifiedUser(),
+                MetricDimension.JOB_ID.value(), connectContext.getQueryId().toString(),
+                MetricDimension.JOB_NAME.value(), connectContext.getQueryId().toString(),
+                MetricDimension.JOB_TYPE.value(), jobType.value(),
+                MetricDimension.ENGINE.value(), MetricsEngineVersion.STARROCKS.getVersion() + "-" +
+                        com.starrocks.common.Version.STARROCKS_VERSION);
+    }
+
+    public static boolean reportMetrics(com.starrocks.catalog.Table table) {
+        if (table.isIcebergTable()) {
+            return PropertyUtil.propertyAsBoolean(
+                    table.getProperties(),
+                    TableProperties.METRIC_REPORTER_ENABLED,
+                    TableProperties.METRIC_REPORTED_ENABLED_DEFAULT);
+        }
+        return false;
     }
 }

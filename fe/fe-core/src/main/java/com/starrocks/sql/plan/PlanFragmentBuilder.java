@@ -21,6 +21,7 @@ import com.starrocks.catalog.ColocateTableIndex;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Function;
 import com.starrocks.catalog.FunctionSet;
+import com.starrocks.catalog.IcebergTable;
 import com.starrocks.catalog.JDBCTable;
 import com.starrocks.catalog.KeysType;
 import com.starrocks.catalog.MaterializedIndex;
@@ -35,6 +36,7 @@ import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Config;
 import com.starrocks.common.IdGenerator;
 import com.starrocks.common.UserException;
+import com.starrocks.connector.iceberg.IcebergUtil;
 import com.starrocks.planner.AggregationNode;
 import com.starrocks.planner.AnalyticEvalNode;
 import com.starrocks.planner.AssertNumRowsNode;
@@ -138,6 +140,9 @@ import com.starrocks.sql.optimizer.statistics.Statistics;
 import com.starrocks.thrift.TPartitionType;
 import com.starrocks.thrift.TResultSinkType;
 import org.apache.commons.collections4.CollectionUtils;
+import org.apache.iceberg.metrics.MetricJobType;
+import org.apache.iceberg.metrics.MetricVars;
+import org.apache.iceberg.metrics.ReadMetrics;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -937,6 +942,16 @@ public class PlanFragmentBuilder {
             IcebergScanNode icebergScanNode =
                     new IcebergScanNode(context.getNextNodeId(), tupleDescriptor, "IcebergScanNode");
             icebergScanNode.computeStatistics(optExpression.getStatistics());
+
+            if (ConnectContext.get() != null & IcebergUtil.reportMetrics(referenceTable)) {
+                LOG.info("StarRocks TableScan init metrics reporter");
+                IcebergTable icebergTable = (IcebergTable) referenceTable;
+                Map<String, String> contextTags = IcebergUtil.getContext(ConnectContext.get(),
+                        icebergTable.getRemoteDbName() + "." + icebergTable.getRemoteTableName(),
+                        MetricJobType.BATCH);
+                ReadMetrics.INSTANCE.init(MetricVars.STARROCKS_METRICS_PROP_PREFIX, contextTags);
+            }
+
             try {
                 if (node.getHybridScanTable() != null) {
                     icebergScanNode.setHybridScanTable(node.getHybridScanTable());
