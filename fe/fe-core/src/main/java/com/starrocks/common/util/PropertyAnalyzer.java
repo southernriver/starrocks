@@ -338,6 +338,9 @@ public class PropertyAnalyzer {
             } catch (Exception e) {
                 throw new AnalysisException(e.getMessage());
             }
+            if (Config.enable_replication_num_restriction && replicationNum < 3) {
+                throw new AnalysisException("Value of `replication_num` should not be less than 3!");
+            }
             checkAvailableBackendsIsEnough(replicationNum);
             properties.remove(PROPERTIES_REPLICATION_NUM);
         }

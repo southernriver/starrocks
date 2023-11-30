@@ -2062,4 +2062,7 @@ public class Config extends ConfigBase {
      */
     @ConfField(mutable = true)
     public static boolean support_upgrade_from_lakehouse_version = false;
+
+    @ConfField(mutable = true)
+    public static boolean enable_replication_num_restriction = true;
 }
