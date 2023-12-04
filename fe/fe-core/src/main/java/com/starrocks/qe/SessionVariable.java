@@ -908,7 +908,9 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     private int scanOrToUnionLimit = 4;
 
     @VarAttr(name = SCAN_OR_TO_UNION_THRESHOLD, flag = VariableMgr.INVISIBLE)
-    private long scanOrToUnionThreshold = 50000000;
+    // Set this parameter to 0 to disable rule `SplitScanORToUnionRule` since there is a bug
+    // unresolved which may cause BE crush after it applied. The origin default value is 50000000.
+    private long scanOrToUnionThreshold = 0;
 
     @VarAttr(name = SELECT_RATIO_THRESHOLD, flag = VariableMgr.INVISIBLE)
     private double selectRatioThreshold = 0.15;
