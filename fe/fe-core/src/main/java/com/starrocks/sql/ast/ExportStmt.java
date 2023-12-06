@@ -211,6 +211,7 @@ public class ExportStmt extends StatementBase {
                 case MYSQL:
                 case OLAP:
                 case LAKE:
+                case MATERIALIZED_VIEW:
                     break;
                 case BROKER:
                 case SCHEMA:

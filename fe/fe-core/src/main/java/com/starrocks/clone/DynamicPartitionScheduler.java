@@ -282,11 +282,18 @@ public class DynamicPartitionScheduler extends LeaderDaemon {
         return getDropPartitionClause(db, olapTable, now, partitionColumn, partitionFormat, lowerBoundOffset, upperBoundOffset);
 
     }
+
     public static ArrayList<DropPartitionClause> getDropPartitionClause(Database db, OlapTable olapTable, ZonedDateTime datatime,
-                                                                  Column partitionColumn, String partitionFormat,
-                                                                  int lowerBoundOffset, int upperBoundOffset) {
-        ArrayList<DropPartitionClause> dropPartitionClauses = new ArrayList<>();
+            Column partitionColumn, String partitionFormat, int lowerBoundOffset, int upperBoundOffset) {
         DynamicPartitionProperty dynamicPartitionProperty = olapTable.getTableProperty().getDynamicPartitionProperty();
+        return getDropPartitionClause(db, olapTable, datatime, partitionColumn, partitionFormat, lowerBoundOffset,
+                upperBoundOffset, dynamicPartitionProperty);
+    }
+
+    public static ArrayList<DropPartitionClause> getDropPartitionClause(Database db, OlapTable olapTable, ZonedDateTime datatime,
+            Column partitionColumn, String partitionFormat, int lowerBoundOffset, int upperBoundOffset,
+            DynamicPartitionProperty dynamicPartitionProperty) {
+        ArrayList<DropPartitionClause> dropPartitionClauses = new ArrayList<>();
         if (lowerBoundOffset == DynamicPartitionProperty.MIN_START_OFFSET) {
             // not set start offset, so not drop any partition
             return dropPartitionClauses;

@@ -5,9 +5,11 @@ package com.starrocks.sql.ast;
 import com.starrocks.analysis.BrokerDesc;
 import com.starrocks.analysis.Expr;
 import com.starrocks.analysis.TableRef;
+import com.starrocks.analysis.TimestampArithmeticExpr;
 import com.starrocks.catalog.Table;
 import com.starrocks.common.util.PrintableMap;
 import com.starrocks.load.export.ExternalTableExportConfig;
+import com.starrocks.sql.analyzer.SemanticException;
 
 import java.util.List;
 import java.util.Map;
@@ -39,6 +41,17 @@ public class CreateColddownStmt extends ExportStmt {
 
     @Override
     protected void checkExternalTable(ExternalTableExportConfig externalTableExportConfig, Table table) {
+        if (table.getType() == Table.TableType.MATERIALIZED_VIEW) {
+            String timeUnitValue = getProperties().get(ExternalTableExportConfig.PARTITION_TIME_UNIT);
+            if (timeUnitValue == null) {
+                throw new SemanticException(ExternalTableExportConfig.PARTITION_TIME_UNIT +
+                        " in job should be specified when colddown MATERIALIZED VIEW");
+            }
+            // verify timeUnitValue is a valid string
+            TimestampArithmeticExpr.TimeUnit timeUnit = TimestampArithmeticExpr.TimeUnit.valueOf(timeUnitValue.toUpperCase());
+            // partitions in mv are generated automatically, so the prefix can be set by user
+            getProperties().put(ExternalTableExportConfig.PARTITION_PREFIX, "p");
+        }
         Table externalTable = externalTableExportConfig.verifyExternalTable();
         if (externalTable != null) {
             return;

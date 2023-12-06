@@ -77,8 +77,8 @@ import java.util.function.Function;
 public class ExternalTableExportConfig {
     private static final Logger LOG = LogManager.getLogger(ExternalTableExportConfig.class);
     public static final String EXTERNAL_TABLE = "external_table";
-    private static final String PARTITION_PREFIX = "partition.prefix";
-    private static final String PARTITION_TIME_UNIT = "partition.time_unit";
+    public static final String PARTITION_PREFIX = "partition.prefix";
+    public static final String PARTITION_TIME_UNIT = "partition.time_unit";
     private static final String SR_TMP_PATH = "/__sr_tmp";
     private final TableName olapTableName;
     private final Map<String, String> properties;

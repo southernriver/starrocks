@@ -361,6 +361,7 @@ public class ExportJob implements Writable {
         switch (exportTable.getType()) {
             case OLAP:
             case LAKE:
+            case MATERIALIZED_VIEW:
                 scanNode = new OlapScanNode(new PlanNodeId(0), exportTupleDesc, "OlapScanNodeForExport");
                 scanNode.setColumnFilters(Maps.newHashMap());
                 ((OlapScanNode) scanNode).setIsPreAggregation(false, "This an export operation");
@@ -392,6 +393,7 @@ public class ExportJob implements Writable {
         switch (exportTable.getType()) {
             case OLAP:
             case LAKE:
+            case MATERIALIZED_VIEW:
                 fragment = new PlanFragment(
                         new PlanFragmentId(nextId.getAndIncrement()), scanNode, DataPartition.RANDOM);
                 break;

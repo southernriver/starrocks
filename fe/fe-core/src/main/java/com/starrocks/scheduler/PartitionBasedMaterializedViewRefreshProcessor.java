@@ -38,6 +38,8 @@ import com.starrocks.common.util.RangeUtils;
 import com.starrocks.common.util.TimeUtils;
 import com.starrocks.common.util.UUIDUtil;
 import com.starrocks.connector.PartitionUtil;
+import com.starrocks.load.ColddownJob;
+import com.starrocks.load.ColddownMgr;
 import com.starrocks.persist.ChangeMaterializedViewRefreshSchemeLog;
 import com.starrocks.planner.HdfsScanNode;
 import com.starrocks.planner.OlapScanNode;
@@ -426,6 +428,17 @@ public class PartitionBasedMaterializedViewRefreshProcessor extends BaseTaskRunP
         }
 
         Map<String, Range<PartitionKey>> deletes = partitionDiff.getDeletes();
+        Iterator<Map.Entry<String, Range<PartitionKey>>> deletesIterator = deletes.entrySet().iterator();
+        while (deletesIterator.hasNext()) {
+            String partitionName = deletesIterator.next().getKey();
+            Partition partition = materializedView.getPartition(partitionName);
+            if (partition == null) {
+                continue;
+            }
+            if (shouldColddown(materializedView, partition)) {
+                deletesIterator.remove();
+            }
+        }
 
         // We should delete the old partition first and then add the new one,
         // because the old and new partitions may overlap
@@ -457,6 +470,26 @@ public class PartitionBasedMaterializedViewRefreshProcessor extends BaseTaskRunP
         mvContext.setBaseToMvNameRef(baseToMvNameRef);
         mvContext.setMvToBaseNameRef(mvToBaseNameRef);
         mvContext.setBasePartitionMap(basePartitionMap);
+    }
+
+    private boolean shouldColddown(Table table, Partition partition) {
+        boolean needColddown = false;
+        ColddownMgr colddownMgr = GlobalStateMgr.getCurrentState().getColddownMgr();
+        for (ColddownJob colddownJob : colddownMgr.getColddownJobs(table.getId())) {
+            if (colddownJob.isFinalState()) {
+                continue;
+            }
+            try {
+                needColddown = needColddown ||
+                        colddownJob.submitColddownPartitionFromTtl(partition);
+            } catch (Exception e) {
+                needColddown = true;
+                LOG.warn("Failed to submit colddown partition " + table.getName() + ":" + partition.getName() +
+                        " from ttl to colddown job " +
+                        colddownJob.getName(), e);
+            }
+        }
+        return needColddown;
     }
 
     private boolean needToRefreshTable(Table table) {

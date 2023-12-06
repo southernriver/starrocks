@@ -32,6 +32,7 @@ import com.starrocks.catalog.Database;
 import com.starrocks.catalog.DynamicPartitionProperty;
 import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.Partition;
+import com.starrocks.catalog.PartitionType;
 import com.starrocks.catalog.RangePartitionInfo;
 import com.starrocks.catalog.Table;
 import com.starrocks.clone.DynamicPartitionScheduler;
@@ -61,6 +62,8 @@ import org.apache.logging.log4j.Logger;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.time.ZonedDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -140,7 +143,7 @@ public class ColddownJob implements Writable {
             if (exportTable == null) {
                 throw new DdlException("Table " + stmt.getTblName().getTbl() + " does not exist");
             }
-            if (exportTable.getType() != Table.TableType.OLAP) {
+            if (exportTable.getType() != Table.TableType.OLAP && exportTable.getType() != Table.TableType.MATERIALIZED_VIEW) {
                 throw new DdlException("Table " + stmt.getTblName().getTbl() + " is not OlapTable");
             }
             if (getColddownPartitionEnd() >= 0) {
@@ -420,7 +423,7 @@ public class ColddownJob implements Writable {
             }
             return true;
         }
-        if (table.getType() != Table.TableType.OLAP) {
+        if (table.getType() != Table.TableType.OLAP && table.getType() != Table.TableType.MATERIALIZED_VIEW) {
             return false;
         }
         // TODO: only partitioned table is supported
@@ -533,16 +536,50 @@ public class ColddownJob implements Writable {
             return Collections.emptyList();
         }
         RangePartitionInfo rangePartitionInfo = (RangePartitionInfo) table.getPartitionInfo();
-        // it is ensured that there is only one partition column when create colddown job
-        Column partitionColumn = rangePartitionInfo.getPartitionColumns().get(0);
-        DynamicPartitionProperty dynamicPartitionProperty =
-                table.getTableProperty().getDynamicPartitionProperty();
-        String format = DynamicPartitionUtil.getPartitionFormat(partitionColumn, dynamicPartitionProperty.getTimeUnit());
         int lowerBoundOffset = getColddownPartitionEnd() + 1;
-        return DynamicPartitionScheduler.getDropPartitionClause(db, table, partitionColumn, format, lowerBoundOffset, 0)
-                .stream()
-                .map(DropPartitionClause::getPartition)
-                .collect(Collectors.toList());
+        if (table.getType() == Table.TableType.OLAP) {
+            // it is ensured that there is only one partition column when create colddown job
+            Column partitionColumn = rangePartitionInfo.getPartitionColumns().get(0);
+            DynamicPartitionProperty dynamicPartitionProperty = table.getTableProperty().getDynamicPartitionProperty();
+            String format = DynamicPartitionUtil.getPartitionFormat(partitionColumn, dynamicPartitionProperty.getTimeUnit());
+            return DynamicPartitionScheduler.getDropPartitionClause(db, table, partitionColumn, format, lowerBoundOffset, 0)
+                    .stream()
+                    .map(DropPartitionClause::getPartition)
+                    .collect(Collectors.toList());
+        }
+        if (table.getType() == Table.TableType.MATERIALIZED_VIEW) {
+            List<Partition> partitions;
+            // for range partitions, we return partitions in ascending range order by default.
+            // this is to be consistent with the behaviour before 0.12
+            if (rangePartitionInfo.getType() == PartitionType.RANGE) {
+                Column partitionColumn = rangePartitionInfo.getPartitionColumns().get(0);
+                Map<String, String> properties = new HashMap<>();
+                for (Map.Entry<String, String> entry : getProperties().entrySet()) {
+                    if (entry.getKey().startsWith(DynamicPartitionProperty.DYNAMIC_PARTITION_PROPERTY_PREFIX)) {
+                        properties.put(entry.getKey(), entry.getValue());
+                    }
+                }
+                properties.put(DynamicPartitionProperty.TIME_UNIT,
+                        getProperties().get(ExternalTableExportConfig.PARTITION_TIME_UNIT));
+                properties.put(DynamicPartitionProperty.START, "" + getColddownPartitionStart());
+                properties.put(DynamicPartitionProperty.END, "" + getColddownPartitionEnd());
+                properties.put(DynamicPartitionProperty.BUCKETS, "1");
+                DynamicPartitionProperty dynamicPartitionProperty = new DynamicPartitionProperty(properties);
+                String format = DynamicPartitionUtil.getPartitionFormat(partitionColumn, dynamicPartitionProperty.getTimeUnit());
+                ZonedDateTime now = ZonedDateTime.now(dynamicPartitionProperty.getTimeZone().toZoneId());
+                partitions = DynamicPartitionScheduler.getDropPartitionClause(db, table, now, partitionColumn, format,
+                                lowerBoundOffset, 0, dynamicPartitionProperty)
+                        .stream()
+                        .map(DropPartitionClause::getPartition)
+                        .collect(Collectors.toList());
+            } else {
+                partitions = new ArrayList<>(table.getPartitions());
+            }
+            return partitions.size() + lowerBoundOffset > 0 ? partitions.subList(0, partitions.size() + lowerBoundOffset) :
+                    Collections.emptyList();
+        }
+        // only support OLAP and MATERIALIZED_VIEW, so never happen here
+        return Collections.emptyList();
     }
 
     private void colddownPartitions() throws Exception {
