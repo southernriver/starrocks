@@ -162,6 +162,8 @@ public class PulsarTaskInfo extends RoutineLoadTaskInfo {
             tRoutineLoadTask.setFormat(TFileFormatType.FORMAT_TDMSG_CSV);
         } else if (routineLoadJob.getFormat().equalsIgnoreCase("tdmsg_kv")) {
             tRoutineLoadTask.setFormat(TFileFormatType.FORMAT_TDMSG_KV);
+        } else if (routineLoadJob.getFormat().equalsIgnoreCase("text_kv")) {
+            tRoutineLoadTask.setFormat(TFileFormatType.FORMAT_TEXT_KV);
         } else {
             tRoutineLoadTask.setFormat(TFileFormatType.FORMAT_CSV_PLAIN);
         }

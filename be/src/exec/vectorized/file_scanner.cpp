@@ -234,6 +234,8 @@ Status FileScanner::create_sequential_file(const TBrokerRangeDesc& range_desc, c
         compression = CompressionTypePB::NO_COMPRESSION;
     } else if (range_desc.format_type == TFileFormatType::FORMAT_TDMSG_KV) {
         compression = CompressionTypePB::NO_COMPRESSION;
+    } else if (range_desc.format_type == TFileFormatType::FORMAT_TEXT_KV) {
+        compression = CompressionTypePB::NO_COMPRESSION;
     } else if (range_desc.format_type == TFileFormatType::FORMAT_CSV_GZ) {
         compression = CompressionTypePB::GZIP;
     } else if (range_desc.format_type == TFileFormatType::FORMAT_CSV_BZ2) {

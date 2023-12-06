@@ -631,6 +631,8 @@ public class CreateRoutineLoadStmt extends DdlStmt {
                 format = "tdmsg_csv";
             } else if (format.equalsIgnoreCase("tdmsg_kv")) {
                 format = "tdmsg_kv";
+            } else if (format.equalsIgnoreCase("text_kv")) {
+                format = "text_kv";
             } else if (format.equalsIgnoreCase("json")) {
                 format = "json";
                 jsonPaths = jobProperties.get(JSONPATHS);

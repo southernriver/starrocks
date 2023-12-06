@@ -365,6 +365,8 @@ public class StreamLoadInfo {
             fileFormatType = TFileFormatType.FORMAT_TDMSG_CSV;
         } else if (routineLoadJob.getFormat().equals("tdmsg_kv")) {
             fileFormatType = TFileFormatType.FORMAT_TDMSG_KV;
+        } else if (routineLoadJob.getFormat().equals("text_kv")) {
+            fileFormatType = TFileFormatType.FORMAT_TEXT_KV;
         }
         StreamLoadInfo streamLoadInfo = new StreamLoadInfo(dummyId, -1L /* dummy txn id */,
                 TFileType.FILE_STREAM, fileFormatType);

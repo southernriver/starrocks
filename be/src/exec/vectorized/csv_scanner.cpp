@@ -151,7 +151,8 @@ StatusOr<ChunkPtr> CSVScanner::get_next() {
             // If file format is KV, use origin ScannerKVReader
             // Use _src_slot_descriptors to extract corresponding columns
             // For columns that are not shown in dest table, the slot is assigned NULL, so need to deal with it
-            if(_scan_range.ranges[_curr_file_index].format_type == TFileFormatType::FORMAT_TDMSG_KV){
+            if (_scan_range.ranges[_curr_file_index].format_type == TFileFormatType::FORMAT_TDMSG_KV ||
+                _scan_range.ranges[_curr_file_index].format_type == TFileFormatType::FORMAT_TEXT_KV) {
                 std::vector<string> columns;
                 int null_idx = 0;
                 for(auto slot: _src_slot_descriptors){
@@ -169,7 +170,8 @@ StatusOr<ChunkPtr> CSVScanner::get_next() {
             if (_scan_range.ranges[_curr_file_index].size > 0 &&
                 (_scan_range.ranges[_curr_file_index].format_type == TFileFormatType::FORMAT_CSV_PLAIN ||
                  _scan_range.ranges[_curr_file_index].format_type == TFileFormatType::FORMAT_TDMSG_CSV ||
-                 _scan_range.ranges[_curr_file_index].format_type == TFileFormatType::FORMAT_TDMSG_KV )) {
+                 _scan_range.ranges[_curr_file_index].format_type == TFileFormatType::FORMAT_TDMSG_KV ||
+                 _scan_range.ranges[_curr_file_index].format_type == TFileFormatType::FORMAT_TEXT_KV)) {
                 // Does not set limit for compressed file.
                 _curr_reader->set_limit(_scan_range.ranges[_curr_file_index].size);
             }

@@ -127,7 +127,8 @@ enum TFileFormatType {
     FORMAT_JSON = 9,
     FORMAT_CSV_ZSTD = 10,
     FORMAT_TDMSG_CSV = 11,
-    FORMAT_TDMSG_KV = 12
+    FORMAT_TDMSG_KV = 12,
+    FORMAT_TEXT_KV = 13
 }
 
 // One broker range information.
