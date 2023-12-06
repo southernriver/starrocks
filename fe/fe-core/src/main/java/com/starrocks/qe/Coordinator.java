@@ -3279,7 +3279,14 @@ public class Coordinator {
             if (fragment.getSink() instanceof ExportSink) {
                 ExportSink exportSink = (ExportSink) fragment.getSink();
                 if (exportSink.getFileNamePrefix() != null) {
-                    exportSink.setFileNamePrefix(exportSink.getFileNamePrefix() + fragmentIndex + "_");
+                    String separator = "__";
+                    int index = exportSink.getFileNamePrefix().indexOf(separator);
+                    if (index > 0) {
+                        exportSink.setFileNamePrefix(
+                                exportSink.getFileNamePrefix().substring(0, index) + separator + fragmentIndex + "_");
+                    } else {
+                        exportSink.setFileNamePrefix(exportSink.getFileNamePrefix() + separator + fragmentIndex + "_");
+                    }
                 }
             }
             if (!uniqueParams.isSetFragment()) {
