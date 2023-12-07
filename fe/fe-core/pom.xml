@@ -38,7 +38,7 @@ under the License.
         <starrocks.home>${basedir}/../../</starrocks.home>
         <fe_ut_parallel>${env.FE_UT_PARALLEL}</fe_ut_parallel>
         <jacoco.version>0.8.5</jacoco.version>
-        <iceberg.version>1.3.3-2-tq-SNAPSHOT</iceberg.version>
+        <iceberg.version>1.3.3-1-tq</iceberg.version>
         <python>python</python>
     </properties>
 
