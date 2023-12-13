@@ -39,6 +39,7 @@ import java.util.Objects;
 
 public class StringLiteral extends LiteralExpr {
     private String value;
+    private byte[] bytes;
 
     public StringLiteral() {
         super();
@@ -73,8 +74,12 @@ public class StringLiteral extends LiteralExpr {
         // compare string with utf-8 byte array, same with DM,BE,StorageEngine
         byte[] thisBytes = null;
         byte[] otherBytes = null;
-        thisBytes = value.getBytes(StandardCharsets.UTF_8);
-        otherBytes = expr.getStringValue().getBytes(StandardCharsets.UTF_8);
+        thisBytes = getBytes();
+        if (expr instanceof StringLiteral) {
+            otherBytes = ((StringLiteral) expr).getBytes();
+        } else {
+            otherBytes = expr.getStringValue().getBytes(StandardCharsets.UTF_8);
+        }
 
         int minLength = Math.min(thisBytes.length, otherBytes.length);
         int i;
@@ -109,6 +114,13 @@ public class StringLiteral extends LiteralExpr {
 
     public String getValue() {
         return value;
+    }
+
+    public byte[] getBytes() {
+        if (bytes == null) {
+            bytes = value.getBytes(StandardCharsets.UTF_8);
+        }
+        return bytes;
     }
 
     @Override

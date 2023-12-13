@@ -254,7 +254,7 @@ public class OptThivePartitionPruner {
                 // only one value
                 String rawValue = entry.getValue().get(0);
                 LiteralExpr literal = LiteralExpr.create(rawValue, partitionColumn.getType());
-                int index = values.indexOf(literal);
+                int index = Collections.binarySearch(values, literal);
                 if (index == 0) {
                     PartitionKey upperBound = new PartitionKey();
                     upperBound.pushColumn(values.get(0), partitionColumn.getType().getPrimitiveType());
@@ -631,7 +631,7 @@ public class OptThivePartitionPruner {
                 // only one value
                 String rawValue = entry.getValue().get(0);
                 LiteralExpr literal = LiteralExpr.create(rawValue, rangePartitionColumn.getType());
-                int index = values.indexOf(literal);
+                int index = Collections.binarySearch(values, literal);
                 if (index == 0) {
                     PartitionKey upperBound = new PartitionKey();
                     upperBound.pushColumn(values.get(0), rangePartitionColumn.getType().getPrimitiveType());
